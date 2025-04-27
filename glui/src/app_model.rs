@@ -80,6 +80,39 @@ impl AppModel {
         let context_map = scope.context_map.borrow();
         context_map.get(&key).cloned()
     }
+
+    pub(crate) fn get_value(&self) -> Option<Rc<dyn Any>> {
+        let scope = self.scope.borrow();
+        let scope = scope.as_ref().unwrap();
+
+        let values = scope.values.borrow();
+        let cursor = scope.value_cursor.get();
+
+        let value = values.get(cursor).map(|value| value.clone());
+        if value.is_some() {
+            scope.value_cursor.set(cursor + 1);
+        }
+
+        value
+    }
+
+    pub(crate) fn set_value<T: 'static>(&self, value: T) -> Rc<dyn Any> {
+        let scope = self.scope.borrow();
+        let scope = scope.as_ref().unwrap();
+
+        let mut values = scope.values.borrow_mut();
+        let cursor = scope.value_cursor.get();
+
+        let value = Rc::new(value);
+        if cursor >= values.len() {
+            values.insert(cursor, value.clone());
+        } else {
+            values[cursor] = value.clone();
+        }
+
+        scope.value_cursor.set(cursor + 1);
+        value
+    }
 }
 
 pub fn create_app_model() -> AppModel {
@@ -94,7 +127,6 @@ pub fn create_app_model() -> AppModel {
 struct Scope {
     element: RefCell<Element>,
     children: RefCell<Vec<Rc<Scope>>>,
-    child_cursor: Cell<usize>,
     values: RefCell<Vec<Rc<dyn Any>>>,
     value_cursor: Cell<usize>,
     context_map: RefCell<HashMap<TypeId, Rc<dyn Any>>>,
@@ -105,7 +137,6 @@ impl Scope {
         let scope = Scope {
             element: RefCell::new(element),
             children: RefCell::new(Vec::new()),
-            child_cursor: Cell::new(0),
             values: RefCell::new(Vec::new()),
             value_cursor: Cell::new(0),
             context_map: RefCell::new(HashMap::new()),

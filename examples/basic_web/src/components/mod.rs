@@ -1,10 +1,17 @@
+use std::rc::Rc;
+
 use bon::Builder;
 use glui::{
     component,
     components::fragment::Fragment,
-    hooks::context::{provide_context, use_context},
+    hooks::{
+        context::{provide_context, use_context},
+        remember::remember,
+    },
     layout, Element, Props,
 };
+use wasm_bindgen::JsCast;
+use web_sys::HtmlElement;
 
 macro_rules! document {
     () => {
@@ -13,7 +20,7 @@ macro_rules! document {
 }
 
 struct ParentContext {
-    parent: String,
+    html_element: Rc<HtmlElement>,
 }
 
 #[derive(PartialEq, Props, Builder)]
@@ -25,9 +32,17 @@ pub struct RootProps {
 
 #[component]
 pub fn Root(props: &RootProps) -> Element {
-    provide_context(ParentContext {
-        parent: "Hello".into(),
+    let root = remember(|| {
+        let body = document!().body().expect("document should have a body");
+        body.query_selector("#root")
+            .unwrap()
+            .unwrap()
+            .dyn_into::<HtmlElement>()
+            .unwrap()
     });
+
+    provide_context(ParentContext { html_element: root });
+
     layout! {
         Fragment(.maybe_children = props.children.clone())
     }
@@ -42,11 +57,15 @@ pub struct TextProps {
 #[component]
 pub fn Text(props: &TextProps) {
     let parent = use_context::<ParentContext>().unwrap();
-    log::debug!("{}", parent.parent);
-    // let html_element = document!()
-    //     .create_element("p")
-    //     .unwrap()
-    //     .dyn_into::<HtmlElement>()
-    //     .unwrap();
-    // html_element.set_text_content(Some(&props.text));
+    let html_element = remember(|| {
+        let html_element = document!()
+            .create_element("p")
+            .unwrap()
+            .dyn_into::<HtmlElement>()
+            .unwrap();
+        html_element.set_text_content(Some(&props.text));
+        html_element
+    });
+
+    parent.html_element.append_child(&html_element).unwrap();
 }
