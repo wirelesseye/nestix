@@ -1,0 +1,8 @@
+[package]
+name = "glui"
+version = "0.1.0"
+edition = "2021"
+
+[dependencies]
+bon = "3.6.3"
+glui-macros = { version = "0.1.0", path = "../glui-macros" }
