@@ -49,10 +49,11 @@ impl AppModel {
 
         let next = self.children_buf.take();
         let scope = self.scope.take().unwrap();
+        let context_map = scope.context_map.borrow().clone();
         let ReconcileResult {
             children,
             update_scopes,
-        } = reconcile(prev, next);
+        } = reconcile(context_map, prev, next);
         scope.children.replace(children);
 
         for scope in update_scopes {
@@ -63,6 +64,21 @@ impl AppModel {
     pub fn add_child(&self, element: Element) {
         let mut update_children = self.children_buf.borrow_mut();
         update_children.push(element);
+    }
+
+    pub fn provide_context(&self, key: TypeId, context: Rc<dyn Any>) {
+        let scope = self.scope.borrow();
+        let scope = scope.as_ref().unwrap();
+
+        let mut context_map = scope.context_map.borrow_mut();
+        context_map.insert(key, context);
+    }
+
+    pub fn use_context(&self, key: TypeId) -> Option<Rc<dyn Any>> {
+        let scope = self.scope.borrow();
+        let scope = scope.as_ref().unwrap();
+        let context_map = scope.context_map.borrow();
+        context_map.get(&key).cloned()
     }
 }
 
@@ -81,6 +97,7 @@ struct Scope {
     child_cursor: Cell<usize>,
     values: RefCell<Vec<Rc<dyn Any>>>,
     value_cursor: Cell<usize>,
+    context_map: RefCell<HashMap<TypeId, Rc<dyn Any>>>,
 }
 
 impl Scope {
@@ -91,6 +108,7 @@ impl Scope {
             child_cursor: Cell::new(0),
             values: RefCell::new(Vec::new()),
             value_cursor: Cell::new(0),
+            context_map: RefCell::new(HashMap::new()),
         };
         Rc::new(scope)
     }
@@ -101,7 +119,11 @@ struct ReconcileResult {
     update_scopes: Vec<Rc<Scope>>,
 }
 
-fn reconcile(prev: Vec<Rc<Scope>>, next: Vec<Element>) -> ReconcileResult {
+fn reconcile(
+    context_map: HashMap<TypeId, Rc<dyn Any>>,
+    prev: Vec<Rc<Scope>>,
+    next: Vec<Element>,
+) -> ReconcileResult {
     let mut scopes_by_comp_id: HashMap<ComponentID, VecDeque<Rc<Scope>>> = HashMap::new();
     for scope in prev {
         let component_id = scope.element.borrow().component_id;
@@ -124,6 +146,7 @@ fn reconcile(prev: Vec<Rc<Scope>>, next: Vec<Element>) -> ReconcileResult {
             }
 
             let scope = Scope::new(next_element);
+            scope.context_map.replace(context_map.clone());
             update_scopes.push(scope.clone());
             scope
         })

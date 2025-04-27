@@ -1,10 +1,19 @@
 use bon::Builder;
-use glui::{component, components::fragment::Fragment, layout, Element, Props};
+use glui::{
+    component,
+    components::fragment::Fragment,
+    hooks::context::{provide_context, use_context},
+    layout, Element, Props,
+};
 
 macro_rules! document {
     () => {
         web_sys::window().unwrap().document().unwrap()
     };
+}
+
+struct ParentContext {
+    parent: String,
 }
 
 #[derive(PartialEq, Props, Builder)]
@@ -16,6 +25,9 @@ pub struct RootProps {
 
 #[component]
 pub fn Root(props: &RootProps) -> Element {
+    provide_context(ParentContext {
+        parent: "Hello".into(),
+    });
     layout! {
         Fragment(.maybe_children = props.children.clone())
     }
@@ -29,7 +41,8 @@ pub struct TextProps {
 
 #[component]
 pub fn Text(props: &TextProps) {
-    log::debug!("{}", props.text);
+    let parent = use_context::<ParentContext>().unwrap();
+    log::debug!("{}", parent.parent);
     // let html_element = document!()
     //     .create_element("p")
     //     .unwrap()
