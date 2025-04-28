@@ -12,7 +12,19 @@ thread_local! {
 }
 
 pub(crate) fn current_app_model() -> Option<Rc<AppModel>> {
-    CURRENT_APP_MODEL.with_borrow(|app_model| app_model.clone())
+    CURRENT_APP_MODEL.with_borrow(|curr| curr.clone())
+}
+
+fn set_app_model(app_model: &Rc<AppModel>) {
+    CURRENT_APP_MODEL.with_borrow_mut(|curr| {
+        if let Some(curr) = curr {
+            if !Rc::ptr_eq(curr, app_model) {
+                *curr = app_model.clone();
+            }
+        } else {
+            *curr = Some(app_model.clone());
+        }
+    })
 }
 
 #[derive(Debug)]
@@ -43,7 +55,7 @@ impl AppModel {
     }
 
     pub(crate) fn update_scope(self: &Rc<Self>, scope: Rc<Scope>) {
-        CURRENT_APP_MODEL.set(Some(self.clone()));
+        set_app_model(self);
 
         let element = scope.element.borrow().clone();
         let prev = scope.children.take();
