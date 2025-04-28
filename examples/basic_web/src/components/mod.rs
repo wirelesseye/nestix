@@ -29,7 +29,7 @@ pub struct RootProps {
 #[component]
 pub fn Root(props: &RootProps) -> Element {
     log::debug!("render Root");
-    let root = remember(|| {
+    let html_element = remember(|| {
         let body = document!().body().expect("document should have a body");
         body.query_selector("#root")
             .unwrap()
@@ -38,8 +38,16 @@ pub fn Root(props: &RootProps) -> Element {
             .unwrap()
     });
 
+    effect_cleanup(html_element.clone(), |html_element| {
+        closure!(
+            [html_element] || {
+                html_element.remove();
+            }
+        )
+    });
+
     provide_context(ParentContext {
-        html_element: (*root).clone(),
+        html_element: (*html_element).clone(),
     });
 
     layout! {
@@ -67,6 +75,14 @@ pub fn Text(props: &TextProps) {
         html_element
     });
 
+    effect_cleanup(html_element.clone(), |html_element| {
+        closure!(
+            [html_element] || {
+                html_element.remove();
+            }
+        )
+    });
+
     html_element.set_text_content(Some(&props.text));
 }
 
@@ -90,6 +106,14 @@ pub fn Button(props: &ButtonProps) -> Element {
             .unwrap();
         parent.html_element.append_child(&html_element).unwrap();
         html_element
+    });
+
+    effect_cleanup(html_element.clone(), |html_element| {
+        closure!(
+            [html_element] || {
+                html_element.remove();
+            }
+        )
     });
 
     effect_cleanup(props.on_click.clone(), |on_click| {
@@ -165,6 +189,14 @@ pub fn FlexView(props: &FlexViewProps) -> Element {
         style.set_property("display", "flex").unwrap();
         parent.html_element.append_child(&html_element).unwrap();
         html_element
+    });
+
+    effect_cleanup(html_element.clone(), |html_element| {
+        closure!(
+            [html_element] || {
+                html_element.remove();
+            }
+        )
     });
 
     provide_context(ParentContext {

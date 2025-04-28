@@ -68,12 +68,6 @@ fn Counter() -> Element {
         }
     );
 
-    effect_cleanup((), |_| {
-        || {
-            log::debug!("cleanup Counter");
-        }
-    });
-
     layout! {
         FlexView(
             .direction = FlexDirection::Column,
