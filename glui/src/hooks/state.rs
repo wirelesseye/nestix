@@ -1,6 +1,6 @@
 use std::{
     cell::{Ref, RefCell},
-    rc::Rc,
+    rc::{Rc, Weak},
 };
 
 use crate::{current_app_model, AppModel, Scope};
@@ -17,7 +17,7 @@ pub fn state<T: 'static>(initializer: impl FnOnce() -> T) -> State<T> {
     State {
         value,
         app_model: app_model.clone(),
-        scope: app_model.current_scope().unwrap(),
+        scope: Rc::downgrade(&app_model.current_scope().unwrap()),
     }
 }
 
@@ -25,7 +25,7 @@ pub fn state<T: 'static>(initializer: impl FnOnce() -> T) -> State<T> {
 pub struct State<T> {
     value: Rc<RefCell<T>>,
     app_model: Rc<AppModel>,
-    scope: Rc<Scope>,
+    scope: Weak<Scope>,
 }
 
 impl<T> State<T> {
@@ -50,7 +50,7 @@ impl<T: PartialEq> State<T> {
     pub fn set(&self, value: T) {
         if *self.borrow() != value {
             self.value.replace(value);
-            self.app_model.update_scope(self.scope.clone());
+            self.app_model.update_scope(self.scope.upgrade().unwrap());
         }
     }
 
@@ -62,7 +62,7 @@ impl<T: PartialEq> State<T> {
 
         if changed {
             self.value.replace(next);
-            self.app_model.update_scope(self.scope.clone());
+            self.app_model.update_scope(self.scope.upgrade().unwrap());
         }
     }
 }

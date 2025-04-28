@@ -1,7 +1,11 @@
 mod components;
 
 use components::{Button, FlexDirection, FlexView, Root, Text};
-use glui::{callback, component, create_app_model, hooks::state, layout, Element};
+use glui::{
+    callback, component, create_app_model,
+    hooks::{effect_cleanup, state},
+    layout, Element,
+};
 use wasm_bindgen::prelude::*;
 
 #[wasm_bindgen(start)]
@@ -64,6 +68,12 @@ fn Counter() -> Element {
         }
     );
 
+    effect_cleanup((), |_| {
+        || {
+            log::debug!("cleanup Counter");
+        }
+    });
+
     layout! {
         FlexView(
             .direction = FlexDirection::Column,
@@ -79,6 +89,8 @@ fn Counter() -> Element {
 
 #[component]
 fn TodoList() -> Element {
+    log::debug!("render TodoList");
+
     layout! {
         Text("Todo List")
     }
