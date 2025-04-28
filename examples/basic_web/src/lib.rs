@@ -1,8 +1,15 @@
 mod components;
 
-use components::{Button, FlexDirection, FlexView, Root, Text};
-use glui::{callback, component, create_app_model, hooks::state, layout, Element};
+use std::{cell::OnceCell, rc::Rc};
+
+use components::{Button, FlexDirection, FlexView, Input, Root, Text};
+use glui::{
+    callback, component, create_app_model,
+    hooks::{remember, state, State},
+    layout, Element,
+};
 use wasm_bindgen::prelude::*;
+use web_sys::{HtmlElement, HtmlInputElement};
 
 #[wasm_bindgen(start)]
 fn init() -> Result<(), JsValue> {
@@ -60,7 +67,7 @@ fn Counter() -> Element {
     let counter = state(|| 0);
     let increment = callback!(
         [counter] || {
-            counter.update(|prev| prev + 1);
+            counter.update(|prev| *prev += 1);
         }
     );
 
@@ -81,7 +88,35 @@ fn Counter() -> Element {
 fn TodoList() -> Element {
     log::debug!("render TodoList");
 
+    let input_ref: Rc<OnceCell<HtmlElement>> = remember(|| OnceCell::new());
+    let items: State<Vec<String>> = state(|| vec![]);
+
+    let add = callback!(
+        [input_ref, items] || {
+            let input = input_ref
+                .get()
+                .unwrap()
+                .clone()
+                .dyn_into::<HtmlInputElement>()
+                .unwrap();
+            let value = input.value();
+            items.update(|items| items.push(value));
+
+            log::debug!("{}", input.value());
+        }
+    );
+
     layout! {
-        Text("Todo List")
+        FlexView(.direction = FlexDirection::Column) {
+            FlexView {
+                Input(.elem_ref = input_ref),
+                Button(.on_click = add) {
+                    Text("Add")
+                }
+            }
+            for item in &*items.borrow() {
+                Text(item)
+            }
+        }
     }
 }

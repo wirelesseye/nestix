@@ -1,10 +1,12 @@
 mod button;
 mod flex_view;
+mod input;
 mod root;
 mod text;
 
 pub use button::*;
 pub use flex_view::*;
+pub use input::*;
 pub use root::*;
 pub use text::*;
 

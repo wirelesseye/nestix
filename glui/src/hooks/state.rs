@@ -54,15 +54,11 @@ impl<T: PartialEq> State<T> {
         }
     }
 
-    pub fn update(&self, updater: impl Fn(&T) -> T) {
-        let prev = self.borrow();
-        let next = updater(&prev);
-        let changed = *prev != next;
-        drop(prev);
-
-        if changed {
-            self.value.replace(next);
-            self.app_model.update_scope(self.scope.upgrade().unwrap());
+    pub fn update(&self, updater: impl FnOnce(&mut T)) {
+        {
+            let mut value = self.value.borrow_mut();
+            updater(&mut value);
         }
+        self.app_model.update_scope(self.scope.upgrade().unwrap());
     }
 }
