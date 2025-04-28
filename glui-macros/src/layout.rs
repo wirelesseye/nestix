@@ -116,7 +116,7 @@ impl Parse for ExprBlock {
             } else {
                 return Err(syn::Error::new(
                     ident.span(),
-                    format!("unknown tag: {}", ident),
+                    format!("unknown tag `{}`, available: list, option", ident),
                 ));
             }
         } else {
@@ -190,7 +190,7 @@ impl Parse for LayoutChild {
 impl Parse for LayoutIf {
     fn parse(input: syn::parse::ParseStream) -> syn::Result<Self> {
         let if_token: Token![if] = input.parse()?;
-        let cond: Expr = input.parse()?;
+        let cond = Expr::parse_without_eager_brace(input)?;
         let children = parse_layout_children(input)?;
         let else_branch = if input.peek(Token![else]) {
             let else_token: Token![else] = input.parse()?;

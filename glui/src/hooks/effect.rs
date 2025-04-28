@@ -2,7 +2,7 @@ use std::any::Any;
 
 use crate::current_app_model;
 
-pub fn effect_cleanup<D: 'static + PartialEq + Eq, C: 'static + Fn() -> ()>(
+pub fn effect_cleanup<D: 'static + PartialEq, C: 'static + Fn() -> ()>(
     dependency: D,
     setup: impl FnOnce(&D) -> C,
 ) {
@@ -30,7 +30,7 @@ pub fn effect_cleanup<D: 'static + PartialEq + Eq, C: 'static + Fn() -> ()>(
     }
 }
 
-pub fn effect<D: 'static + PartialEq + Eq>(dependency: D, setup: impl FnOnce(&D) -> ()) {
+pub fn effect<D: 'static + PartialEq>(dependency: D, setup: impl FnOnce(&D) -> ()) {
     let app_model = current_app_model().unwrap();
     if let Some(rc) = app_model.get_value() {
         let store = rc.downcast_ref::<EffectStore>().unwrap();
