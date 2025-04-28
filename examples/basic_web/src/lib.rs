@@ -69,11 +69,13 @@ fn Counter() -> Element {
     log::debug!("render Counter");
 
     let counter = state(|| 0);
-    let increment = callback!(
-        [counter] || {
-            counter.update(|prev| *prev += 1);
-        }
-    );
+    let increment = remember(|| {
+        callback!(
+            [counter] || {
+                counter.update(|prev| *prev += 1);
+            }
+        )
+    });
 
     layout! {
         FlexView(
@@ -81,7 +83,7 @@ fn Counter() -> Element {
             .width = 100.0
         ) {
             Text(counter.get().to_string()),
-            Button(.on_click = increment) {
+            Button(.on_click = (*increment).clone()) {
                 Text("Increment")
             },
         }
@@ -101,38 +103,42 @@ fn TodoList() -> Element {
     let input_ref: Rc<OnceCell<HtmlElement>> = remember(|| OnceCell::new());
     let items: State<Vec<TodoItem>> = state(|| vec![]);
 
-    let add = callback!(
-        [input_ref, items] || {
-            let input = input_ref
-                .get()
-                .unwrap()
-                .clone()
-                .dyn_into::<HtmlInputElement>()
-                .unwrap();
-            let value = input.value();
-            items.update(|items| {
-                items.push(TodoItem {
-                    key: nanoid!(),
-                    content: value,
-                })
-            });
-            input.set_value("");
-        }
-    );
+    let add = remember(|| {
+        callback!(
+            [input_ref, items] || {
+                let input = input_ref
+                    .get()
+                    .unwrap()
+                    .clone()
+                    .dyn_into::<HtmlInputElement>()
+                    .unwrap();
+                let value = input.value();
+                items.update(|items| {
+                    items.push(TodoItem {
+                        key: nanoid!(),
+                        content: value,
+                    })
+                });
+                input.set_value("");
+            }
+        )
+    });
 
-    let remove = callback!(
-        [items] | key | {
-            items.update(|items| {
-                items.retain(|item| item.key != key);
-            })
-        }
-    );
+    let remove = remember(|| {
+        callback!(
+            [items] | key | {
+                items.update(|items| {
+                    items.retain(|item| item.key != key);
+                })
+            }
+        )
+    });
 
     layout! {
         FlexView(.direction = FlexDirection::Column) {
             FlexView {
                 Input(.elem_ref = input_ref),
-                Button(.on_click = add) {
+                Button(.on_click = (*add).clone()) {
                     Text("Add")
                 }
             }
@@ -140,7 +146,7 @@ fn TodoList() -> Element {
                 TodoItemView(
                     $key = item.key.clone(),
                     .item = item.clone(),
-                    .remove = remove.clone(),
+                    .remove = (*remove).clone(),
                 )
             }
         }
