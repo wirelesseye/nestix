@@ -101,8 +101,6 @@ fn TodoList() -> Element {
                 .unwrap();
             let value = input.value();
             items.update(|items| items.push(value));
-
-            log::debug!("{}", input.value());
         }
     );
 
@@ -114,8 +112,15 @@ fn TodoList() -> Element {
                     Text("Add")
                 }
             }
-            for item in &*items.borrow() {
-                Text(item)
+            for (i, item) in items.borrow().iter().enumerate() {
+                FlexView {
+                    Button(.on_click = callback!(
+                        [items] || items.update(|items| {items.remove(i);}))
+                    ) {
+                        Text("X")
+                    }
+                    Text(item)
+                }
             }
         }
     }
