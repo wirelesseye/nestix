@@ -3,7 +3,7 @@ mod component;
 mod element;
 mod props;
 
-pub mod callback;
+pub mod callbacks;
 pub mod components;
 pub mod hooks;
 

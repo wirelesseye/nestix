@@ -18,7 +18,7 @@ pub fn callback_impl(input: TokenStream) -> TokenStream {
     let callback_name = format_ident!("Callback{}", arg_len);
 
     quote! {
-        #crate_path::callback::#callback_name::from(#closure_expand)
+        #crate_path::callbacks::#callback_name::from(#closure_expand)
     }
     .into()
 }
@@ -36,7 +36,7 @@ pub fn callback_mut_impl(input: TokenStream) -> TokenStream {
     let callback_name = format_ident!("CallbackMut{}", arg_len);
 
     quote! {
-        #crate_path::callback::#callback_name::from(#closure_expand)
+        #crate_path::callbacks::#callback_name::from(#closure_expand)
     }
     .into()
 }

@@ -1,6 +1,6 @@
 use bon::Builder;
 use glui::{
-    callback::Callback0,
+    callbacks::Callback0,
     closure, component,
     components::fragment::Fragment,
     hooks::{effect, effect_cleanup, provide_context, remember, use_context},
