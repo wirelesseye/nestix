@@ -1,14 +1,23 @@
 use std::rc::Rc;
 
+use bon::Builder;
+
 use crate::{
     components::{component_id, Component, ComponentID},
     props::Props,
 };
 
+#[derive(Debug, Builder)]
+pub struct ElementOptions {
+    #[builder(into)]
+    pub key: Option<String>,
+}
+
 #[derive(Debug, Clone)]
 pub struct Element {
     pub(crate) component_id: ComponentID,
     pub(crate) props: Rc<dyn Props>,
+    pub(crate) options: Rc<ElementOptions>,
 }
 
 impl PartialEq for Element {
@@ -29,9 +38,10 @@ impl Element {
     }
 }
 
-pub fn create_element<C: Component>(props: C::Props) -> Element {
+pub fn create_element<C: Component>(props: C::Props, options: ElementOptions) -> Element {
     Element {
         component_id: component_id::<C>(),
         props: Rc::new(props),
+        options: Rc::new(options),
     }
 }

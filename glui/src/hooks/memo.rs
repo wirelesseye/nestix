@@ -38,9 +38,16 @@ struct MemoStore<T> {
     value: T,
 }
 
-#[derive(Clone)]
 pub struct Memo<T> {
     store: Rc<MemoStore<T>>,
+}
+
+impl<T> Clone for Memo<T> {
+    fn clone(&self) -> Self {
+        Self {
+            store: self.store.clone(),
+        }
+    }
 }
 
 impl<T> AsRef<T> for Memo<T> {

@@ -62,19 +62,70 @@ impl Parse for LayoutNamedArg {
     }
 }
 
+struct ElementArg {
+    dollar_token: Token![$],
+    ident: Option<Ident>,
+    expr: Option<Expr>,
+}
+
+impl Parse for ElementArg {
+    fn parse(input: syn::parse::ParseStream) -> syn::Result<Self> {
+        let dollar_token: Token![$] = input.parse()?;
+        if !input.peek(Ident) {
+            return Ok(Self {
+                dollar_token,
+                ident: None,
+                expr: None,
+            });
+        }
+
+        let ident: Ident = input.parse()?;
+
+        if !input.peek(Token![=]) {
+            return Ok(Self {
+                dollar_token,
+                ident: Some(ident),
+                expr: None,
+            });
+        }
+
+        input.parse::<Token![=]>()?;
+
+        if input.is_empty() || input.peek(Token![,]) {
+            return Ok(Self {
+                dollar_token,
+                ident: Some(ident),
+                expr: None,
+            });
+        }
+
+        let expr: Expr = input.parse()?;
+        Ok(Self {
+            dollar_token,
+            ident: Some(ident),
+            expr: Some(expr),
+        })
+    }
+}
+
 struct LayoutArgs {
     start_args: Vec<Expr>,
     named_args: Vec<LayoutNamedArg>,
+    element_args: Vec<ElementArg>,
 }
 
 impl Parse for LayoutArgs {
     fn parse(input: syn::parse::ParseStream) -> syn::Result<Self> {
         let mut start_args = Vec::new();
         let mut named_args = Vec::new();
+        let mut element_args = Vec::new();
         while !input.is_empty() {
             if input.peek(Token![.]) {
                 let named_arg: LayoutNamedArg = input.parse()?;
                 named_args.push(named_arg);
+            } else if input.peek(Token![$]) {
+                let element_arg: ElementArg = input.parse()?;
+                element_args.push(element_arg);
             } else {
                 let expr: Expr = input.parse()?;
                 start_args.push(expr);
@@ -90,6 +141,7 @@ impl Parse for LayoutArgs {
         Ok(Self {
             start_args,
             named_args,
+            element_args,
         })
     }
 }
@@ -593,8 +645,34 @@ fn expand_layout(input: LayoutInput) -> TokenStream2 {
         }
     };
 
+    let options_expand = {
+        let mut tokens = TokenStream2::new();
+        if let Some(args) = &args {
+            for element_arg in &args.element_args {
+                let ElementArg {
+                    dollar_token,
+                    ident,
+                    expr,
+                } = element_arg;
+                let mut dot_token = <Token![.]>::default();
+                dot_token.span = dollar_token.span;
+
+                quote! {
+                    #dot_token #ident (#expr)
+                }
+                .to_tokens(&mut tokens);
+            }
+        }
+
+        quote! {
+            #crate_path::ElementOptions::builder()
+            #tokens
+            .build()
+        }
+    };
+
     quote! {{
-        let __element = #crate_path::create_element::<#path>(#args_expand);
+        let __element = #crate_path::create_element::<#path>(#args_expand, #options_expand);
         __element
     }}
 }

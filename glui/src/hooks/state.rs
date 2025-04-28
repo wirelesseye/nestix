@@ -21,16 +21,33 @@ pub fn state<T: 'static>(initializer: impl FnOnce() -> T) -> State<T> {
     }
 }
 
-#[derive(Clone)]
 pub struct State<T> {
     value: Rc<RefCell<T>>,
     app_model: Rc<AppModel>,
     scope: Weak<Scope>,
 }
 
+impl<T> Clone for State<T> {
+    fn clone(&self) -> Self {
+        Self {
+            value: self.value.clone(),
+            app_model: self.app_model.clone(),
+            scope: self.scope.clone(),
+        }
+    }
+}
+
 impl<T> State<T> {
     pub fn borrow(&self) -> Ref<T> {
         self.value.borrow()
+    }
+
+    pub fn update(&self, updater: impl FnOnce(&mut T)) {
+        {
+            let mut value = self.value.borrow_mut();
+            updater(&mut value);
+        }
+        self.app_model.update_scope(self.scope.upgrade().unwrap());
     }
 }
 
@@ -52,13 +69,5 @@ impl<T: PartialEq> State<T> {
             self.value.replace(value);
             self.app_model.update_scope(self.scope.upgrade().unwrap());
         }
-    }
-
-    pub fn update(&self, updater: impl FnOnce(&mut T)) {
-        {
-            let mut value = self.value.borrow_mut();
-            updater(&mut value);
-        }
-        self.app_model.update_scope(self.scope.upgrade().unwrap());
     }
 }

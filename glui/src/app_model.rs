@@ -180,11 +180,15 @@ fn reconcile(
     prev: Vec<Rc<Scope>>,
     next: Vec<Element>,
 ) -> ReconcileResult {
-    let mut scopes_by_comp_id: HashMap<ComponentID, VecDeque<Rc<Scope>>> = HashMap::new();
+    let mut scopes_by_comp_id: HashMap<ComponentID, HashMap<Option<String>, VecDeque<Rc<Scope>>>> =
+        HashMap::new();
     for scope in prev {
-        let component_id = scope.element.borrow().component_id;
+        let (component_id, key) = {
+            let element = scope.element.borrow();
+            (element.component_id, element.options.key.clone())
+        };
         let scopes_of_comp_id = scopes_by_comp_id.entry(component_id).or_default();
-        scopes_of_comp_id.push_back(scope);
+        scopes_of_comp_id.entry(key).or_default().push_back(scope);
     }
 
     let mut update_scopes = Vec::new();
@@ -192,12 +196,14 @@ fn reconcile(
         .into_iter()
         .map(|next_element| {
             if let Some(elements_of_tag) = scopes_by_comp_id.get_mut(&next_element.component_id) {
-                if let Some(scope) = elements_of_tag.pop_front() {
-                    if *scope.element.borrow() != next_element {
-                        scope.element.replace(next_element);
-                        update_scopes.push(scope.clone());
+                if let Some(elements_of_key) = elements_of_tag.get_mut(&next_element.options.key) {
+                    if let Some(scope) = elements_of_key.pop_front() {
+                        if *scope.element.borrow() != next_element {
+                            scope.element.replace(next_element);
+                            update_scopes.push(scope.clone());
+                        }
+                        return scope;
                     }
-                    return scope;
                 }
             }
 
