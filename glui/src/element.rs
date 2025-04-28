@@ -1,6 +1,9 @@
 use std::rc::Rc;
 
-use crate::{component_id, props::Props, Component, ComponentID};
+use crate::{
+    components::{component_id, Component, ComponentID},
+    props::Props,
+};
 
 #[derive(Debug, Clone)]
 pub struct Element {

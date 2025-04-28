@@ -1,11 +1,7 @@
 mod components;
 
 use components::{Button, FlexDirection, FlexView, Root, Text};
-use glui::{
-    callback, component, create_app_model,
-    hooks::{effect_cleanup, state},
-    layout, Element,
-};
+use glui::{callback, component, create_app_model, hooks::state, layout, Element};
 use wasm_bindgen::prelude::*;
 
 #[wasm_bindgen(start)]

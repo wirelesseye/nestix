@@ -1,5 +1,4 @@
 mod app_model;
-mod component;
 mod element;
 mod props;
 
@@ -8,7 +7,7 @@ pub mod components;
 pub mod hooks;
 
 pub use app_model::*;
-pub use component::*;
+pub use components::Component;
 pub use element::*;
 pub use props::*;
 

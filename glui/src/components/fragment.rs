@@ -1,6 +1,8 @@
 use bon::Builder;
 
-use crate::{Component, Element, Props};
+use crate::{Element, Props};
+
+use super::Component;
 
 #[derive(Props, PartialEq, Builder, Debug)]
 #[props(debug)]

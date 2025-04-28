@@ -5,7 +5,7 @@ use std::{
     rc::Rc,
 };
 
-use crate::{ComponentID, Element};
+use crate::{components::ComponentID, Element};
 
 thread_local! {
     static CURRENT_APP_MODEL: RefCell<Option<Rc<AppModel>>> = RefCell::new(None);
