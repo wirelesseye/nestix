@@ -113,12 +113,17 @@ fn expand_define_callback(input: DefineCallbackInput) -> TokenStream2 {
     };
 
     quote! {
-        #[derive(Clone)]
         pub struct #name<R, #type_params>(std::rc::Rc<dyn Fn(#type_params) -> R>);
 
         impl<R, #type_params> #name<R, #type_params> {
             pub fn call(&self, #fn_params) -> R {
                 (self.0)(#call_args)
+            }
+        }
+
+        impl<R, #type_params> Clone for #name<R, #type_params> {
+            fn clone(&self) -> Self {
+                Self(self.0.clone())
             }
         }
 
@@ -189,12 +194,17 @@ fn expand_define_callback_mut(input: DefineCallbackInput) -> TokenStream2 {
     };
 
     quote! {
-        #[derive(Clone)]
         pub struct #name<R, #type_params>(std::rc::Rc<std::cell::RefCell<dyn FnMut(#type_params) -> R>>);
 
         impl<R, #type_params> #name<R, #type_params> {
             pub fn call(&self, #fn_params) -> R {
                 (self.0.borrow_mut())(#call_args)
+            }
+        }
+
+        impl<R, #type_params> Clone for #name<R, #type_params> {
+            fn clone(&self) -> Self {
+                Self(self.0.clone())
             }
         }
 
