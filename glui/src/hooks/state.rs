@@ -35,7 +35,7 @@ impl<T> State<T> {
 }
 
 impl<T: Clone> State<T> {
-    pub fn get_clone(&self) -> T {
+    pub fn get_cloned(&self) -> T {
         self.value.borrow().clone()
     }
 }

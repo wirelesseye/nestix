@@ -2,7 +2,6 @@ use std::{
     any::{Any, TypeId},
     cell::{Cell, RefCell},
     collections::{HashMap, VecDeque},
-    ptr,
     rc::Rc,
 };
 
@@ -54,7 +53,7 @@ impl AppModel {
 
         let scope = self.scope.take().unwrap();
         scope.value_cursor.set(0);
-        
+
         let next = self.children_buf.take();
         let context_map = scope.context_map.borrow().clone();
         let ReconcileResult {
@@ -86,6 +85,13 @@ impl AppModel {
         let scope = scope.as_ref().unwrap();
         let context_map = scope.context_map.borrow();
         context_map.get(&key).cloned()
+    }
+
+    pub(crate) fn backward_value(&self) {
+        let scope = self.scope.borrow();
+        let scope = scope.as_ref().unwrap();
+        let cursor = scope.value_cursor.get();
+        scope.value_cursor.set(cursor - 1);
     }
 
     pub(crate) fn get_value(&self) -> Option<Rc<dyn Any>> {

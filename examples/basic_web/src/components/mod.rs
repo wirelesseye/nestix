@@ -3,10 +3,7 @@ use glui::{
     callback::Callback0,
     closure, component,
     components::fragment::Fragment,
-    hooks::{
-        context::{provide_context, use_context},
-        remember::remember,
-    },
+    hooks::{effect_cleanup, provide_context, remember, use_context},
     layout, Element, Props,
 };
 use wasm_bindgen::{prelude::Closure, JsCast};
@@ -93,8 +90,8 @@ pub fn Button(props: &ButtonProps) -> Element {
         html_element
     });
 
-    remember(|| {
-        let cb = if let Some(on_click) = &props.on_click {
+    effect_cleanup(props.on_click.clone(), |on_click| {
+        let cb = if let Some(on_click) = on_click {
             let on_click = on_click.clone();
             Some(Closure::wrap(Box::new(closure!([on_click] |_: Event| {
                 on_click.call();
@@ -109,7 +106,15 @@ pub fn Button(props: &ButtonProps) -> Element {
                 .unwrap();
         }
 
-        cb
+        closure!(
+            [html_element] || {
+                if let Some(cb) = &cb {
+                    html_element
+                        .remove_event_listener_with_callback("click", cb.as_ref().unchecked_ref())
+                        .unwrap();
+                }
+            }
+        )
     });
 
     provide_context(ParentContext {
