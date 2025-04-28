@@ -9,13 +9,14 @@ use std::{
 use crate::{ComponentID, Element};
 
 thread_local! {
-    static CURRENT_APP_MODEL: Cell<*const AppModel> = Cell::new(ptr::null());
+    static CURRENT_APP_MODEL: RefCell<Option<Rc<AppModel>>> = RefCell::new(None);
 }
 
-pub unsafe fn current_app_model() -> Option<&'static AppModel> {
-    CURRENT_APP_MODEL.get().as_ref()
+pub(crate) fn current_app_model() -> Option<Rc<AppModel>> {
+    CURRENT_APP_MODEL.with_borrow(|app_model| app_model.clone())
 }
 
+#[derive(Debug)]
 pub struct AppModel {
     root: RefCell<Option<Rc<Scope>>>,
     scope: RefCell<Option<Rc<Scope>>>,
@@ -23,7 +24,7 @@ pub struct AppModel {
 }
 
 impl AppModel {
-    pub fn render(&self, element: Element) {
+    pub fn render(self: &Rc<Self>, element: Element) {
         {
             let mut root = self.root.borrow_mut();
             if let Some(root) = &mut *root {
@@ -38,8 +39,12 @@ impl AppModel {
         self.update_scope(scope);
     }
 
-    fn update_scope(&self, scope: Rc<Scope>) {
-        CURRENT_APP_MODEL.with(|app_model| app_model.set(self));
+    pub(crate) fn current_scope(&self) -> Option<Rc<Scope>> {
+        self.scope.borrow().clone()
+    }
+
+    pub(crate) fn update_scope(self: &Rc<Self>, scope: Rc<Scope>) {
+        CURRENT_APP_MODEL.set(Some(self.clone()));
 
         let element = scope.element.borrow().clone();
         let prev = scope.children.take();
@@ -47,8 +52,10 @@ impl AppModel {
 
         (element.component_id.render_fn)(self, element);
 
-        let next = self.children_buf.take();
         let scope = self.scope.take().unwrap();
+        scope.value_cursor.set(0);
+        
+        let next = self.children_buf.take();
         let context_map = scope.context_map.borrow().clone();
         let ReconcileResult {
             children,
@@ -115,16 +122,16 @@ impl AppModel {
     }
 }
 
-pub fn create_app_model() -> AppModel {
-    AppModel {
+pub fn create_app_model() -> Rc<AppModel> {
+    Rc::new(AppModel {
         root: RefCell::new(None),
         scope: RefCell::new(None),
         children_buf: RefCell::new(Vec::new()),
-    }
+    })
 }
 
 #[derive(Debug)]
-struct Scope {
+pub(crate) struct Scope {
     element: RefCell<Element>,
     children: RefCell<Vec<Rc<Scope>>>,
     values: RefCell<Vec<Rc<dyn Any>>>,

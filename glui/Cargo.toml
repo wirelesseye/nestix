@@ -6,3 +6,4 @@ edition = "2021"
 [dependencies]
 bon = "3.6.3"
 glui-macros = { version = "0.1.0", path = "../glui-macros" }
+log = "0.4.27"

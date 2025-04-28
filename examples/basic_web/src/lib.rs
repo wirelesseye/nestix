@@ -1,7 +1,11 @@
 mod components;
 
-use components::{Root, Text};
-use glui::{component, create_app_model, layout, Element};
+use components::{Button, Root, Text};
+use glui::{
+    callback, component, create_app_model,
+    hooks::{remember::remember, state::state},
+    layout, Element,
+};
 use wasm_bindgen::prelude::*;
 
 #[wasm_bindgen(start)]
@@ -10,16 +14,29 @@ fn init() -> Result<(), JsValue> {
 
     let app_model = create_app_model();
     app_model.render(layout! { App });
+
     Ok(())
 }
 
 #[component]
 fn App() -> Element {
     log::debug!("render App");
+
+    let counter = state(|| 0);
+    let increment = remember(|| {
+        callback!(
+            [counter] || {
+                counter.update(|prev| prev + 1);
+            }
+        )
+    });
+
     layout! {
         Root(.selector = "#root") {
-            Text("Hello"),
-            Text("World"),
+            Text(counter.get().to_string()),
+            Button(.on_click = (*increment).clone()) {
+                Text("Increment")
+            }
         }
     }
 }
