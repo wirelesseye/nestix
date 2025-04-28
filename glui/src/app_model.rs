@@ -84,7 +84,7 @@ impl AppModel {
         update_children.push(element);
     }
 
-    pub fn provide_context(&self, key: TypeId, context: Rc<dyn Any>) {
+    pub(crate) fn provide_context(&self, key: TypeId, context: Rc<dyn Any>) {
         let scope = self.scope.borrow();
         let scope = scope.as_ref().unwrap();
 
@@ -92,7 +92,7 @@ impl AppModel {
         context_map.insert(key, context);
     }
 
-    pub fn use_context(&self, key: TypeId) -> Option<Rc<dyn Any>> {
+    pub(crate) fn use_context(&self, key: TypeId) -> Option<Rc<dyn Any>> {
         let scope = self.scope.borrow();
         let scope = scope.as_ref().unwrap();
         let context_map = scope.context_map.borrow();
