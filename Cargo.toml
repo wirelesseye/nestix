@@ -1,4 +1,4 @@
 [workspace]
-members = ["glui", "glui-*", "examples/*"]
-default-members = ["glui", "glui-*"]
+members = ["nestix", "nestix-*", "examples/*"]
+default-members = ["nestix", "nestix-*"]
 resolver = "2"

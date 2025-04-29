@@ -1,7 +1,7 @@
 use std::{cell::OnceCell, rc::Rc};
 
 use bon::Builder;
-use glui::{
+use nestix::{
     closure, component,
     hooks::{effect, effect_cleanup, provide_context, remember, use_context},
     Props,

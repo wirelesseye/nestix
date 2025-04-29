@@ -1,6 +1,6 @@
 use std::{fmt::Debug, rc::Rc};
 
-use glui_macros::{define_callback, define_callback_mut};
+use nestix_macros::{define_callback, define_callback_mut};
 
 define_callback!(Callback0, 0);
 define_callback!(Callback1, 1);

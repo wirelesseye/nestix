@@ -4,7 +4,7 @@ use std::{cell::OnceCell, rc::Rc};
 
 use bon::Builder;
 use components::{Button, FlexDirection, FlexView, Input, Root, Text};
-use glui::{
+use nestix::{
     callback,
     callbacks::Callback1,
     component, create_app_model,

@@ -1,5 +1,5 @@
 use bon::Builder;
-use glui::{
+use nestix::{
     closure, component,
     hooks::{effect_cleanup, remember, use_context},
     Props,

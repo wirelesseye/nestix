@@ -5,4 +5,4 @@ edition = "2021"
 
 [dependencies]
 bon = "3.6.3"
-glui = { path = "../../glui" }
+nestix = { path = "../../nestix" }

@@ -1,5 +1,5 @@
 use bon::Builder;
-use glui::{
+use nestix::{
     callbacks::Callback0,
     closure, component,
     components::fragment::Fragment,

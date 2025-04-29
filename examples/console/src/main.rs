@@ -1,5 +1,5 @@
 use bon::Builder;
-use glui::{
+use nestix::{
     component, components::fragment::Fragment, create_app_model, layout, Element, Props
 };
 

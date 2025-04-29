@@ -11,4 +11,4 @@ pub use components::Component;
 pub use element::*;
 pub use props::*;
 
-pub use glui_macros::{callback, callback_mut, closure, component, layout, Props};
+pub use nestix_macros::{callback, callback_mut, closure, component, layout, Props};

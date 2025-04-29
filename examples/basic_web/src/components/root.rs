@@ -1,5 +1,5 @@
 use bon::Builder;
-use glui::{
+use nestix::{
     closure, component,
     components::fragment::Fragment,
     hooks::{effect_cleanup, provide_context, remember},
