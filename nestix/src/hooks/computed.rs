@@ -2,7 +2,7 @@ use std::{any::Any, ops::Deref, rc::Rc};
 
 use crate::current_app_model;
 
-pub fn computed<D: 'static + PartialEq + Eq, T: 'static>(
+pub fn computed<D: 'static + PartialEq, T: 'static>(
     dependency: D,
     compute: impl FnOnce(&D) -> T,
 ) -> Computed<T> {
