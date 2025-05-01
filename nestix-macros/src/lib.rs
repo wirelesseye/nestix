@@ -1,4 +1,4 @@
-use callback::{callback_impl, callback_mut_impl, define_callback_impl, define_callback_mut_impl};
+use callback::callback_impl;
 use closure::closure_impl;
 use component::component_impl;
 use derive_props::derive_props_impl;
@@ -36,19 +36,4 @@ pub fn closure(input: TokenStream) -> TokenStream {
 #[proc_macro]
 pub fn callback(input: TokenStream) -> TokenStream {
     callback_impl(input)
-}
-
-#[proc_macro]
-pub fn callback_mut(input: TokenStream) -> TokenStream {
-    callback_mut_impl(input)
-}
-
-#[proc_macro]
-pub fn define_callback(input: TokenStream) -> TokenStream {
-    define_callback_impl(input)
-}
-
-#[proc_macro]
-pub fn define_callback_mut(input: TokenStream) -> TokenStream {
-    define_callback_mut_impl(input)
 }

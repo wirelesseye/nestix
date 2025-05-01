@@ -4,14 +4,12 @@ use std::{cell::OnceCell, rc::Rc};
 
 use bon::Builder;
 use components::{Button, FlexDirection, FlexView, Input, Root, Text};
-use nestix::{
-    callback,
-    callbacks::Callback1,
-    component, create_app_model,
-    hooks::{remember, state, State},
-    layout, Element, Props,
-};
 use nanoid_wasm::nanoid;
+use nestix::{
+    callback, component, create_app_model,
+    hooks::{remember, state, State},
+    layout, Element, PropValue, Props,
+};
 use wasm_bindgen::prelude::*;
 use web_sys::{HtmlElement, HtmlInputElement};
 
@@ -83,7 +81,7 @@ fn Counter() -> Element {
             .width = 100.0
         ) {
             Text(counter.get().to_string()),
-            Button(.on_click = (*increment).clone()) {
+            Button(.on_click = increment.clone_prop_value()) {
                 Text("Increment")
             },
         }
@@ -126,7 +124,7 @@ fn TodoList() -> Element {
 
     let remove = remember(|| {
         callback!(
-            [items] | key | {
+            [items] | key: &str | {
                 items.update(|items| {
                     items.retain(|item| item.key != key);
                 })
@@ -138,7 +136,7 @@ fn TodoList() -> Element {
         FlexView(.direction = FlexDirection::Column) {
             FlexView {
                 Input(.elem_ref = input_ref),
-                Button(.on_click = (*add).clone()) {
+                Button(.on_click = add.clone_prop_value()) {
                     Text("Add")
                 }
             }
@@ -146,7 +144,7 @@ fn TodoList() -> Element {
                 TodoItemView(
                     $key = item.key.clone(),
                     .item = item.clone(),
-                    .remove = (*remove).clone(),
+                    .remove = remove.clone_prop_value(),
                 )
             }
         }
@@ -156,7 +154,7 @@ fn TodoList() -> Element {
 #[derive(PartialEq, Props, Builder)]
 struct TodoItemViewProps {
     item: TodoItem,
-    remove: Callback1<(), String>,
+    remove: PropValue<dyn Fn(&str)>,
 }
 
 #[component]
@@ -166,7 +164,7 @@ fn TodoItemView(props: &TodoItemViewProps) -> Element {
     layout! {
         FlexView {
             Button(.on_click = callback!(
-                [props.remove, props.item] || remove.call(item.key.clone())
+                [props.remove, props.item] || remove(&item.key)
             )) {
                 Text("X")
             }

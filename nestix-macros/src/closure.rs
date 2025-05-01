@@ -2,7 +2,11 @@ use proc_macro::TokenStream;
 use proc_macro2::TokenStream as TokenStream2;
 use quote::{quote, ToTokens};
 use syn::{
-    bracketed, parse::Parse, parse_macro_input, token::{self, Move}, Expr, ExprClosure, Ident, Token,
+    bracketed,
+    parse::Parse,
+    parse_macro_input,
+    token::{self, Move},
+    Expr, ExprClosure, Ident, Token,
 };
 
 pub fn closure_impl(input: TokenStream) -> TokenStream {

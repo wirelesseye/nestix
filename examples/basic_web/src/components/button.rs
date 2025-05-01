@@ -1,20 +1,16 @@
 use bon::Builder;
 use nestix::{
-    callbacks::Callback0,
-    closure, component,
-    components::fragment::Fragment,
-    hooks::{effect, effect_cleanup, provide_context, remember, use_context},
-    layout, Element, Props,
+    closure, component, components::fragment::Fragment, hooks::{effect, effect_cleanup, provide_context, remember, use_context}, layout, Element, PropValue, Props
 };
 use wasm_bindgen::{prelude::Closure, JsCast};
 use web_sys::{Event, HtmlElement};
 
 use crate::{components::ParentContext, document};
 
-#[derive(Debug, PartialEq, Props, Builder)]
+#[derive(PartialEq, Props, Builder)]
 pub struct ButtonProps {
     children: Option<Vec<Element>>,
-    on_click: Option<Callback0<()>>,
+    on_click: Option<PropValue<dyn Fn()>>,
     #[builder(default = false)]
     disabled: bool,
 }
@@ -45,7 +41,7 @@ pub fn Button(props: &ButtonProps) -> Element {
         let cb = if let Some(on_click) = on_click {
             let on_click = on_click.clone();
             Some(Closure::wrap(Box::new(closure!([on_click] |_: Event| {
-                on_click.call();
+                on_click();
             })) as Box<dyn Fn(_)>))
         } else {
             None
