@@ -1,9 +1,9 @@
-use bon::Builder;
 use nestix::{
     closure, component,
     components::fragment::Fragment,
+    derive_props,
     hooks::{effect, effect_cleanup, provide_context, remember, use_context},
-    layout, Element, Props,
+    layout, Element,
 };
 use wasm_bindgen::JsCast;
 use web_sys::HtmlElement;
@@ -16,7 +16,8 @@ pub enum FlexDirection {
     Column,
 }
 
-#[derive(PartialEq, Props, Builder)]
+#[derive_props]
+#[derive(PartialEq)]
 pub struct FlexViewProps {
     #[builder(default = FlexDirection::Row)]
     direction: FlexDirection,

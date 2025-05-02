@@ -3,7 +3,7 @@ use proc_macro2::TokenStream as TokenStream2;
 use quote::{quote, ToTokens};
 use syn::{parse_macro_input, parse_quote, spanned::Spanned, ItemFn};
 
-use crate::util::crate_path;
+use crate::util::{crate_name, FoundCrateExt};
 
 pub fn component(_attr: TokenStream, input: TokenStream) -> TokenStream {
     let component_input = parse_macro_input!(input as ItemFn);
@@ -13,7 +13,7 @@ pub fn component(_attr: TokenStream, input: TokenStream) -> TokenStream {
 }
 
 fn generate_component(input: ItemFn) -> Result<TokenStream2, syn::Error> {
-    let crate_path = crate_path();
+    let crate_path = crate_name().to_path();
     let ItemFn {
         attrs,
         vis,

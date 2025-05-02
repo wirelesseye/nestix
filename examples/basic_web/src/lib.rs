@@ -2,13 +2,12 @@ mod components;
 
 use std::{cell::OnceCell, rc::Rc};
 
-use bon::Builder;
 use components::{Button, FlexDirection, FlexView, Input, Root, Text};
 use nanoid_wasm::nanoid;
 use nestix::{
-    callback, component, create_app_model,
+    callback, component, create_app_model, derive_props,
     hooks::{remember, state, State},
-    layout, Element, PropValue, Props,
+    layout, Element, PropValue,
 };
 use wasm_bindgen::prelude::*;
 use web_sys::{HtmlElement, HtmlInputElement};
@@ -151,7 +150,8 @@ fn TodoList() -> Element {
     }
 }
 
-#[derive(PartialEq, Props, Builder)]
+#[derive_props]
+#[derive(PartialEq)]
 struct TodoItemViewProps {
     item: TodoItem,
     remove: PropValue<dyn Fn(&str)>,

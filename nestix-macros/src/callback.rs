@@ -5,7 +5,7 @@ use syn::{parse_macro_input, punctuated::Punctuated, spanned::Spanned, Pat, Toke
 
 use crate::{
     closure::{generate_closure, ClosureInput},
-    util::crate_path,
+    util::{crate_name, FoundCrateExt},
 };
 
 pub fn callback(input: TokenStream) -> TokenStream {
@@ -16,7 +16,7 @@ pub fn callback(input: TokenStream) -> TokenStream {
 }
 
 fn generate_callback(input: ClosureInput) -> Result<TokenStream2, syn::Error> {
-    let crate_path = crate_path();
+    let crate_path = crate_name().to_path();
     let expr_closure = &input.expr_closure;
     let types = expr_closure
         .inputs

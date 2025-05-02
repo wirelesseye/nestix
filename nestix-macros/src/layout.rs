@@ -9,7 +9,7 @@ use syn::{
     Block, Expr, Ident, Pat, Path, Token,
 };
 
-use crate::util::crate_path;
+use crate::util::{crate_name, FoundCrateExt};
 
 pub fn layout(input: TokenStream) -> TokenStream {
     let layout_input = parse_macro_input!(input as LayoutInput);
@@ -577,7 +577,7 @@ fn generate_child(child: LayoutChild) -> Result<TokenStream2, syn::Error> {
 }
 
 fn generate_layout(input: LayoutInput) -> Result<TokenStream2, syn::Error> {
-    let crate_path = crate_path();
+    let crate_path = crate_name().to_path();
     let LayoutInput {
         path,
         paren,

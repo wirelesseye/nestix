@@ -1,13 +1,17 @@
-use bon::Builder;
 use nestix::{
-    closure, component, components::fragment::Fragment, hooks::{effect, effect_cleanup, provide_context, remember, use_context}, layout, Element, PropValue, Props
+    closure, component,
+    components::fragment::Fragment,
+    derive_props,
+    hooks::{effect, effect_cleanup, provide_context, remember, use_context},
+    layout, Element, PropValue,
 };
 use wasm_bindgen::{prelude::Closure, JsCast};
 use web_sys::{Event, HtmlElement};
 
 use crate::{components::ParentContext, document};
 
-#[derive(PartialEq, Props, Builder)]
+#[derive_props]
+#[derive(PartialEq)]
 pub struct ButtonProps {
     children: Option<Vec<Element>>,
     on_click: Option<PropValue<dyn Fn()>>,

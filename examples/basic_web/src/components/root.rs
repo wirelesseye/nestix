@@ -1,16 +1,17 @@
-use bon::Builder;
 use nestix::{
     closure, component,
     components::fragment::Fragment,
+    derive_props,
     hooks::{effect_cleanup, provide_context, remember},
-    layout, Element, Props,
+    layout, Element,
 };
 use wasm_bindgen::JsCast;
 use web_sys::HtmlElement;
 
 use crate::{components::ParentContext, document};
 
-#[derive(PartialEq, Props, Builder)]
+#[derive_props]
+#[derive(PartialEq)]
 pub struct RootProps {
     #[builder(into)]
     selector: String,
