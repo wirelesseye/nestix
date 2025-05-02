@@ -29,13 +29,13 @@ fn generate_component(input: ItemFn) -> Result<TokenStream2, syn::Error> {
         tokens
     };
 
-    let comp_args = if sig.inputs.len() == 0 {
+    let render_args = if sig.inputs.len() == 0 {
         quote! {}
     } else if sig.inputs.len() == 1 {
         quote! {props}
     } else {
         return Err(syn::Error::new(
-            sig.span(),
+            sig.inputs.span(),
             format!(
                 "expect 0 or 1 parameter, but actually get {}",
                 sig.inputs.len()
@@ -72,7 +72,7 @@ fn generate_component(input: ItemFn) -> Result<TokenStream2, syn::Error> {
                 #sig #block
 
                 let props = element.props().downcast_ref::<#props_type>().unwrap();
-                if let Some(output) = #crate_path::__private::ComponentOutput::into_maybe_element(#ident(#comp_args)) {
+                if let Some(output) = #crate_path::__private::ComponentOutput::into_maybe_element(#ident(#render_args)) {
                     app_model.add_child(output);
                 }
             }
