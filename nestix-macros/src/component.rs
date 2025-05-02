@@ -60,36 +60,6 @@ fn generate_component(input: ItemFn) -> Result<TokenStream2, syn::Error> {
 
     let ident = &sig.ident;
 
-    let return_ty_output = match &sig.output {
-        syn::ReturnType::Default => quote! {#ident(#comp_args);},
-        syn::ReturnType::Type(_, ty) => match &**ty {
-            syn::Type::Path(type_path) => {
-                let last = type_path.path.segments.last().unwrap();
-                if last.ident == "Option" {
-                    quote! {
-                        let output = #ident(#comp_args);
-                        if let Some(output) = output {
-                            app_model.add_child(output);
-                        }
-                    }
-                } else {
-                    quote! {
-                        let output = #ident(#comp_args);
-                        app_model.add_child(output);
-                    }
-                }
-            }
-            syn::Type::Tuple(type_tuple) => {
-                if type_tuple.elems.is_empty() {
-                    quote! {#ident(#comp_args);}
-                } else {
-                    return Err(syn::Error::new(ty.span(), "unexpected return type"));
-                }
-            }
-            _ => return Err(syn::Error::new(ty.span(), "unexpected return type")),
-        },
-    };
-
     Ok(quote! {
         #vis struct #ident;
 
@@ -102,7 +72,9 @@ fn generate_component(input: ItemFn) -> Result<TokenStream2, syn::Error> {
                 #sig #block
 
                 let props = element.props().downcast_ref::<#props_type>().unwrap();
-                #return_ty_output
+                if let Some(output) = #crate_path::__private::ComponentOutput::into_maybe_element(#ident(#comp_args)) {
+                    app_model.add_child(output);
+                }
             }
         }
     })
