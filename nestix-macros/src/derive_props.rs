@@ -30,7 +30,15 @@ fn expand_derive_props(input: ItemStruct) -> TokenStream2 {
                 for ident in parsed_options {
                     match ident.to_string().as_str() {
                         "debug" => options.impl_debug = true,
-                        other => panic!("unexpected ident: {}", other),
+                        other => {
+                            return TokenStream2::from(
+                                syn::Error::new(
+                                    ident.span(),
+                                    format!("unexpected attribute: {}", other),
+                                )
+                                .to_compile_error(),
+                            )
+                        }
                     }
                 }
             }

@@ -1,7 +1,7 @@
 use proc_macro::TokenStream;
 use proc_macro2::TokenStream as TokenStream2;
 use quote::{quote, ToTokens};
-use syn::{parse_macro_input, punctuated::Punctuated, Pat, Token};
+use syn::{parse_macro_input, punctuated::Punctuated, spanned::Spanned, Pat, Token};
 
 use crate::{
     closure::{expand_closure, ClosureInput},
@@ -20,10 +20,17 @@ fn expand_callback(input: ClosureInput) -> TokenStream2 {
         .inputs
         .iter()
         .map(|pat| match pat {
-            Pat::Type(ty) => ty.ty.clone(),
-            other => panic!("type annotation missing: {}", other.to_token_stream()),
+            Pat::Type(ty) => Ok(ty.ty.clone()),
+            other => Err(syn::Error::new(
+                other.span(),
+                format!("type annotation missing: {}", other.to_token_stream()),
+            )),
         })
-        .collect::<Punctuated<_, Token![,]>>();
+        .collect::<syn::Result<Punctuated<_, Token![,]>>>();
+    let types = match types {
+        Ok(types) => types,
+        Err(err) => return TokenStream2::from(err.to_compile_error()),
+    };
     let closure_expand = expand_closure(input);
 
     quote! {

@@ -1,7 +1,7 @@
 use proc_macro::TokenStream;
 use proc_macro2::TokenStream as TokenStream2;
 use quote::{quote, ToTokens};
-use syn::{parse_macro_input, parse_quote, ItemFn};
+use syn::{parse_macro_input, parse_quote, spanned::Spanned, ItemFn};
 
 use crate::util::crate_path;
 
@@ -32,16 +32,27 @@ fn expand_component(input: ItemFn) -> TokenStream2 {
     } else if sig.inputs.len() == 1 {
         quote! {props}
     } else {
-        panic!(
-            "expect 0 or 1 parameter, but actually get {}.",
-            sig.inputs.len()
+        return TokenStream2::from(
+            syn::Error::new(
+                sig.span(),
+                format!(
+                    "expect 0 or 1 parameter, but actually get {}",
+                    sig.inputs.len()
+                ),
+            )
+            .to_compile_error(),
         );
     };
 
     let props_type = match sig.inputs.get(0) {
         Some(syn::FnArg::Typed(pat_type)) => match &*pat_type.ty {
             syn::Type::Reference(type_reference) => *type_reference.elem.clone(),
-            _ => panic!("props must be passed by reference"),
+            other => {
+                return TokenStream2::from(
+                    syn::Error::new(other.span(), "props must be passed by reference")
+                        .to_compile_error(),
+                )
+            }
         },
         _ => {
             parse_quote!(())
@@ -73,10 +84,16 @@ fn expand_component(input: ItemFn) -> TokenStream2 {
                 if type_tuple.elems.is_empty() {
                     quote! {#ident(#comp_args);}
                 } else {
-                    panic!("unexpected return type")
+                    return TokenStream2::from(
+                        syn::Error::new(ty.span(), "unexpected return type").to_compile_error(),
+                    );
                 }
             }
-            _ => panic!("unexpected return type"),
+            _ => {
+                return TokenStream2::from(
+                    syn::Error::new(ty.span(), "unexpected return type").to_compile_error(),
+                )
+            }
         },
     };
 
