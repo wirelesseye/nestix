@@ -9,9 +9,11 @@ use syn::{
     Expr, ExprClosure, Ident, Token,
 };
 
-pub fn closure_impl(input: TokenStream) -> TokenStream {
+pub fn closure(input: TokenStream) -> TokenStream {
     let closure_input = parse_macro_input!(input as ClosureInput);
-    expand_closure(closure_input).into()
+    generate_closure(closure_input)
+        .unwrap_or_else(|err| TokenStream2::from(err.to_compile_error()))
+        .into()
 }
 
 pub struct CloneVar {
@@ -66,9 +68,9 @@ impl Parse for ClosureInput {
     }
 }
 
-pub fn expand_closure(input: ClosureInput) -> TokenStream2 {
+pub fn generate_closure(input: ClosureInput) -> Result<TokenStream2, syn::Error> {
     let has_clone_vars = !input.clone_vars.is_empty();
-    let clone_vars_expand = {
+    let clone_vars_output = {
         let mut tokens = TokenStream2::new();
         for clone_var in input.clone_vars {
             let CloneVar { expr, ident } = clone_var;
@@ -93,10 +95,10 @@ pub fn expand_closure(input: ClosureInput) -> TokenStream2 {
         expr_closure.capture = Some(Move::default());
     }
 
-    quote! {{
-        #clone_vars_expand
+    Ok(quote! {{
+        #clone_vars_output
         #expr_closure
-    }}
+    }})
 }
 
 fn get_ident_from_expr(expr: &Expr) -> Option<Ident> {

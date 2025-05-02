@@ -5,12 +5,14 @@ use syn::{parse_macro_input, parse_quote, spanned::Spanned, ItemFn};
 
 use crate::util::crate_path;
 
-pub fn component_impl(_attr: TokenStream, input: TokenStream) -> TokenStream {
+pub fn component(_attr: TokenStream, input: TokenStream) -> TokenStream {
     let component_input = parse_macro_input!(input as ItemFn);
-    expand_component(component_input).into()
+    generate_component(component_input)
+        .unwrap_or_else(|err| TokenStream2::from(err.to_compile_error()))
+        .into()
 }
 
-fn expand_component(input: ItemFn) -> TokenStream2 {
+fn generate_component(input: ItemFn) -> Result<TokenStream2, syn::Error> {
     let crate_path = crate_path();
     let ItemFn {
         attrs,
@@ -19,7 +21,7 @@ fn expand_component(input: ItemFn) -> TokenStream2 {
         block,
     } = input;
 
-    let attrs_expand = {
+    let attrs_output = {
         let mut tokens = TokenStream2::new();
         for attr in attrs {
             attr.to_tokens(&mut tokens);
@@ -32,26 +34,23 @@ fn expand_component(input: ItemFn) -> TokenStream2 {
     } else if sig.inputs.len() == 1 {
         quote! {props}
     } else {
-        return TokenStream2::from(
-            syn::Error::new(
-                sig.span(),
-                format!(
-                    "expect 0 or 1 parameter, but actually get {}",
-                    sig.inputs.len()
-                ),
-            )
-            .to_compile_error(),
-        );
+        return Err(syn::Error::new(
+            sig.span(),
+            format!(
+                "expect 0 or 1 parameter, but actually get {}",
+                sig.inputs.len()
+            ),
+        ));
     };
 
     let props_type = match sig.inputs.get(0) {
         Some(syn::FnArg::Typed(pat_type)) => match &*pat_type.ty {
             syn::Type::Reference(type_reference) => *type_reference.elem.clone(),
             other => {
-                return TokenStream2::from(
-                    syn::Error::new(other.span(), "props must be passed by reference")
-                        .to_compile_error(),
-                )
+                return Err(syn::Error::new(
+                    other.span(),
+                    "props must be passed by reference",
+                ))
             }
         },
         _ => {
@@ -61,7 +60,7 @@ fn expand_component(input: ItemFn) -> TokenStream2 {
 
     let ident = &sig.ident;
 
-    let output_expand = match &sig.output {
+    let return_ty_output = match &sig.output {
         syn::ReturnType::Default => quote! {#ident(#comp_args);},
         syn::ReturnType::Type(_, ty) => match &**ty {
             syn::Type::Path(type_path) => {
@@ -84,20 +83,14 @@ fn expand_component(input: ItemFn) -> TokenStream2 {
                 if type_tuple.elems.is_empty() {
                     quote! {#ident(#comp_args);}
                 } else {
-                    return TokenStream2::from(
-                        syn::Error::new(ty.span(), "unexpected return type").to_compile_error(),
-                    );
+                    return Err(syn::Error::new(ty.span(), "unexpected return type"));
                 }
             }
-            _ => {
-                return TokenStream2::from(
-                    syn::Error::new(ty.span(), "unexpected return type").to_compile_error(),
-                )
-            }
+            _ => return Err(syn::Error::new(ty.span(), "unexpected return type")),
         },
     };
 
-    quote! {
+    Ok(quote! {
         #vis struct #ident;
 
         impl #crate_path::Component for #ident {
@@ -105,12 +98,12 @@ fn expand_component(input: ItemFn) -> TokenStream2 {
 
             fn render(app_model: &#crate_path::AppModel, element: #crate_path::Element) {
                 #[allow(non_snake_case)]
-                #attrs_expand
+                #attrs_output
                 #sig #block
 
                 let props = element.props().downcast_ref::<#props_type>().unwrap();
-                #output_expand
+                #return_ty_output
             }
         }
-    }
+    })
 }

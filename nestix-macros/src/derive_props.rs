@@ -5,9 +5,11 @@ use syn::{parse_macro_input, punctuated::Punctuated, Ident, ItemStruct, Meta, To
 
 use crate::util::crate_path;
 
-pub fn derive_props_impl(input: TokenStream) -> TokenStream {
+pub fn derive_props(input: TokenStream) -> TokenStream {
     let derive_props_input = parse_macro_input!(input as ItemStruct);
-    expand_derive_props(derive_props_input).into()
+    expand_derive_props(derive_props_input)
+        .unwrap_or_else(|err| TokenStream2::from(err.to_compile_error()))
+        .into()
 }
 
 #[derive(Default)]
@@ -15,7 +17,7 @@ struct DerivePropsOptions {
     impl_debug: bool,
 }
 
-fn expand_derive_props(input: ItemStruct) -> TokenStream2 {
+fn expand_derive_props(input: ItemStruct) -> Result<TokenStream2, syn::Error> {
     let crate_path = crate_path();
     let ItemStruct { ident, attrs, .. } = input;
 
@@ -31,13 +33,10 @@ fn expand_derive_props(input: ItemStruct) -> TokenStream2 {
                     match ident.to_string().as_str() {
                         "debug" => options.impl_debug = true,
                         other => {
-                            return TokenStream2::from(
-                                syn::Error::new(
-                                    ident.span(),
-                                    format!("unexpected attribute: {}", other),
-                                )
-                                .to_compile_error(),
-                            )
+                            return Err(syn::Error::new(
+                                ident.span(),
+                                format!("unexpected attribute: {}", other),
+                            ))
                         }
                     }
                 }
@@ -46,7 +45,7 @@ fn expand_derive_props(input: ItemStruct) -> TokenStream2 {
         }
     }
 
-    let impl_debug_expand = if options.impl_debug {
+    let impl_debug_output = if options.impl_debug {
         quote! {
             fn debug_fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
                 std::fmt::Debug::fmt(self, f)
@@ -56,7 +55,7 @@ fn expand_derive_props(input: ItemStruct) -> TokenStream2 {
         quote! {}
     };
 
-    quote! {
+    Ok(quote! {
         impl #crate_path::Props for #ident {
             fn has_changed(&self, prev: &dyn Props) -> bool {
                 if let Some(prev) = prev.downcast_ref::<#ident>() {
@@ -66,7 +65,7 @@ fn expand_derive_props(input: ItemStruct) -> TokenStream2 {
                 }
             }
 
-            #impl_debug_expand
+            #impl_debug_output
         }
-    }
+    })
 }

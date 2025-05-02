@@ -11,9 +11,11 @@ use syn::{
 
 use crate::util::crate_path;
 
-pub fn layout_impl(input: TokenStream) -> TokenStream {
+pub fn layout(input: TokenStream) -> TokenStream {
     let layout_input = parse_macro_input!(input as LayoutInput);
-    expand_layout(layout_input).into()
+    generate_layout(layout_input)
+        .unwrap_or_else(|err| TokenStream2::from(err.to_compile_error()))
+        .into()
 }
 
 struct LayoutNamedArg {
@@ -409,7 +411,7 @@ impl Parse for LayoutInput {
     }
 }
 
-fn expand_layout_arm(tokens: &mut TokenStream2, arm: LayoutArm) {
+fn generate_layout_arm(arm: LayoutArm) -> Result<TokenStream2, syn::Error> {
     let LayoutArm {
         pat,
         guard,
@@ -418,7 +420,7 @@ fn expand_layout_arm(tokens: &mut TokenStream2, arm: LayoutArm) {
         comma,
     } = arm;
 
-    let guard_expand = if let Some((if_token, expr)) = guard {
+    let guard_output = if let Some((if_token, expr)) = guard {
         let mut tokens = TokenStream2::new();
         if_token.to_tokens(&mut tokens);
         expr.to_tokens(&mut tokens);
@@ -427,32 +429,31 @@ fn expand_layout_arm(tokens: &mut TokenStream2, arm: LayoutArm) {
         quote! {}
     };
 
-    let body_expand = match body {
-        Some(LayoutBody::Child(layout_child)) => expand_child(*layout_child),
+    let body_output = match body {
+        Some(LayoutBody::Child(layout_child)) => generate_child(*layout_child)?,
         Some(LayoutBody::Children(children)) => {
             let mut tokens = TokenStream2::new();
             for child in children {
-                expand_child(child).to_tokens(&mut tokens);
+                generate_child(child)?.to_tokens(&mut tokens);
             }
             tokens
         }
         None => quote! {()},
     };
 
-    quote! {
-        #pat #guard_expand #fat_arrow_token {
-            #body_expand
+    Ok(quote! {
+        #pat #guard_output #fat_arrow_token {
+            #body_output
         } #comma
-    }
-    .to_tokens(tokens);
+    })
 }
 
-fn expand_child(child: LayoutChild) -> TokenStream2 {
-    match child {
+fn generate_child(child: LayoutChild) -> Result<TokenStream2, syn::Error> {
+    Ok(match child {
         LayoutChild::Layout(layout_input) => {
-            let layout_expand = expand_layout(layout_input);
+            let layout_output = generate_layout(layout_input)?;
             quote! {
-                __children.push(#layout_expand);
+                __children.push(#layout_output);
             }
         }
         LayoutChild::ExprBlock(ExprBlock { tag, block }) => match tag {
@@ -484,17 +485,17 @@ fn expand_child(child: LayoutChild) -> TokenStream2 {
                 else_branch,
             } = layout_if;
 
-            let children_expand = {
+            let children_output = {
                 let mut tokens = TokenStream2::new();
                 for child in children {
-                    expand_child(child).to_tokens(&mut tokens);
+                    generate_child(child)?.to_tokens(&mut tokens);
                 }
                 tokens
             };
 
             let mut output = quote! {
                 #if_token #cond {
-                    #children_expand
+                    #children_output
                 }
             };
 
@@ -502,12 +503,12 @@ fn expand_child(child: LayoutChild) -> TokenStream2 {
                 else_token.to_tokens(&mut output);
                 match else_branch {
                     LayoutBody::Child(child) => {
-                        expand_child(*child).to_tokens(&mut output);
+                        generate_child(*child)?.to_tokens(&mut output);
                     }
                     LayoutBody::Children(children) => {
                         let mut tokens = TokenStream2::new();
                         for child in children {
-                            expand_child(child).to_tokens(&mut tokens);
+                            generate_child(child)?.to_tokens(&mut tokens);
                         }
                         quote! {
                             {#tokens}
@@ -528,17 +529,17 @@ fn expand_child(child: LayoutChild) -> TokenStream2 {
                 children,
             } = layout_each;
 
-            let children_expand = {
+            let children_output = {
                 let mut tokens = TokenStream2::new();
                 for child in children {
-                    expand_child(child).to_tokens(&mut tokens);
+                    generate_child(child)?.to_tokens(&mut tokens);
                 }
                 tokens
             };
 
             quote! {
                 #for_token #pat #in_token #expr {
-                    #children_expand
+                    #children_output
                 }
             }
         }
@@ -551,20 +552,31 @@ fn expand_child(child: LayoutChild) -> TokenStream2 {
             } = layout_match;
 
             let mut body = TokenStream2::new();
+
+            let mut arm_err = None;
             brace_token.surround(&mut body, |body| {
                 for arm in arms {
-                    expand_layout_arm(body, arm);
+                    match generate_layout_arm(arm) {
+                        Ok(output) => output.to_tokens(body),
+                        Err(err) => {
+                            arm_err = Some(err);
+                            return;
+                        }
+                    }
                 }
             });
+            if let Some(err) = arm_err {
+                return Err(err);
+            }
 
             quote! {
                 #match_token #expr #body
             }
         }
-    }
+    })
 }
 
-fn expand_layout(input: LayoutInput) -> TokenStream2 {
+fn generate_layout(input: LayoutInput) -> Result<TokenStream2, syn::Error> {
     let crate_path = crate_path();
     let LayoutInput {
         path,
@@ -574,10 +586,10 @@ fn expand_layout(input: LayoutInput) -> TokenStream2 {
     } = input;
 
     let has_children = children.is_some();
-    let children_expand = if let Some(children) = children {
+    let children_output = if let Some(children) = children {
         let mut tokens = TokenStream2::new();
         for child in children {
-            expand_child(child).to_tokens(&mut tokens);
+            generate_child(child)?.to_tokens(&mut tokens);
         }
         quote! {
             .children({
@@ -590,8 +602,8 @@ fn expand_layout(input: LayoutInput) -> TokenStream2 {
         quote! {}
     };
 
-    let args_expand = if let Some(args) = &args {
-        let start_args_expand = {
+    let args_output = if let Some(args) = &args {
+        let start_args_output = {
             let mut tokens = TokenStream2::new();
             for (i, start_arg) in args.start_args.iter().enumerate() {
                 if i > 0 {
@@ -601,7 +613,7 @@ fn expand_layout(input: LayoutInput) -> TokenStream2 {
             }
             tokens
         };
-        let named_args_expand = {
+        let named_args_output = {
             let mut tokens = TokenStream2::new();
             for named_arg in &args.named_args {
                 let LayoutNamedArg {
@@ -614,7 +626,7 @@ fn expand_layout(input: LayoutInput) -> TokenStream2 {
                 }
                 .to_tokens(&mut tokens);
             }
-            children_expand.to_tokens(&mut tokens);
+            children_output.to_tokens(&mut tokens);
             tokens
         };
 
@@ -622,7 +634,7 @@ fn expand_layout(input: LayoutInput) -> TokenStream2 {
             let mut tokens = TokenStream2::new();
             if let Some(paren) = paren {
                 paren.surround(&mut tokens, |tokens| {
-                    start_args_expand.to_tokens(tokens);
+                    start_args_output.to_tokens(tokens);
                 });
             }
             tokens
@@ -630,14 +642,14 @@ fn expand_layout(input: LayoutInput) -> TokenStream2 {
 
         quote! {
             <#path as #crate_path::Component>::Props::builder #parenthesized_start_args
-            #named_args_expand
+            #named_args_output
             .build()
         }
     } else {
         if has_children {
             quote! {
                 <#path as #crate_path::Component>::Props::builder()
-                #children_expand
+                #children_output
                 .build()
             }
         } else {
@@ -645,7 +657,7 @@ fn expand_layout(input: LayoutInput) -> TokenStream2 {
         }
     };
 
-    let options_expand = {
+    let options_output = {
         let mut tokens = TokenStream2::new();
         if let Some(args) = &args {
             for element_arg in &args.element_args {
@@ -671,8 +683,8 @@ fn expand_layout(input: LayoutInput) -> TokenStream2 {
         }
     };
 
-    quote! {{
-        let __element = #crate_path::create_element::<#path>(#args_expand, #options_expand);
+    Ok(quote! {{
+        let __element = #crate_path::create_element::<#path>(#args_output, #options_output);
         __element
-    }}
+    }})
 }
