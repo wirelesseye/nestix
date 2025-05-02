@@ -1,25 +1,25 @@
 pub use bon;
 
-use crate::Element;
+use crate::{AppModel, Element};
 
 pub trait ComponentOutput {
-    fn into_maybe_element(self) -> Option<Element>;
+    fn add_child(self, app_model: &AppModel);
 }
 
 impl ComponentOutput for () {
-    fn into_maybe_element(self) -> Option<Element> {
-        None
-    }
+    fn add_child(self, _app_model: &AppModel) {}
 }
 
 impl ComponentOutput for Option<Element> {
-    fn into_maybe_element(self) -> Option<Element> {
-        self
+    fn add_child(self, app_model: &AppModel) {
+        if let Some(element) = self {
+            app_model.add_child(element);
+        }
     }
 }
 
 impl ComponentOutput for Element {
-    fn into_maybe_element(self) -> Option<Element> {
-        Some(self)
+    fn add_child(self, app_model: &AppModel) {
+        app_model.add_child(self);
     }
 }

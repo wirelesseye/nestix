@@ -72,9 +72,7 @@ fn generate_component(input: ItemFn) -> Result<TokenStream2, syn::Error> {
                 #sig #block
 
                 let props = element.props().downcast_ref::<#props_type>().unwrap();
-                if let Some(output) = #crate_path::__private::ComponentOutput::into_maybe_element(#ident(#render_args)) {
-                    app_model.add_child(output);
-                }
+                #crate_path::__private::ComponentOutput::add_child(#ident(#render_args), app_model);
             }
         }
     })
