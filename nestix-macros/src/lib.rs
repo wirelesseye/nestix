@@ -3,8 +3,8 @@ use proc_macro::TokenStream;
 mod callback;
 mod closure;
 mod component;
-mod props;
 mod layout;
+mod props;
 mod util;
 
 #[proc_macro_attribute]
@@ -12,9 +12,9 @@ pub fn component(attr: TokenStream, input: TokenStream) -> TokenStream {
     component::component(attr, input)
 }
 
-#[proc_macro_attribute]
-pub fn derive_props(attr: TokenStream, input: TokenStream) -> TokenStream {
-    props::derive_props(attr, input)
+#[proc_macro_derive(Props, attributes(props))]
+pub fn derive_props(input: TokenStream) -> TokenStream {
+    props::derive_props(input)
 }
 
 /// layout! {}

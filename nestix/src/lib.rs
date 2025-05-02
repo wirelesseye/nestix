@@ -12,6 +12,6 @@ pub use element::*;
 pub use prop_value::*;
 pub use props::*;
 
-pub use nestix_macros::{callback, closure, component, derive_props, layout};
+pub use nestix_macros::{callback, closure, component, layout, Props};
 #[doc(hidden)]
 pub mod __private;

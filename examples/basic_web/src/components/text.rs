@@ -1,14 +1,15 @@
+use bon::Builder;
 use nestix::{
-    closure, component, derive_props,
+    closure, component,
     hooks::{effect_cleanup, remember, use_context},
+    Props,
 };
 use wasm_bindgen::JsCast;
 use web_sys::HtmlElement;
 
 use crate::{components::ParentContext, document};
 
-#[derive_props]
-#[derive(PartialEq)]
+#[derive(PartialEq, Props, Builder)]
 pub struct TextProps {
     #[builder(start_fn, into)]
     text: String,

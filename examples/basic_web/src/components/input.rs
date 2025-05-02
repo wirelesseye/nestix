@@ -1,16 +1,17 @@
 use std::{cell::OnceCell, rc::Rc};
 
+use bon::Builder;
 use nestix::{
-    closure, component, derive_props,
+    closure, component,
     hooks::{effect, effect_cleanup, provide_context, remember, use_context},
+    Props,
 };
 use wasm_bindgen::JsCast;
 use web_sys::HtmlElement;
 
 use crate::{components::ParentContext, document};
 
-#[derive_props]
-#[derive(Debug, PartialEq)]
+#[derive(Debug, Props, Builder, PartialEq)]
 pub struct InputProps {
     elem_ref: Option<Rc<OnceCell<HtmlElement>>>,
 }

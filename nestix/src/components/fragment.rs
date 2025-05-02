@@ -1,11 +1,11 @@
-use nestix_macros::derive_props;
+use bon::Builder;
+use nestix_macros::Props;
 
 use crate::Element;
 
 use super::Component;
 
-#[derive_props(debug)]
-#[derive(PartialEq, Debug)]
+#[derive(PartialEq, Debug, Props, Builder)]
 pub struct FragmentProps {
     pub children: Option<Vec<Element>>,
 }

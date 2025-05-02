@@ -1,9 +1,7 @@
-use nestix::{
-    component, components::fragment::Fragment, create_app_model, derive_props, layout, Element,
-};
+use bon::Builder;
+use nestix::{component, components::fragment::Fragment, create_app_model, layout, Element, Props};
 
-#[derive(Clone, PartialEq, Debug)]
-#[derive_props(debug)]
+#[derive(Clone, PartialEq, Props, Builder, Debug)]
 struct AppProps {
     data: i32,
 }
