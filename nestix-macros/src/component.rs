@@ -1,33 +1,23 @@
 use proc_macro::TokenStream;
 use proc_macro2::TokenStream as TokenStream2;
-use quote::{quote, ToTokens};
-use syn::{parse_macro_input, parse_quote, spanned::Spanned, ItemFn};
+use quote::quote;
+use syn::{parse_quote, spanned::Spanned, ItemFn};
 
 use crate::util::{crate_name, FoundCrateExt};
 
 pub fn component(_attr: TokenStream, input: TokenStream) -> TokenStream {
-    let component_input = parse_macro_input!(input as ItemFn);
-    generate_component(component_input)
-        .unwrap_or_else(|err| TokenStream2::from(err.to_compile_error()))
-        .into()
+    let raw = TokenStream2::from(input.clone());
+    match syn::parse::<ItemFn>(input) {
+        Ok(item) => generate_component(raw, item)
+            .unwrap_or_else(|err| TokenStream2::from(err.to_compile_error()))
+            .into(),
+        Err(_) => raw.into(),
+    }
 }
 
-fn generate_component(input: ItemFn) -> Result<TokenStream2, syn::Error> {
+fn generate_component(raw: TokenStream2, item: ItemFn) -> Result<TokenStream2, syn::Error> {
     let crate_path = crate_name().to_path();
-    let ItemFn {
-        attrs,
-        vis,
-        sig,
-        block,
-    } = input;
-
-    let attrs_output = {
-        let mut tokens = TokenStream2::new();
-        for attr in attrs {
-            attr.to_tokens(&mut tokens);
-        }
-        tokens
-    };
+    let ItemFn { vis, sig, .. } = item;
 
     let render_args = if sig.inputs.len() == 0 {
         quote! {}
@@ -68,8 +58,7 @@ fn generate_component(input: ItemFn) -> Result<TokenStream2, syn::Error> {
 
             fn render(app_model: &#crate_path::AppModel, element: #crate_path::Element) {
                 #[allow(non_snake_case)]
-                #attrs_output
-                #sig #block
+                #raw
 
                 let props = element.props().downcast_ref::<#props_type>().unwrap();
                 #crate_path::__private::ComponentOutput::add_child(#ident(#render_args), app_model);
