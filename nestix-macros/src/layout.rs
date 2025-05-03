@@ -5,6 +5,7 @@ use syn::{
     braced, parenthesized,
     parse::Parse,
     parse_macro_input,
+    punctuated::Punctuated,
     token::{self, Brace, Paren},
     Block, Expr, Ident, Pat, Path, Token,
 };
@@ -110,41 +111,24 @@ impl Parse for ElementArg {
     }
 }
 
-struct LayoutArgs {
-    start_args: Vec<Expr>,
-    named_args: Vec<LayoutNamedArg>,
-    element_args: Vec<ElementArg>,
+enum LayoutArg {
+    Start(Expr),
+    Named(LayoutNamedArg),
+    Element(ElementArg),
 }
 
-impl Parse for LayoutArgs {
+impl Parse for LayoutArg {
     fn parse(input: syn::parse::ParseStream) -> syn::Result<Self> {
-        let mut start_args = Vec::new();
-        let mut named_args = Vec::new();
-        let mut element_args = Vec::new();
-        while !input.is_empty() {
-            if input.peek(Token![.]) {
-                let named_arg: LayoutNamedArg = input.parse()?;
-                named_args.push(named_arg);
-            } else if input.peek(Token![$]) {
-                let element_arg: ElementArg = input.parse()?;
-                element_args.push(element_arg);
-            } else {
-                let expr: Expr = input.parse()?;
-                start_args.push(expr);
-            }
-
-            if input.peek(Token![,]) {
-                input.parse::<Token![,]>()?;
-            } else {
-                break;
-            }
+        if input.peek(Token![.]) {
+            let named_arg: LayoutNamedArg = input.parse()?;
+            Ok(Self::Named(named_arg))
+        } else if input.peek(Token![$]) {
+            let element_arg: ElementArg = input.parse()?;
+            Ok(Self::Element(element_arg))
+        } else {
+            let expr: Expr = input.parse()?;
+            Ok(Self::Start(expr))
         }
-
-        Ok(Self {
-            start_args,
-            named_args,
-            element_args,
-        })
     }
 }
 
@@ -380,7 +364,7 @@ fn parse_layout_children(input: syn::parse::ParseStream) -> syn::Result<Vec<Layo
 struct LayoutInput {
     path: Path,
     paren: Option<Paren>,
-    args: Option<LayoutArgs>,
+    args: Option<Punctuated<LayoutArg, Token![,]>>,
     children: Option<Vec<LayoutChild>>,
 }
 
@@ -390,7 +374,7 @@ impl Parse for LayoutInput {
         let (paren, args) = if input.peek(token::Paren) {
             let inner;
             let paren = parenthesized!(inner in input);
-            let args: LayoutArgs = inner.parse()?;
+            let args = Punctuated::<LayoutArg, Token![,]>::parse_terminated(&inner)?;
             (Some(paren), Some(args))
         } else {
             (None, None)
@@ -602,20 +586,23 @@ fn generate_layout(input: LayoutInput) -> Result<TokenStream2, syn::Error> {
         quote! {}
     };
 
-    let args_output = if let Some(args) = &args {
-        let start_args_output = {
-            let mut tokens = TokenStream2::new();
-            for (i, start_arg) in args.start_args.iter().enumerate() {
-                if i > 0 {
-                    quote! {,}.to_tokens(&mut tokens);
-                }
-                start_arg.to_tokens(&mut tokens);
+    let mut start_args = Punctuated::<&Expr, Token![,]>::new();
+    let mut named_args = Vec::new();
+    let mut element_args = Vec::new();
+    if let Some(args) = &args {
+        for arg in args {
+            match arg {
+                LayoutArg::Start(expr) => start_args.push(expr),
+                LayoutArg::Named(layout_named_arg) => named_args.push(layout_named_arg),
+                LayoutArg::Element(element_arg) => element_args.push(element_arg),
             }
-            tokens
-        };
+        }
+    }
+
+    let args_output = if args.is_some() {
         let named_args_output = {
             let mut tokens = TokenStream2::new();
-            for named_arg in &args.named_args {
+            for named_arg in &named_args {
                 let LayoutNamedArg {
                     dot_token: dot,
                     ident,
@@ -634,7 +621,7 @@ fn generate_layout(input: LayoutInput) -> Result<TokenStream2, syn::Error> {
             let mut tokens = TokenStream2::new();
             if let Some(paren) = paren {
                 paren.surround(&mut tokens, |tokens| {
-                    start_args_output.to_tokens(tokens);
+                    start_args.to_tokens(tokens);
                 });
             }
             tokens
@@ -659,21 +646,19 @@ fn generate_layout(input: LayoutInput) -> Result<TokenStream2, syn::Error> {
 
     let options_output = {
         let mut tokens = TokenStream2::new();
-        if let Some(args) = &args {
-            for element_arg in &args.element_args {
-                let ElementArg {
-                    dollar_token,
-                    ident,
-                    expr,
-                } = element_arg;
-                let mut dot_token = <Token![.]>::default();
-                dot_token.span = dollar_token.span;
+        for element_arg in &element_args {
+            let ElementArg {
+                dollar_token,
+                ident,
+                expr,
+            } = element_arg;
+            let mut dot_token = <Token![.]>::default();
+            dot_token.span = dollar_token.span;
 
-                quote! {
-                    #dot_token #ident (#expr)
-                }
-                .to_tokens(&mut tokens);
+            quote! {
+                #dot_token #ident (#expr)
             }
+            .to_tokens(&mut tokens);
         }
 
         quote! {
