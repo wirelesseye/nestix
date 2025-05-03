@@ -8,7 +8,7 @@ use nanoid_wasm::nanoid;
 use nestix::{
     callback, component, create_app_model,
     hooks::{remember, state, State},
-    layout, Element, PropValue, Props,
+    layout, Element, Props, Shared,
 };
 use wasm_bindgen::prelude::*;
 use web_sys::{HtmlElement, HtmlInputElement};
@@ -81,7 +81,7 @@ fn Counter() -> Element {
             .width = 100.0
         ) {
             Text(counter.get().to_string()),
-            Button(.on_click = increment.clone_prop_value()) {
+            Button(.on_click = increment.clone_shared()) {
                 Text("Increment")
             },
         }
@@ -136,7 +136,7 @@ fn TodoList() -> Element {
         FlexView(.direction = FlexDirection::Column) {
             FlexView {
                 Input(.elem_ref = input_ref),
-                Button(.on_click = add.clone_prop_value()) {
+                Button(.on_click = add.clone_shared()) {
                     Text("Add")
                 }
             }
@@ -144,7 +144,7 @@ fn TodoList() -> Element {
                 TodoItemView(
                     $key = item.key.clone(),
                     .item = item.clone(),
-                    .remove = remove.clone_prop_value(),
+                    .remove = remove.clone_shared(),
                 )
             }
         }
@@ -154,7 +154,7 @@ fn TodoList() -> Element {
 #[derive(PartialEq, Props, Builder)]
 struct TodoItemViewProps {
     item: TodoItem,
-    remove: PropValue<dyn Fn(&str)>,
+    remove: Shared<dyn Fn(&str)>,
 }
 
 #[component]

@@ -3,7 +3,7 @@ use nestix::{
     closure, component,
     components::fragment::Fragment,
     hooks::{effect, effect_cleanup, provide_context, remember, use_context},
-    layout, Element, PropValue, Props,
+    layout, Element, Shared, Props,
 };
 use wasm_bindgen::{prelude::Closure, JsCast};
 use web_sys::{Event, HtmlElement};
@@ -13,7 +13,7 @@ use crate::{components::ParentContext, document};
 #[derive(PartialEq, Props, Builder)]
 pub struct ButtonProps {
     children: Option<Vec<Element>>,
-    on_click: Option<PropValue<dyn Fn()>>,
+    on_click: Option<Shared<dyn Fn()>>,
     #[builder(default = false)]
     disabled: bool,
 }

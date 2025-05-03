@@ -32,6 +32,6 @@ fn generate_callback(input: ClosureInput) -> Result<TokenStream2, syn::Error> {
     let closure_output = generate_closure(input)?;
 
     Ok(quote! {
-        #crate_path::PropValue::from(std::rc::Rc::new(#closure_output) as std::rc::Rc<dyn Fn(#types)>)
+        #crate_path::Shared::from(std::rc::Rc::new(#closure_output) as std::rc::Rc<dyn Fn(#types)>)
     })
 }
