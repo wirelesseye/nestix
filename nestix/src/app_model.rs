@@ -27,11 +27,19 @@ fn set_app_model(app_model: &Rc<AppModel>) {
     })
 }
 
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum UpdateMode {
+    Instant,
+    Poll,
+}
+
 #[derive(Debug)]
 pub struct AppModel {
+    mode: Cell<UpdateMode>,
     root: RefCell<Option<Rc<Scope>>>,
     scope: RefCell<Option<Rc<Scope>>>,
     children_buf: RefCell<Vec<Element>>,
+    update_queue: RefCell<VecDeque<Rc<Scope>>>,
 }
 
 impl AppModel {
@@ -47,14 +55,46 @@ impl AppModel {
         }
 
         let scope = self.root.borrow().clone().unwrap();
-        self.update_scope(scope);
+        self.request_update(scope);
     }
 
     pub(crate) fn current_scope(&self) -> Option<Rc<Scope>> {
         self.scope.borrow().clone()
     }
 
-    pub(crate) fn update_scope(self: &Rc<Self>, scope: Rc<Scope>) {
+    pub(crate) fn request_update(self: &Rc<Self>, scope: Rc<Scope>) {
+        {
+            let mut update_queue = self.update_queue.borrow_mut();
+            update_queue.push_back(scope);
+        }
+        if self.mode.get() == UpdateMode::Instant {
+            while self.update() {}
+        }
+    }
+
+    pub fn set_update_mode(&self, update_mode: UpdateMode) {
+        self.mode.set(update_mode);
+    }
+
+    pub fn run(self: &Rc<Self>) {
+        loop {
+            self.update();
+        }
+    }
+
+    pub fn update(self: &Rc<Self>) -> bool {
+        if let Some(scope) = {
+            let mut update_queue = self.update_queue.borrow_mut();
+            update_queue.pop_front()
+        } {
+            self.perform_update(scope);
+            true
+        } else {
+            false
+        }
+    }
+
+    fn perform_update(self: &Rc<Self>, scope: Rc<Scope>) {
         set_app_model(self);
 
         let element = scope.element.borrow().clone();
@@ -68,15 +108,8 @@ impl AppModel {
 
         let next = self.children_buf.take();
         let context_map = scope.context_map.borrow().clone();
-        let ReconcileResult {
-            children,
-            update_scopes,
-        } = reconcile(context_map, prev, next);
+        let children = self.reconcile(context_map, prev, next);
         scope.children.replace(children);
-
-        for scope in update_scopes {
-            self.update_scope(scope);
-        }
     }
 
     pub fn add_child(&self, element: Element) {
@@ -138,13 +171,62 @@ impl AppModel {
         scope.value_cursor.set(cursor + 1);
         value
     }
+
+    fn reconcile(
+        self: &Rc<Self>,
+        context_map: HashMap<TypeId, Rc<dyn Any>>,
+        prev: Vec<Rc<Scope>>,
+        next: Vec<Element>,
+    ) -> Vec<Rc<Scope>> {
+        let mut scopes_by_comp_id: HashMap<
+            ComponentID,
+            HashMap<Option<String>, VecDeque<Rc<Scope>>>,
+        > = HashMap::new();
+        for scope in prev {
+            let (component_id, key) = {
+                let element = scope.element.borrow();
+                (element.component_id, element.options.key.clone())
+            };
+            let scopes_of_comp_id = scopes_by_comp_id.entry(component_id).or_default();
+            scopes_of_comp_id.entry(key).or_default().push_back(scope);
+        }
+
+        let children = next
+            .into_iter()
+            .map(|next_element| {
+                if let Some(elements_of_tag) = scopes_by_comp_id.get_mut(&next_element.component_id)
+                {
+                    if let Some(elements_of_key) =
+                        elements_of_tag.get_mut(&next_element.options.key)
+                    {
+                        if let Some(scope) = elements_of_key.pop_front() {
+                            if *scope.element.borrow() != next_element {
+                                scope.element.replace(next_element);
+                                self.request_update(scope.clone());
+                            }
+                            return scope;
+                        }
+                    }
+                }
+
+                let scope = Scope::new(next_element);
+                scope.context_map.replace(context_map.clone());
+                self.request_update(scope.clone());
+                scope
+            })
+            .collect();
+
+        children
+    }
 }
 
 pub fn create_app_model() -> Rc<AppModel> {
     Rc::new(AppModel {
+        mode: Cell::new(UpdateMode::Instant),
         root: RefCell::new(None),
         scope: RefCell::new(None),
         children_buf: RefCell::new(Vec::new()),
+        update_queue: RefCell::new(VecDeque::new()),
     })
 }
 
@@ -167,55 +249,5 @@ impl Scope {
             context_map: RefCell::new(HashMap::new()),
         };
         Rc::new(scope)
-    }
-}
-
-struct ReconcileResult {
-    children: Vec<Rc<Scope>>,
-    update_scopes: Vec<Rc<Scope>>,
-}
-
-fn reconcile(
-    context_map: HashMap<TypeId, Rc<dyn Any>>,
-    prev: Vec<Rc<Scope>>,
-    next: Vec<Element>,
-) -> ReconcileResult {
-    let mut scopes_by_comp_id: HashMap<ComponentID, HashMap<Option<String>, VecDeque<Rc<Scope>>>> =
-        HashMap::new();
-    for scope in prev {
-        let (component_id, key) = {
-            let element = scope.element.borrow();
-            (element.component_id, element.options.key.clone())
-        };
-        let scopes_of_comp_id = scopes_by_comp_id.entry(component_id).or_default();
-        scopes_of_comp_id.entry(key).or_default().push_back(scope);
-    }
-
-    let mut update_scopes = Vec::new();
-    let children = next
-        .into_iter()
-        .map(|next_element| {
-            if let Some(elements_of_tag) = scopes_by_comp_id.get_mut(&next_element.component_id) {
-                if let Some(elements_of_key) = elements_of_tag.get_mut(&next_element.options.key) {
-                    if let Some(scope) = elements_of_key.pop_front() {
-                        if *scope.element.borrow() != next_element {
-                            scope.element.replace(next_element);
-                            update_scopes.push(scope.clone());
-                        }
-                        return scope;
-                    }
-                }
-            }
-
-            let scope = Scope::new(next_element);
-            scope.context_map.replace(context_map.clone());
-            update_scopes.push(scope.clone());
-            scope
-        })
-        .collect();
-
-    ReconcileResult {
-        children,
-        update_scopes,
     }
 }

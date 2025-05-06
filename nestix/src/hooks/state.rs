@@ -16,14 +16,14 @@ pub fn state<T: 'static>(initializer: impl FnOnce() -> T) -> State<T> {
 
     State {
         value,
-        app_model: app_model.clone(),
+        app_model: Rc::downgrade(&app_model),
         scope: Rc::downgrade(&app_model.current_scope().unwrap()),
     }
 }
 
 pub struct State<T> {
     value: Rc<RefCell<T>>,
-    app_model: Rc<AppModel>,
+    app_model: Weak<AppModel>,
     scope: Weak<Scope>,
 }
 
@@ -47,7 +47,10 @@ impl<T> State<T> {
             let mut value = self.value.borrow_mut();
             updater(&mut value);
         }
-        self.app_model.update_scope(self.scope.upgrade().unwrap());
+        self.app_model
+            .upgrade()
+            .unwrap()
+            .request_update(self.scope.upgrade().unwrap());
     }
 }
 
@@ -67,7 +70,10 @@ impl<T: PartialEq> State<T> {
     pub fn set(&self, value: T) {
         if *self.borrow() != value {
             self.value.replace(value);
-            self.app_model.update_scope(self.scope.upgrade().unwrap());
+            self.app_model
+                .upgrade()
+                .unwrap()
+                .request_update(self.scope.upgrade().unwrap());
         }
     }
 }
