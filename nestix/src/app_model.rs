@@ -68,7 +68,7 @@ impl AppModel {
             update_queue.push_back(scope);
         }
         if self.mode.get() == UpdateMode::Instant {
-            while self.update() {}
+            while self.update_next() {}
         }
     }
 
@@ -76,13 +76,7 @@ impl AppModel {
         self.mode.set(update_mode);
     }
 
-    pub fn run(self: &Rc<Self>) {
-        loop {
-            self.update();
-        }
-    }
-
-    pub fn update(self: &Rc<Self>) -> bool {
+    pub fn update_next(self: &Rc<Self>) -> bool {
         if let Some(scope) = {
             let mut update_queue = self.update_queue.borrow_mut();
             update_queue.pop_front()
