@@ -106,7 +106,7 @@ impl AppModel {
         scope.children.replace(children);
     }
 
-    pub fn add_child(&self, element: Element) {
+    pub fn push_child(&self, element: Element) {
         let mut update_children = self.children_buf.borrow_mut();
         update_children.push(element);
     }

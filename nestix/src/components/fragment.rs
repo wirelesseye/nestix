@@ -19,7 +19,7 @@ impl Component for Fragment {
         let props = element.props.downcast_ref::<FragmentProps>().unwrap();
         if let Some(children) = &props.children {
             for child in children {
-                app_model.add_child(child.clone());
+                app_model.push_child(child.clone());
             }
         }
     }

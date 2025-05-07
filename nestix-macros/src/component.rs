@@ -61,7 +61,7 @@ fn generate_component(raw: TokenStream2, item: ItemFn) -> Result<TokenStream2, s
                 #raw
 
                 let props = element.props().downcast_ref::<#props_type>().unwrap();
-                #crate_path::__private::ComponentOutput::add_child(#ident(#render_args), app_model);
+                #crate_path::__private::ComponentOutput::push_child(#ident(#render_args), app_model);
             }
         }
     })
