@@ -33,13 +33,13 @@ pub enum UpdateMode {
     Poll,
 }
 
-#[derive(Debug)]
 pub struct AppModel {
     mode: Cell<UpdateMode>,
     root: RefCell<Option<Rc<Scope>>>,
     scope: RefCell<Option<Rc<Scope>>>,
     children_buf: RefCell<Vec<Element>>,
     update_queue: RefCell<VecDeque<Rc<Scope>>>,
+    postupdate: RefCell<Option<Box<dyn FnOnce(&Rc<AppModel>)>>>,
 }
 
 impl AppModel {
@@ -68,7 +68,7 @@ impl AppModel {
             update_queue.push_back(scope);
         }
         if self.mode.get() == UpdateMode::Instant {
-            while self.update_next() {}
+            while self.perform_update() {}
         }
     }
 
@@ -76,19 +76,19 @@ impl AppModel {
         self.mode.set(update_mode);
     }
 
-    pub fn update_next(self: &Rc<Self>) -> bool {
+    pub fn perform_update(self: &Rc<Self>) -> bool {
         if let Some(scope) = {
             let mut update_queue = self.update_queue.borrow_mut();
             update_queue.pop_front()
         } {
-            self.perform_update(scope);
+            self.update_scope(scope);
             true
         } else {
             false
         }
     }
 
-    fn perform_update(self: &Rc<Self>, scope: Rc<Scope>) {
+    fn update_scope(self: &Rc<Self>, scope: Rc<Scope>) {
         set_app_model(self);
 
         let element = scope.element.borrow().clone();
@@ -104,6 +104,10 @@ impl AppModel {
         let context_map = scope.context_map.borrow().clone();
         let children = self.reconcile(context_map, prev, next);
         scope.children.replace(children);
+
+        if let Some(postupdate) = self.postupdate.take() {
+            postupdate(self)
+        }
     }
 
     pub fn push_child(&self, element: Element) {
@@ -166,6 +170,10 @@ impl AppModel {
         value
     }
 
+    pub(crate) fn set_postupdate(&self, f: Box<dyn FnOnce(&Rc<AppModel>)>) {
+        self.postupdate.replace(Some(f));
+    }
+
     fn reconcile(
         self: &Rc<Self>,
         context_map: HashMap<TypeId, Rc<dyn Any>>,
@@ -221,6 +229,7 @@ pub fn create_app_model() -> Rc<AppModel> {
         scope: RefCell::new(None),
         children_buf: RefCell::new(Vec::new()),
         update_queue: RefCell::new(VecDeque::new()),
+        postupdate: RefCell::new(None),
     })
 }
 
