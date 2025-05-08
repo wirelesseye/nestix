@@ -11,7 +11,7 @@ thread_local! {
     static CURRENT_APP_MODEL: RefCell<Option<Rc<AppModel>>> = RefCell::new(None);
 }
 
-pub(crate) fn current_app_model() -> Option<Rc<AppModel>> {
+pub fn current_app_model() -> Option<Rc<AppModel>> {
     CURRENT_APP_MODEL.with_borrow(|curr| curr.clone())
 }
 
@@ -39,7 +39,7 @@ pub struct AppModel {
     scope: RefCell<Option<Rc<Scope>>>,
     children_buf: RefCell<Vec<Element>>,
     update_queue: RefCell<VecDeque<Rc<Scope>>>,
-    postupdate: RefCell<Option<Box<dyn FnOnce(&Rc<AppModel>)>>>,
+    postupdates: RefCell<Vec<Box<dyn FnOnce()>>>,
 }
 
 impl AppModel {
@@ -105,8 +105,8 @@ impl AppModel {
         let children = self.reconcile(context_map, prev, next);
         scope.children.replace(children);
 
-        if let Some(postupdate) = self.postupdate.take() {
-            postupdate(self)
+        for postupdate in self.postupdates.take() {
+            postupdate()
         }
     }
 
@@ -170,8 +170,9 @@ impl AppModel {
         value
     }
 
-    pub(crate) fn set_postupdate(&self, f: Box<dyn FnOnce(&Rc<AppModel>)>) {
-        self.postupdate.replace(Some(f));
+    pub(crate) fn push_postupdate(&self, f: Box<dyn FnOnce()>) {
+        let mut postupdates = self.postupdates.borrow_mut();
+        postupdates.push(f);
     }
 
     fn reconcile(
@@ -229,7 +230,7 @@ pub fn create_app_model() -> Rc<AppModel> {
         scope: RefCell::new(None),
         children_buf: RefCell::new(Vec::new()),
         update_queue: RefCell::new(VecDeque::new()),
-        postupdate: RefCell::new(None),
+        postupdates: RefCell::new(Vec::new()),
     })
 }
 
