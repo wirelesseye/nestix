@@ -15,14 +15,18 @@ pub fn current_app_model() -> Option<Rc<AppModel>> {
     CURRENT_APP_MODEL.with_borrow(|curr| curr.clone())
 }
 
-fn set_app_model(app_model: &Rc<AppModel>) {
+fn set_app_model(app_model: Option<&Rc<AppModel>>) {
     CURRENT_APP_MODEL.with_borrow_mut(|curr| {
-        if let Some(curr) = curr {
-            if !Rc::ptr_eq(curr, app_model) {
-                *curr = app_model.clone();
+        if let Some(app_model) = app_model {
+            if let Some(curr) = curr {
+                if !Rc::ptr_eq(curr, app_model) {
+                    *curr = app_model.clone();
+                }
+            } else {
+                *curr = Some(app_model.clone());
             }
         } else {
-            *curr = Some(app_model.clone());
+            *curr = None;
         }
     })
 }
@@ -89,7 +93,7 @@ impl AppModel {
     }
 
     fn update_scope(self: &Rc<Self>, scope: Rc<Scope>) {
-        set_app_model(self);
+        set_app_model(Some(self));
 
         let element = scope.element.borrow().clone();
         let prev = scope.children.take();
@@ -108,6 +112,8 @@ impl AppModel {
         for postupdate in self.postupdates.take() {
             postupdate()
         }
+
+        set_app_model(None);
     }
 
     pub fn push_child(&self, element: Element) {

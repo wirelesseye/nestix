@@ -1,6 +1,6 @@
 mod components;
 
-use std::{cell::OnceCell, rc::Rc};
+use std::{cell::OnceCell, mem, rc::Rc};
 
 use bon::Builder;
 use components::{Button, FlexDirection, FlexView, Input, Root, Text};
@@ -19,6 +19,8 @@ fn init() -> Result<(), JsValue> {
 
     let app_model = create_app_model();
     app_model.render(layout! { App });
+
+    mem::forget(app_model);
 
     Ok(())
 }
