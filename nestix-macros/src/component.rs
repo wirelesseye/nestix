@@ -1,5 +1,5 @@
 use proc_macro::TokenStream;
-use proc_macro2::TokenStream as TokenStream2;
+use proc_macro2::{Span, TokenStream as TokenStream2};
 use quote::quote;
 use syn::{parse_quote, spanned::Spanned, ItemFn};
 
@@ -23,11 +23,13 @@ fn generate_component(raw: TokenStream2, item: ItemFn) -> Result<TokenStream2, s
         quote! {}
     } else if sig.inputs.len() == 1 {
         quote! {props}
+    } else if sig.inputs.len() == 2 {
+        quote! {props, app_model}
     } else {
         return Err(syn::Error::new(
-            sig.inputs.span(),
+            Span::call_site(),
             format!(
-                "expect 0 or 1 parameter, but actually get {}",
+                "expect 0-2 parameters, but actually get {}",
                 sig.inputs.len()
             ),
         ));
@@ -56,7 +58,7 @@ fn generate_component(raw: TokenStream2, item: ItemFn) -> Result<TokenStream2, s
         impl #crate_path::Component for #ident {
             type Props = #props_type;
 
-            fn render(app_model: &#crate_path::AppModel, element: #crate_path::Element) {
+            fn render(app_model: &std::rc::Rc<#crate_path::AppModel>, element: #crate_path::Element) {
                 #[allow(non_snake_case)]
                 #raw
 

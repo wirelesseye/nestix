@@ -2,33 +2,26 @@ use std::{
     any::{Any, TypeId},
     cell::{Cell, RefCell},
     collections::{HashMap, VecDeque},
+    ptr,
     rc::Rc,
 };
 
 use crate::{components::ComponentID, Element};
 
 thread_local! {
-    static CURRENT_APP_MODEL: RefCell<Option<Rc<AppModel>>> = RefCell::new(None);
+    static CURRENT_APP_MODEL: Cell<*const Rc<AppModel>> = Cell::new(ptr::null());
 }
 
-pub fn current_app_model() -> Option<Rc<AppModel>> {
-    CURRENT_APP_MODEL.with_borrow(|curr| curr.clone())
+pub(crate) fn current_app_model() -> Option<&'static Rc<AppModel>> {
+    unsafe { CURRENT_APP_MODEL.get().as_ref() }
 }
 
 fn set_app_model(app_model: Option<&Rc<AppModel>>) {
-    CURRENT_APP_MODEL.with_borrow_mut(|curr| {
-        if let Some(app_model) = app_model {
-            if let Some(curr) = curr {
-                if !Rc::ptr_eq(curr, app_model) {
-                    *curr = app_model.clone();
-                }
-            } else {
-                *curr = Some(app_model.clone());
-            }
-        } else {
-            *curr = None;
-        }
-    })
+    if let Some(app_model) = app_model {
+        CURRENT_APP_MODEL.set(app_model);
+    } else {
+        CURRENT_APP_MODEL.set(ptr::null());
+    }
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]

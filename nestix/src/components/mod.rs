@@ -1,17 +1,19 @@
 pub mod fragment;
 
+use std::rc::Rc;
+
 use crate::{app_model::AppModel, Element, Props};
 
 pub trait Component {
     type Props: Props;
 
-    fn render(app_model: &AppModel, element: Element);
+    fn render(app_model: &Rc<AppModel>, element: Element);
 }
 
 #[derive(Debug, Clone, Copy, Hash)]
 pub struct ComponentID {
     pub(crate) name: &'static str,
-    pub(crate) render_fn: fn(&AppModel, Element),
+    pub(crate) render_fn: fn(&Rc<AppModel>, Element),
 }
 
 impl PartialEq for ComponentID {

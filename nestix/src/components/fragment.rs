@@ -1,7 +1,9 @@
+use std::rc::Rc;
+
 use bon::Builder;
 use nestix_macros::Props;
 
-use crate::Element;
+use crate::{AppModel, Element};
 
 use super::Component;
 
@@ -15,7 +17,7 @@ pub struct Fragment;
 impl Component for Fragment {
     type Props = FragmentProps;
 
-    fn render(app_model: &crate::AppModel, element: crate::Element) {
+    fn render(app_model: &Rc<AppModel>, element: crate::Element) {
         let props = element.props.downcast_ref::<FragmentProps>().unwrap();
         if let Some(children) = &props.children {
             for child in children {
