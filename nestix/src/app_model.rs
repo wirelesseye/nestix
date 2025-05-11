@@ -36,7 +36,7 @@ pub struct AppModel {
     scope: RefCell<Option<Rc<Scope>>>,
     children_buf: RefCell<Vec<Element>>,
     update_queue: RefCell<VecDeque<Rc<Scope>>>,
-    postupdates: RefCell<Vec<Box<dyn FnOnce()>>>,
+    after_update_handlers: RefCell<Vec<Box<dyn FnOnce()>>>,
 }
 
 impl AppModel {
@@ -102,8 +102,8 @@ impl AppModel {
         let children = self.reconcile(context_map, prev, next);
         scope.children.replace(children);
 
-        for postupdate in self.postupdates.take() {
-            postupdate()
+        for handler in self.after_update_handlers.take() {
+            handler()
         }
 
         set_app_model(None);
@@ -169,9 +169,9 @@ impl AppModel {
         value
     }
 
-    pub(crate) fn push_postupdate(&self, f: Box<dyn FnOnce()>) {
-        let mut postupdates = self.postupdates.borrow_mut();
-        postupdates.push(f);
+    pub(crate) fn add_after_update_handler(&self, f: Box<dyn FnOnce()>) {
+        let mut after_update_handlers = self.after_update_handlers.borrow_mut();
+        after_update_handlers.push(f);
     }
 
     fn reconcile(
@@ -229,7 +229,7 @@ pub fn create_app_model() -> Rc<AppModel> {
         scope: RefCell::new(None),
         children_buf: RefCell::new(Vec::new()),
         update_queue: RefCell::new(VecDeque::new()),
-        postupdates: RefCell::new(Vec::new()),
+        after_update_handlers: RefCell::new(Vec::new()),
     })
 }
 
