@@ -42,6 +42,14 @@ impl<T> State<T> {
         self.value.borrow()
     }
 
+    pub fn set(&self, value: T) {
+        self.value.replace(value);
+        self.app_model
+            .upgrade()
+            .unwrap()
+            .request_update(self.scope.upgrade().unwrap());
+    }
+
     pub fn update(&self, updater: impl FnOnce(&mut T)) {
         {
             let mut value = self.value.borrow_mut();
@@ -67,7 +75,7 @@ impl<T: Copy> State<T> {
 }
 
 impl<T: PartialEq> State<T> {
-    pub fn set(&self, value: T) {
+    pub fn set_eq(&self, value: T) {
         if *self.borrow() != value {
             self.value.replace(value);
             self.app_model

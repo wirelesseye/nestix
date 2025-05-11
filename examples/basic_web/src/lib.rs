@@ -43,13 +43,13 @@ fn App() -> Element {
                 FlexView {
                     Button(
                         .disabled = page.get() == AppPage::Counter,
-                        .on_click = callback!([page] || page.set(AppPage::Counter)),
+                        .on_click = callback!([page] || page.set_eq(AppPage::Counter)),
                     ) {
                         Text("Counter")
                     }
                     Button(
                         .disabled = page.get() == AppPage::TodoList,
-                        .on_click = callback!([page] || page.set(AppPage::TodoList))
+                        .on_click = callback!([page] || page.set_eq(AppPage::TodoList))
                     ) {
                         Text("Todo List")
                     }
