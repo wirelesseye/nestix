@@ -1,7 +1,7 @@
 mod post_update;
 mod computed;
 mod context;
-mod refs;
+mod handle;
 mod effect;
 mod remember;
 mod state;
@@ -9,7 +9,7 @@ mod state;
 pub use post_update::*;
 pub use computed::*;
 pub use context::*;
-pub use refs::*;
+pub use handle::*;
 pub use effect::*;
 pub use remember::*;
 pub use state::*;

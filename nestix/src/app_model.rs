@@ -174,13 +174,13 @@ impl AppModel {
         post_update_events.push(f);
     }
 
-    pub(crate) fn provide_ref(&self, value: Box<dyn Any>) {
+    pub(crate) fn provide_handle(&self, value: Box<dyn Any>) {
         let scope = self.scope.borrow();
         let scope = scope.as_ref().unwrap();
 
         let element = scope.element.borrow();
-        if let Some(r#ref) = &element.options.r#ref {
-            r#ref.provide(value);
+        if let Some(handle) = &element.options.handle {
+            handle.provide(value);
         }
     }
 

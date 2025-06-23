@@ -24,9 +24,9 @@ fn generate_component(raw: TokenStream2, item: ItemFn) -> Result<TokenStream2, s
     } else if sig.inputs.len() == 1 {
         quote! {props}
     } else if sig.inputs.len() == 2 {
-        quote! {props, &element.options().r#ref}
+        quote! {props, &element.options().handle}
     } else if sig.inputs.len() == 3 {
-        quote! {props, &element.options().r#ref, app_model}
+        quote! {props, &element.options().handle, app_model}
     } else {
         return Err(syn::Error::new(
             Span::call_site(),
@@ -53,7 +53,7 @@ fn generate_component(raw: TokenStream2, item: ItemFn) -> Result<TokenStream2, s
     };
 
     // TODO: clean code
-    let ref_type = match sig.inputs.get(1) {
+    let handle_type = match sig.inputs.get(1) {
         Some(syn::FnArg::Typed(pat_type)) => match &*pat_type.ty {
             syn::Type::Reference(type_ref) => match &*type_ref.elem {
                 Type::Path(type_path) => {
@@ -66,7 +66,7 @@ fn generate_component(raw: TokenStream2, item: ItemFn) -> Result<TokenStream2, s
                                         other => {
                                             return Err(syn::Error::new(
                                                 other.span(),
-                                                "excepted &Option<RefProvider>",
+                                                "excepted &Option<Handle>",
                                             ))
                                         }
                                     }
@@ -74,34 +74,34 @@ fn generate_component(raw: TokenStream2, item: ItemFn) -> Result<TokenStream2, s
                                 other => {
                                     return Err(syn::Error::new(
                                         other.span(),
-                                        "excepted &Option<RefProvider>",
+                                        "excepted &Option<Handle>",
                                     ))
                                 }
                             }
                         } else {
                             return Err(syn::Error::new(
                                 seg.span(),
-                                "excepted &Option<RefProvider>",
+                                "excepted &Option<Handle>",
                             ));
                         }
                     } else {
                         return Err(syn::Error::new(
                             type_path.span(),
-                            "excepted &Option<RefProvider>",
+                            "excepted &Option<Handle>",
                         ));
                     }
                 }
                 _ => {
                     return Err(syn::Error::new(
                         type_ref.span(),
-                        "excepted &Option<RefProvider>",
+                        "excepted &Option<Handle>",
                     ))
                 }
             },
             other => {
                 return Err(syn::Error::new(
                     other.span(),
-                    "excepted &Option<RefProvider>",
+                    "excepted &Option<Handle>",
                 ))
             }
         },
@@ -117,7 +117,7 @@ fn generate_component(raw: TokenStream2, item: ItemFn) -> Result<TokenStream2, s
 
         impl #crate_path::Component for #ident {
             type Props = #props_type;
-            type Ref = #ref_type;
+            type Handle = #handle_type;
 
             fn render(app_model: &std::rc::Rc<#crate_path::AppModel>, element: #crate_path::Element) {
                 #[allow(non_snake_case)]

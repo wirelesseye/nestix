@@ -6,7 +6,7 @@ use crate::{app_model::AppModel, Element, Props};
 
 pub trait Component {
     type Props: Props;
-    type Ref;
+    type Handle;
 
     fn render(app_model: &Rc<AppModel>, element: Element);
 }

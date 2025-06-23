@@ -74,10 +74,7 @@ struct ElementArg {
 impl Parse for ElementArg {
     fn parse(input: syn::parse::ParseStream) -> syn::Result<Self> {
         let dollar_token: Token![$] = input.parse()?;
-        let ident: Ident = if input.peek(Token![ref]) {
-            input.parse::<Token![ref]>()?;
-            parse_quote!(r#ref)
-        } else if input.peek(Ident) {
+        let ident: Ident = if input.peek(Ident) {
             input.parse()?
         } else {
             return Ok(Self {

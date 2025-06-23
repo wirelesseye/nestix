@@ -16,7 +16,7 @@ pub struct Fragment;
 
 impl Component for Fragment {
     type Props = FragmentProps;
-    type Ref = ();
+    type Handle = ();
 
     fn render(app_model: &Rc<AppModel>, element: crate::Element) {
         let props = element.props.downcast_ref::<FragmentProps>().unwrap();

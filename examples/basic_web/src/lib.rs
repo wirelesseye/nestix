@@ -1,13 +1,13 @@
 mod components;
 
-use std::{cell::OnceCell, mem, rc::Rc};
+use std::mem;
 
 use bon::Builder;
 use components::{Button, FlexDirection, FlexView, Input, Root, Text};
 use nanoid_wasm::nanoid;
 use nestix::{
     callback, component, create_app_model,
-    hooks::{remember, state, State},
+    hooks::{create_handle, remember, state, State},
     layout, Element, Props, Shared,
 };
 use wasm_bindgen::prelude::*;
@@ -100,15 +100,14 @@ struct TodoItem {
 fn TodoList() -> Element {
     log::debug!("render TodoList");
 
-    let input_ref: Rc<OnceCell<HtmlElement>> = remember(|| OnceCell::new());
+    let input_handle = create_handle::<HtmlElement>();
     let items: State<Vec<TodoItem>> = state(|| vec![]);
 
     let add = remember(|| {
         callback!(
-            [input_ref, items] || {
-                let input = input_ref
+            [input_handle, items] || {
+                let input = input_handle
                     .get()
-                    .unwrap()
                     .clone()
                     .dyn_into::<HtmlInputElement>()
                     .unwrap();
@@ -137,7 +136,7 @@ fn TodoList() -> Element {
     layout! {
         FlexView(.direction = FlexDirection::Column) {
             FlexView {
-                Input(.elem_ref = input_ref),
+                Input($handle = input_handle),
                 Button(.on_click = add.clone_shared()) {
                     Text("Add")
                 }

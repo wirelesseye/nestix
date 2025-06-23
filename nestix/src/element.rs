@@ -7,12 +7,12 @@ use crate::{
     props::Props,
 };
 
-pub struct ElementRef<T> {
+pub struct HandleValue<T> {
     rc: Rc<OnceCell<Box<dyn Any>>>,
     phantom: PhantomData<T>,
 }
 
-impl<T> Clone for ElementRef<T> {
+impl<T> Clone for HandleValue<T> {
     fn clone(&self) -> Self {
         Self {
             rc: self.rc.clone(),
@@ -21,7 +21,7 @@ impl<T> Clone for ElementRef<T> {
     }
 }
 
-impl<T: 'static> ElementRef<T> {
+impl<T: 'static> HandleValue<T> {
     pub(crate) fn from_rc(rc: Rc<OnceCell<Box<dyn Any>>>) -> Self {
         Self {
             rc,
@@ -39,23 +39,23 @@ impl<T: 'static> ElementRef<T> {
 }
 
 #[derive(Clone)]
-pub enum RefProvider {
+pub enum Handle {
     Value(Rc<OnceCell<Box<dyn Any>>>),
     Callback(Rc<dyn Fn(Box<dyn Any>)>),
 }
 
-impl RefProvider {
+impl Handle {
     pub fn provide(&self, value: Box<dyn Any>) {
         match self {
-            RefProvider::Value(element_ref) => {
-                let _ = element_ref.set(value);
+            Handle::Value(rc) => {
+                let _ = rc.set(value);
             }
-            RefProvider::Callback(cb) => cb(value),
+            Handle::Callback(cb) => cb(value),
         }
     }
 }
 
-impl Debug for RefProvider {
+impl Debug for Handle {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {
             Self::Value(arg0) => f.debug_tuple("Value").field(arg0).finish(),
@@ -64,13 +64,13 @@ impl Debug for RefProvider {
     }
 }
 
-impl<T> From<ElementRef<T>> for RefProvider {
-    fn from(value: ElementRef<T>) -> Self {
+impl<T> From<HandleValue<T>> for Handle {
+    fn from(value: HandleValue<T>) -> Self {
         Self::Value(value.rc)
     }
 }
 
-impl From<Rc<dyn Fn(Box<dyn Any>)>> for RefProvider {
+impl From<Rc<dyn Fn(Box<dyn Any>)>> for Handle {
     fn from(value: Rc<dyn Fn(Box<dyn Any>)>) -> Self {
         Self::Callback(value)
     }
@@ -81,7 +81,7 @@ pub struct ElementOptions {
     #[builder(into)]
     pub key: Option<String>,
     #[builder(into)]
-    pub r#ref: Option<RefProvider>,
+    pub handle: Option<Handle>,
 }
 
 #[derive(Debug, Clone)]
