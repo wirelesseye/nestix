@@ -1,9 +1,7 @@
 use proc_macro::TokenStream;
 use proc_macro2::{Span, TokenStream as TokenStream2};
 use quote::quote;
-use syn::{
-    parse::Parse, parse_quote, spanned::Spanned, GenericArgument, Ident, ItemFn, Token, Type,
-};
+use syn::{parse_quote, spanned::Spanned, GenericArgument, ItemFn, Type};
 
 use crate::util::{crate_name, FoundCrateExt};
 
@@ -14,29 +12,6 @@ pub fn component(_attr: TokenStream, input: TokenStream) -> TokenStream {
             .unwrap_or_else(|err| TokenStream2::from(err.to_compile_error()))
             .into(),
         Err(_) => raw.into(),
-    }
-}
-
-enum ComponentArg {
-    Ref(Type),
-}
-
-impl Parse for ComponentArg {
-    fn parse(input: syn::parse::ParseStream) -> syn::Result<Self> {
-        let ident: Ident = input.parse()?;
-        match ident.to_string().as_str() {
-            "ref" => {
-                input.parse::<Token![=]>()?;
-                let ty: Type = input.parse()?;
-                Ok(Self::Ref(ty))
-            }
-            _ => {
-                return Err(syn::Error::new(
-                    Span::call_site(),
-                    format!("unexpected ident: {}", ident),
-                ))
-            }
-        }
     }
 }
 
