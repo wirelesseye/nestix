@@ -4,7 +4,7 @@ use quote::{quote, ToTokens};
 use syn::{
     braced, parenthesized,
     parse::Parse,
-    parse_macro_input,
+    parse_macro_input, parse_quote,
     punctuated::Punctuated,
     token::{self, Brace, Paren},
     Block, Expr, Ident, Pat, Path, Token,
@@ -74,15 +74,18 @@ struct ElementArg {
 impl Parse for ElementArg {
     fn parse(input: syn::parse::ParseStream) -> syn::Result<Self> {
         let dollar_token: Token![$] = input.parse()?;
-        if !input.peek(Ident) {
+        let ident: Ident = if input.peek(Token![ref]) {
+            input.parse::<Token![ref]>()?;
+            parse_quote!(r#ref)
+        } else if input.peek(Ident) {
+            input.parse()?
+        } else {
             return Ok(Self {
                 dollar_token,
                 ident: None,
                 expr: None,
             });
-        }
-
-        let ident: Ident = input.parse()?;
+        };
 
         if !input.peek(Token![=]) {
             return Ok(Self {

@@ -36,7 +36,7 @@ pub struct AppModel {
     scope: RefCell<Option<Rc<Scope>>>,
     children_buf: RefCell<Vec<Element>>,
     update_queue: RefCell<VecDeque<Rc<Scope>>>,
-    after_update_handlers: RefCell<Vec<Box<dyn FnOnce()>>>,
+    post_update_events: RefCell<Vec<Box<dyn FnOnce()>>>,
 }
 
 impl AppModel {
@@ -102,7 +102,7 @@ impl AppModel {
         let children = self.reconcile(context_map, prev, next);
         scope.children.replace(children);
 
-        for handler in self.after_update_handlers.take() {
+        for handler in self.post_update_events.take() {
             handler()
         }
 
@@ -169,9 +169,19 @@ impl AppModel {
         value
     }
 
-    pub(crate) fn add_after_update_handler(&self, f: Box<dyn FnOnce()>) {
-        let mut after_update_handlers = self.after_update_handlers.borrow_mut();
-        after_update_handlers.push(f);
+    pub(crate) fn add_post_update_event(&self, f: Box<dyn FnOnce()>) {
+        let mut post_update_events = self.post_update_events.borrow_mut();
+        post_update_events.push(f);
+    }
+
+    pub(crate) fn provide_ref(&self, value: Box<dyn Any>) {
+        let scope = self.scope.borrow();
+        let scope = scope.as_ref().unwrap();
+
+        let element = scope.element.borrow();
+        if let Some(r#ref) = &element.options.r#ref {
+            r#ref.provide(value);
+        }
     }
 
     fn reconcile(
@@ -229,7 +239,7 @@ pub fn create_app_model() -> Rc<AppModel> {
         scope: RefCell::new(None),
         children_buf: RefCell::new(Vec::new()),
         update_queue: RefCell::new(VecDeque::new()),
-        after_update_handlers: RefCell::new(Vec::new()),
+        post_update_events: RefCell::new(Vec::new()),
     })
 }
 

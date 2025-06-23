@@ -1,4 +1,4 @@
-use std::rc::Rc;
+use std::{any::Any, cell::OnceCell, fmt::Debug, marker::PhantomData, rc::Rc};
 
 use bon::Builder;
 
@@ -7,10 +7,81 @@ use crate::{
     props::Props,
 };
 
-#[derive(Debug, Builder)]
+pub struct ElementRef<T> {
+    rc: Rc<OnceCell<Box<dyn Any>>>,
+    phantom: PhantomData<T>,
+}
+
+impl<T> Clone for ElementRef<T> {
+    fn clone(&self) -> Self {
+        Self {
+            rc: self.rc.clone(),
+            phantom: self.phantom.clone(),
+        }
+    }
+}
+
+impl<T: 'static> ElementRef<T> {
+    pub(crate) fn from_rc(rc: Rc<OnceCell<Box<dyn Any>>>) -> Self {
+        Self {
+            rc,
+            phantom: PhantomData,
+        }
+    }
+
+    pub fn set(&self, value: T) {
+        let _ = self.rc.set(Box::new(value));
+    }
+
+    pub fn get(&self) -> &T {
+        self.rc.get().unwrap().downcast_ref().unwrap()
+    }
+}
+
+#[derive(Clone)]
+pub enum RefProvider {
+    Value(Rc<OnceCell<Box<dyn Any>>>),
+    Callback(Rc<dyn Fn(Box<dyn Any>)>),
+}
+
+impl RefProvider {
+    pub fn provide(&self, value: Box<dyn Any>) {
+        match self {
+            RefProvider::Value(element_ref) => {
+                let _ = element_ref.set(value);
+            }
+            RefProvider::Callback(cb) => cb(value),
+        }
+    }
+}
+
+impl Debug for RefProvider {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            Self::Value(arg0) => f.debug_tuple("Value").field(arg0).finish(),
+            Self::Callback(_) => f.debug_tuple("Callback").finish(),
+        }
+    }
+}
+
+impl<T> From<ElementRef<T>> for RefProvider {
+    fn from(value: ElementRef<T>) -> Self {
+        Self::Value(value.rc)
+    }
+}
+
+impl From<Rc<dyn Fn(Box<dyn Any>)>> for RefProvider {
+    fn from(value: Rc<dyn Fn(Box<dyn Any>)>) -> Self {
+        Self::Callback(value)
+    }
+}
+
+#[derive(Debug, Builder, Clone)]
 pub struct ElementOptions {
     #[builder(into)]
     pub key: Option<String>,
+    #[builder(into)]
+    pub r#ref: Option<RefProvider>,
 }
 
 #[derive(Debug, Clone)]
@@ -35,6 +106,16 @@ impl Element {
     #[inline]
     pub fn props(&self) -> &dyn Props {
         self.props.as_ref()
+    }
+
+    #[inline]
+    pub fn options(&self) -> &ElementOptions {
+        &self.options
+    }
+
+    #[inline]
+    pub fn set_options(&mut self, options: impl Into<Rc<ElementOptions>>) {
+        self.options = options.into();
     }
 }
 
