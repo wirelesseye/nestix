@@ -1,7 +1,7 @@
 use proc_macro::TokenStream;
 use proc_macro2::{Span, TokenStream as TokenStream2};
 use quote::quote;
-use syn::{parse_quote, spanned::Spanned, GenericArgument, ItemFn, Type};
+use syn::{parse_quote, spanned::Spanned, GenericArgument, ItemFn, PatType, Type};
 
 use crate::util::{crate_name, FoundCrateExt};
 
@@ -24,9 +24,9 @@ fn generate_component(raw: TokenStream2, item: ItemFn) -> Result<TokenStream2, s
     } else if sig.inputs.len() == 1 {
         quote! {props}
     } else if sig.inputs.len() == 2 {
-        quote! {props, &element.options().handle}
+        quote! {props, element.handle::<Self::Handle>()}
     } else if sig.inputs.len() == 3 {
-        quote! {props, &element.options().handle, app_model}
+        quote! {props, element.handle::<Self::Handle>(), app_model}
     } else {
         return Err(syn::Error::new(
             Span::call_site(),
@@ -54,54 +54,12 @@ fn generate_component(raw: TokenStream2, item: ItemFn) -> Result<TokenStream2, s
 
     // TODO: clean code
     let handle_type = match sig.inputs.get(1) {
-        Some(syn::FnArg::Typed(pat_type)) => match &*pat_type.ty {
-            syn::Type::Reference(type_ref) => match &*type_ref.elem {
-                Type::Path(type_path) => {
-                    if let Some(seg) = type_path.path.segments.last() {
-                        if seg.ident == "Option" {
-                            match &seg.arguments {
-                                syn::PathArguments::AngleBracketed(bracketed) => {
-                                    match bracketed.args.first() {
-                                        Some(GenericArgument::Type(ty)) => ty.clone(),
-                                        other => {
-                                            return Err(syn::Error::new(
-                                                other.span(),
-                                                "excepted &Option<Handle>",
-                                            ))
-                                        }
-                                    }
-                                }
-                                other => {
-                                    return Err(syn::Error::new(
-                                        other.span(),
-                                        "excepted &Option<Handle>",
-                                    ))
-                                }
-                            }
-                        } else {
-                            return Err(syn::Error::new(
-                                seg.span(),
-                                "excepted &Option<Handle>",
-                            ));
-                        }
-                    } else {
-                        return Err(syn::Error::new(
-                            type_path.span(),
-                            "excepted &Option<Handle>",
-                        ));
-                    }
-                }
-                _ => {
-                    return Err(syn::Error::new(
-                        type_ref.span(),
-                        "excepted &Option<Handle>",
-                    ))
-                }
-            },
-            other => {
+        Some(syn::FnArg::Typed(pat_type)) => match parse_handle_type(pat_type) {
+            Some(ty) => ty,
+            None => {
                 return Err(syn::Error::new(
-                    other.span(),
-                    "excepted &Option<Handle>",
+                    pat_type.span(),
+                    "excepted Option<&HandleProvider<T>>",
                 ))
             }
         },
@@ -128,4 +86,46 @@ fn generate_component(raw: TokenStream2, item: ItemFn) -> Result<TokenStream2, s
             }
         }
     })
+}
+
+fn parse_handle_type(pat_type: &PatType) -> Option<Type> {
+    let type_path = match &*pat_type.ty {
+        Type::Path(type_path) => Some(type_path),
+        _ => None,
+    }?;
+    let seg = type_path.path.segments.last()?;
+    let option_args = if seg.ident == "Option" {
+        Some(&seg.arguments)
+    } else {
+        None
+    }?;
+    let ref_ty = match option_args {
+        syn::PathArguments::AngleBracketed(bracketed) => match bracketed.args.first()? {
+            GenericArgument::Type(ty) => Some(ty),
+            _ => None,
+        },
+        _ => None,
+    }?;
+    let handle_ty = match ref_ty {
+        Type::Reference(ty_ref) => Some(&*ty_ref.elem),
+        _ => None,
+    }?;
+    let type_path = match handle_ty {
+        Type::Path(type_path) => Some(type_path),
+        _ => None,
+    }?;
+    let seg = type_path.path.segments.last()?;
+    let handle_args = if seg.ident == "HandleProvider" {
+        Some(&seg.arguments)
+    } else {
+        None
+    }?;
+    let ty = match handle_args {
+        syn::PathArguments::AngleBracketed(bracketed) => match bracketed.args.first()? {
+            GenericArgument::Type(ty) => Some(ty),
+            _ => None,
+        },
+        _ => None,
+    }?;
+    Some(ty.clone())
 }

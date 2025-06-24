@@ -1,10 +1,10 @@
 use proc_macro::TokenStream;
 use proc_macro2::TokenStream as TokenStream2;
-use quote::{quote, ToTokens};
+use quote::{format_ident, quote, ToTokens};
 use syn::{
     braced, parenthesized,
     parse::Parse,
-    parse_macro_input, parse_quote,
+    parse_macro_input,
     punctuated::Punctuated,
     token::{self, Brace, Paren},
     Block, Expr, Ident, Pat, Path, Token,
@@ -652,24 +652,23 @@ fn generate_layout(input: LayoutInput) -> Result<TokenStream2, syn::Error> {
                 ident,
                 expr,
             } = element_arg;
+
             let mut dot_token = <Token![.]>::default();
             dot_token.span = dollar_token.span;
 
+            let with_ident = ident.as_ref().map(|ident| format_ident!("with_{}", ident));
+
             quote! {
-                #dot_token #ident (#expr)
+                #dot_token #with_ident (#expr)
             }
             .to_tokens(&mut tokens);
         }
 
-        quote! {
-            #crate_path::ElementOptions::builder()
-            #tokens
-            .build()
-        }
+        tokens
     };
 
     Ok(quote! {{
-        let __element = #crate_path::create_element::<#path>(#args_output, #options_output);
+        let __element = #crate_path::create_element::<#path>(#args_output) #options_output ;
         __element
     }})
 }

@@ -2,7 +2,7 @@ use bon::Builder;
 use nestix::{
     closure, component,
     hooks::{effect, effect_cleanup, provide_context, remember, use_context},
-    Props, Handle,
+    Props, HandleProvider,
 };
 use wasm_bindgen::JsCast;
 use web_sys::HtmlElement;
@@ -13,7 +13,7 @@ use crate::{components::ParentContext, document};
 pub struct InputProps {}
 
 #[component]
-pub fn Input(_: &InputProps, handle: &Option<Handle>) {
+pub fn Input(_: &InputProps, handle: Option<&HandleProvider<HtmlElement>>) {
     log::debug!("render Input");
     let parent = use_context::<ParentContext>().unwrap();
     let html_element = remember(|| {
@@ -29,7 +29,7 @@ pub fn Input(_: &InputProps, handle: &Option<Handle>) {
     effect(html_element.clone(), |html_element| {
         if let Some(elem_handle) = handle {
             let html_element = (**html_element).clone();
-            let _ = elem_handle.provide(Box::new(html_element));
+            let _ = elem_handle.provide(html_element);
         }
     });
 

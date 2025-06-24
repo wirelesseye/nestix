@@ -1,18 +1,17 @@
 use std::{any::Any, cell::OnceCell, fmt::Debug, marker::PhantomData, rc::Rc};
 
-use bon::Builder;
-
 use crate::{
     components::{component_id, Component, ComponentID},
     props::Props,
 };
 
-pub struct HandleValue<T> {
-    rc: Rc<OnceCell<Box<dyn Any>>>,
-    phantom: PhantomData<T>,
+#[derive(Debug)]
+pub struct HandleValue<Handle> {
+    rc: Rc<OnceCell<Handle>>,
+    phantom: PhantomData<Handle>,
 }
 
-impl<T> Clone for HandleValue<T> {
+impl<Handle> Clone for HandleValue<Handle> {
     fn clone(&self) -> Self {
         Self {
             rc: self.rc.clone(),
@@ -21,41 +20,49 @@ impl<T> Clone for HandleValue<T> {
     }
 }
 
-impl<T: 'static> HandleValue<T> {
-    pub(crate) fn from_rc(rc: Rc<OnceCell<Box<dyn Any>>>) -> Self {
+impl<Handle: 'static> HandleValue<Handle> {
+    pub(crate) fn from_rc(rc: Rc<OnceCell<Handle>>) -> Self {
         Self {
             rc,
             phantom: PhantomData,
         }
     }
 
-    pub fn set(&self, value: T) {
-        let _ = self.rc.set(Box::new(value));
+    pub fn set(&self, value: Handle) {
+        let _ = self.rc.set(value);
     }
 
-    pub fn get(&self) -> &T {
-        self.rc.get().unwrap().downcast_ref().unwrap()
+    pub fn get(&self) -> Option<&Handle> {
+        self.rc.get()
     }
 }
 
-#[derive(Clone)]
-pub enum Handle {
-    Value(Rc<OnceCell<Box<dyn Any>>>),
-    Callback(Rc<dyn Fn(Box<dyn Any>)>),
+pub enum HandleProvider<Handle> {
+    Value(HandleValue<Handle>),
+    Callback(Rc<dyn Fn(Handle)>),
 }
 
-impl Handle {
-    pub fn provide(&self, value: Box<dyn Any>) {
+impl<Handle> Clone for HandleProvider<Handle> {
+    fn clone(&self) -> Self {
         match self {
-            Handle::Value(rc) => {
-                let _ = rc.set(value);
-            }
-            Handle::Callback(cb) => cb(value),
+            Self::Value(arg0) => Self::Value(arg0.clone()),
+            Self::Callback(arg0) => Self::Callback(arg0.clone()),
         }
     }
 }
 
-impl Debug for Handle {
+impl<Handle: 'static> HandleProvider<Handle> {
+    pub fn provide(&self, value: Handle) {
+        match self {
+            HandleProvider::Value(rc) => {
+                let _ = rc.set(value);
+            }
+            HandleProvider::Callback(cb) => cb(value),
+        }
+    }
+}
+
+impl<Handle: Debug> Debug for HandleProvider<Handle> {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {
             Self::Value(arg0) => f.debug_tuple("Value").field(arg0).finish(),
@@ -64,31 +71,24 @@ impl Debug for Handle {
     }
 }
 
-impl<T> From<HandleValue<T>> for Handle {
-    fn from(value: HandleValue<T>) -> Self {
-        Self::Value(value.rc)
+impl<Handle> From<HandleValue<Handle>> for HandleProvider<Handle> {
+    fn from(value: HandleValue<Handle>) -> Self {
+        Self::Value(value)
     }
 }
 
-impl From<Rc<dyn Fn(Box<dyn Any>)>> for Handle {
-    fn from(value: Rc<dyn Fn(Box<dyn Any>)>) -> Self {
+impl<Handle> From<Rc<dyn Fn(Handle)>> for HandleProvider<Handle> {
+    fn from(value: Rc<dyn Fn(Handle)>) -> Self {
         Self::Callback(value)
     }
 }
 
-#[derive(Debug, Builder, Clone)]
-pub struct ElementOptions {
-    #[builder(into)]
-    pub key: Option<String>,
-    #[builder(into)]
-    pub handle: Option<Handle>,
-}
-
-#[derive(Debug, Clone)]
+#[derive(Clone, Debug)]
 pub struct Element {
     pub(crate) component_id: ComponentID,
     pub(crate) props: Rc<dyn Props>,
-    pub(crate) options: Rc<ElementOptions>,
+    pub(crate) key: Option<Rc<String>>,
+    pub(crate) handle: Option<Rc<dyn Any>>,
 }
 
 impl PartialEq for Element {
@@ -109,20 +109,59 @@ impl Element {
     }
 
     #[inline]
-    pub fn options(&self) -> &ElementOptions {
-        &self.options
+    pub fn key(&self) -> Option<&str> {
+        self.key.as_ref().map(|x| x.as_str())
     }
 
     #[inline]
-    pub fn set_options(&mut self, options: impl Into<Rc<ElementOptions>>) {
-        self.options = options.into();
+    pub fn with_key(mut self, key: impl Into<Rc<String>>) -> Self {
+        self.key = Some(key.into());
+        self
+    }
+
+    #[inline]
+    pub fn with_maybe_key(self, key: Option<impl Into<Rc<String>>>) -> Self {
+        if let Some(key) = key {
+            self.with_key(key)
+        } else {
+            self
+        }
+    }
+
+    #[inline]
+    pub fn handle<Handle: 'static>(&self) -> Option<&HandleProvider<Handle>> {
+        self.handle
+            .as_ref()
+            .and_then(|handle| handle.downcast_ref::<HandleProvider<Handle>>())
+    }
+
+    #[inline]
+    pub fn with_handle<Handle: 'static>(
+        mut self,
+        handle: impl Into<HandleProvider<Handle>>,
+    ) -> Self {
+        self.handle = Some(Rc::new(handle.into()));
+        self
+    }
+
+    #[inline]
+    pub fn with_maybe_handle<Handle: 'static>(
+        self,
+        handle: Option<impl Into<HandleProvider<Handle>>>,
+    ) -> Self {
+        if let Some(handle) = handle {
+            self.with_handle(handle)
+        } else {
+            self
+        }
     }
 }
 
-pub fn create_element<C: Component>(props: C::Props, options: ElementOptions) -> Element {
+pub fn create_element<C: Component>(props: C::Props) -> Element {
     Element {
         component_id: component_id::<C>(),
         props: Rc::new(props),
-        options: Rc::new(options),
+        key: None,
+        handle: None,
     }
 }

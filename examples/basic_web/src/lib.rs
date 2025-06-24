@@ -108,6 +108,7 @@ fn TodoList() -> Element {
             [input_handle, items] || {
                 let input = input_handle
                     .get()
+                    .unwrap()
                     .clone()
                     .dyn_into::<HtmlInputElement>()
                     .unwrap();

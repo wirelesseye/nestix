@@ -174,16 +174,6 @@ impl AppModel {
         post_update_events.push(f);
     }
 
-    pub(crate) fn provide_handle(&self, value: Box<dyn Any>) {
-        let scope = self.scope.borrow();
-        let scope = scope.as_ref().unwrap();
-
-        let element = scope.element.borrow();
-        if let Some(handle) = &element.options.handle {
-            handle.provide(value);
-        }
-    }
-
     fn reconcile(
         self: &Rc<Self>,
         context_map: HashMap<TypeId, Rc<dyn Any>>,
@@ -197,7 +187,10 @@ impl AppModel {
         for scope in prev {
             let (component_id, key) = {
                 let element = scope.element.borrow();
-                (element.component_id, element.options.key.clone())
+                (
+                    element.component_id,
+                    element.key().map(|str| str.to_string()),
+                )
             };
             let scopes_of_comp_id = scopes_by_comp_id.entry(component_id).or_default();
             scopes_of_comp_id.entry(key).or_default().push_back(scope);
@@ -209,7 +202,7 @@ impl AppModel {
                 if let Some(elements_of_tag) = scopes_by_comp_id.get_mut(&next_element.component_id)
                 {
                     if let Some(elements_of_key) =
-                        elements_of_tag.get_mut(&next_element.options.key)
+                        elements_of_tag.get_mut(&next_element.key().map(|str| str.to_string()))
                     {
                         if let Some(scope) = elements_of_key.pop_front() {
                             if *scope.element.borrow() != next_element {
