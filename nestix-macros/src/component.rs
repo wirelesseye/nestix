@@ -24,9 +24,9 @@ fn generate_component(raw: TokenStream2, item: ItemFn) -> Result<TokenStream2, s
     } else if sig.inputs.len() == 1 {
         quote! {props}
     } else if sig.inputs.len() == 2 {
-        quote! {props, element.handle::<Self::Handle>()}
+        quote! {props, element.receiver::<Self::Handle>()}
     } else if sig.inputs.len() == 3 {
-        quote! {props, element.handle::<Self::Handle>(), app_model}
+        quote! {props, element.receiver::<Self::Handle>(), app_model}
     } else {
         return Err(syn::Error::new(
             Span::call_site(),
@@ -59,7 +59,7 @@ fn generate_component(raw: TokenStream2, item: ItemFn) -> Result<TokenStream2, s
             None => {
                 return Err(syn::Error::new(
                     pat_type.span(),
-                    "excepted Option<&HandleProvider<T>>",
+                    "excepted Option<&Receiver<T>>",
                 ))
             }
         },
@@ -106,21 +106,21 @@ fn parse_handle_type(pat_type: &PatType) -> Option<Type> {
         },
         _ => None,
     }?;
-    let handle_ty = match ref_ty {
+    let receiver_ty = match ref_ty {
         Type::Reference(ty_ref) => Some(&*ty_ref.elem),
         _ => None,
     }?;
-    let type_path = match handle_ty {
+    let type_path = match receiver_ty {
         Type::Path(type_path) => Some(type_path),
         _ => None,
     }?;
     let seg = type_path.path.segments.last()?;
-    let handle_args = if seg.ident == "HandleProvider" {
+    let receiver_args = if seg.ident == "Receiver" {
         Some(&seg.arguments)
     } else {
         None
     }?;
-    let ty = match handle_args {
+    let ty = match receiver_args {
         syn::PathArguments::AngleBracketed(bracketed) => match bracketed.args.first()? {
             GenericArgument::Type(ty) => Some(ty),
             _ => None,

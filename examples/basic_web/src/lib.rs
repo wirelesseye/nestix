@@ -7,7 +7,7 @@ use components::{Button, FlexDirection, FlexView, Input, Root, Text};
 use nanoid_wasm::nanoid;
 use nestix::{
     callback, component, create_app_model,
-    hooks::{create_handle, remember, state, State},
+    hooks::{value_receiver, remember, state, State},
     layout, Element, Props, Shared,
 };
 use wasm_bindgen::prelude::*;
@@ -100,13 +100,13 @@ struct TodoItem {
 fn TodoList() -> Element {
     log::debug!("render TodoList");
 
-    let input_handle = create_handle::<HtmlElement>();
+    let input_receiver = value_receiver::<HtmlElement>();
     let items: State<Vec<TodoItem>> = state(|| vec![]);
 
     let add = remember(|| {
         callback!(
-            [input_handle, items] || {
-                let input = input_handle
+            [input_receiver, items] || {
+                let input = input_receiver
                     .get()
                     .unwrap()
                     .clone()
@@ -137,7 +137,7 @@ fn TodoList() -> Element {
     layout! {
         FlexView(.direction = FlexDirection::Column) {
             FlexView {
-                Input($handle = input_handle),
+                Input($receiver = input_receiver),
                 Button(.on_click = add.clone_shared()) {
                     Text("Add")
                 }

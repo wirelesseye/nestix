@@ -665,7 +665,7 @@ fn generate_layout(input: LayoutInput) -> Result<TokenStream2, syn::Error> {
                         }
                         .to_tokens(&mut tokens);
                     },
-                    "handle" | "handle_maybe" => {
+                    "receiver" | "receiver_maybe" => {
                         let func_ident = format_ident!("with_{}", ident);
                         quote! {
                             #dot_token #func_ident ::<<#path as nestix::Component>::Handle> (#expr)
@@ -676,7 +676,7 @@ fn generate_layout(input: LayoutInput) -> Result<TokenStream2, syn::Error> {
                         return Err(syn::Error::new(
                             ident.span(),
                             format!(
-                                "unexpected option `{}`, available: key, key_maybe, handle, handle_maybe",
+                                "unexpected option `{}`, available: key, key_maybe, receiver, receiver_maybe",
                                 other
                             ),
                         ))

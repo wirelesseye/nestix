@@ -6,12 +6,12 @@ use crate::{
 };
 
 #[derive(Debug)]
-pub struct HandleValue<Handle> {
+pub struct ValueReceiver<Handle> {
     rc: Rc<OnceCell<Handle>>,
     phantom: PhantomData<Handle>,
 }
 
-impl<Handle> Clone for HandleValue<Handle> {
+impl<Handle> Clone for ValueReceiver<Handle> {
     fn clone(&self) -> Self {
         Self {
             rc: self.rc.clone(),
@@ -20,7 +20,7 @@ impl<Handle> Clone for HandleValue<Handle> {
     }
 }
 
-impl<Handle: 'static> HandleValue<Handle> {
+impl<Handle: 'static> ValueReceiver<Handle> {
     pub(crate) fn from_rc(rc: Rc<OnceCell<Handle>>) -> Self {
         Self {
             rc,
@@ -37,12 +37,12 @@ impl<Handle: 'static> HandleValue<Handle> {
     }
 }
 
-pub enum HandleProvider<Handle> {
-    Value(HandleValue<Handle>),
+pub enum Receiver<Handle> {
+    Value(ValueReceiver<Handle>),
     Callback(Rc<dyn Fn(Handle)>),
 }
 
-impl<Handle> Clone for HandleProvider<Handle> {
+impl<Handle> Clone for Receiver<Handle> {
     fn clone(&self) -> Self {
         match self {
             Self::Value(arg0) => Self::Value(arg0.clone()),
@@ -51,18 +51,18 @@ impl<Handle> Clone for HandleProvider<Handle> {
     }
 }
 
-impl<Handle: 'static> HandleProvider<Handle> {
+impl<Handle: 'static> Receiver<Handle> {
     pub fn provide(&self, value: Handle) {
         match self {
-            HandleProvider::Value(rc) => {
+            Receiver::Value(rc) => {
                 let _ = rc.set(value);
             }
-            HandleProvider::Callback(cb) => cb(value),
+            Receiver::Callback(cb) => cb(value),
         }
     }
 }
 
-impl<Handle: Debug> Debug for HandleProvider<Handle> {
+impl<Handle: Debug> Debug for Receiver<Handle> {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {
             Self::Value(arg0) => f.debug_tuple("Value").field(arg0).finish(),
@@ -71,13 +71,13 @@ impl<Handle: Debug> Debug for HandleProvider<Handle> {
     }
 }
 
-impl<Handle> From<HandleValue<Handle>> for HandleProvider<Handle> {
-    fn from(value: HandleValue<Handle>) -> Self {
+impl<Handle> From<ValueReceiver<Handle>> for Receiver<Handle> {
+    fn from(value: ValueReceiver<Handle>) -> Self {
         Self::Value(value)
     }
 }
 
-impl<Handle> From<Rc<dyn Fn(Handle)>> for HandleProvider<Handle> {
+impl<Handle> From<Rc<dyn Fn(Handle)>> for Receiver<Handle> {
     fn from(value: Rc<dyn Fn(Handle)>) -> Self {
         Self::Callback(value)
     }
@@ -88,7 +88,7 @@ pub struct Element {
     pub(crate) component_id: ComponentID,
     pub(crate) props: Rc<dyn Props>,
     pub(crate) key: Option<Rc<String>>,
-    pub(crate) handle: Option<Rc<dyn Any>>,
+    pub(crate) receiver: Option<Rc<dyn Any>>,
 }
 
 impl PartialEq for Element {
@@ -129,28 +129,28 @@ impl Element {
     }
 
     #[inline]
-    pub fn handle<Handle: 'static>(&self) -> Option<&HandleProvider<Handle>> {
-        self.handle
+    pub fn receiver<Handle: 'static>(&self) -> Option<&Receiver<Handle>> {
+        self.receiver
             .as_ref()
-            .and_then(|handle| handle.downcast_ref::<HandleProvider<Handle>>())
+            .and_then(|receiver| receiver.downcast_ref::<Receiver<Handle>>())
     }
 
     #[inline]
-    pub fn with_handle<Handle: 'static>(
+    pub fn with_receiver<Handle: 'static>(
         mut self,
-        handle: impl Into<HandleProvider<Handle>>,
+        receiver: impl Into<Receiver<Handle>>,
     ) -> Self {
-        self.handle = Some(Rc::new(handle.into()));
+        self.receiver = Some(Rc::new(receiver.into()));
         self
     }
 
     #[inline]
-    pub fn with_maybe_handle<Handle: 'static>(
+    pub fn with_maybe_receiver<Handle: 'static>(
         self,
-        handle: Option<impl Into<HandleProvider<Handle>>>,
+        receiver: Option<impl Into<Receiver<Handle>>>,
     ) -> Self {
-        if let Some(handle) = handle {
-            self.with_handle(handle)
+        if let Some(receiver) = receiver {
+            self.with_receiver(receiver)
         } else {
             self
         }
@@ -162,6 +162,6 @@ pub fn create_element<C: Component>(props: C::Props) -> Element {
         component_id: component_id::<C>(),
         props: Rc::new(props),
         key: None,
-        handle: None,
+        receiver: None,
     }
 }
