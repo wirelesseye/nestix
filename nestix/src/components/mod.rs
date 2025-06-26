@@ -17,6 +17,12 @@ pub struct ComponentID {
     pub(crate) render_fn: fn(&Rc<AppModel>, Element),
 }
 
+impl ComponentID {
+    pub fn name(&self) -> &'static str {
+        self.name
+    }
+}
+
 impl PartialEq for ComponentID {
     fn eq(&self, other: &Self) -> bool {
         self.render_fn == other.render_fn

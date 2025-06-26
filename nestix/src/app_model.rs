@@ -110,8 +110,8 @@ impl AppModel {
     }
 
     pub fn push_child(&self, element: Element) {
-        let mut update_children = self.children_buf.borrow_mut();
-        update_children.push(element);
+        let mut children_buf = self.children_buf.borrow_mut();
+        children_buf.push(element);
     }
 
     pub(crate) fn provide_context(&self, key: TypeId, context: Rc<dyn Any>) {
@@ -196,7 +196,7 @@ impl AppModel {
             scopes_of_comp_id.entry(key).or_default().push_back(scope);
         }
 
-        let children = next
+        let children: Vec<Rc<Scope>> = next
             .into_iter()
             .map(|next_element| {
                 if let Some(elements_of_tag) = scopes_by_comp_id.get_mut(&next_element.component_id)
@@ -220,7 +220,7 @@ impl AppModel {
                 scope
             })
             .collect();
-
+        
         children
     }
 }
