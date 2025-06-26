@@ -656,12 +656,38 @@ fn generate_layout(input: LayoutInput) -> Result<TokenStream2, syn::Error> {
             let mut dot_token = <Token![.]>::default();
             dot_token.span = dollar_token.span;
 
-            let with_ident = ident.as_ref().map(|ident| format_ident!("with_{}", ident));
-
-            quote! {
-                #dot_token #with_ident (#expr)
+            if let Some(ident) = ident {
+                match ident.to_string().as_str() {
+                    "key" | "key_maybe" => {
+                        let func_ident = format_ident!("with_{}", ident);
+                        quote! {
+                            #dot_token #func_ident (#expr)
+                        }
+                        .to_tokens(&mut tokens);
+                    },
+                    "handle" | "handle_maybe" => {
+                        let func_ident = format_ident!("with_{}", ident);
+                        quote! {
+                            #dot_token #func_ident ::<<#path as nestix::Component>::Handle> (#expr)
+                        }
+                        .to_tokens(&mut tokens);
+                    },
+                    other => {
+                        return Err(syn::Error::new(
+                            ident.span(),
+                            format!(
+                                "unexpected option `{}`, available: key, key_maybe, handle, handle_maybe",
+                                other
+                            ),
+                        ))
+                    }
+                }
+            } else {
+                quote! {
+                    #dot_token
+                }
+                .to_tokens(&mut tokens);
             }
-            .to_tokens(&mut tokens);
         }
 
         tokens

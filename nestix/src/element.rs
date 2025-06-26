@@ -114,13 +114,13 @@ impl Element {
     }
 
     #[inline]
-    pub fn with_key(mut self, key: impl Into<Rc<String>>) -> Self {
-        self.key = Some(key.into());
+    pub fn with_key(mut self, key: impl Into<String>) -> Self {
+        self.key = Some(Rc::new(key.into()));
         self
     }
 
     #[inline]
-    pub fn with_maybe_key(self, key: Option<impl Into<Rc<String>>>) -> Self {
+    pub fn with_maybe_key(self, key: Option<impl Into<String>>) -> Self {
         if let Some(key) = key {
             self.with_key(key)
         } else {
