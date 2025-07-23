@@ -5,7 +5,7 @@ A React-like declarative layout and state management library for Rust.
 > This library is still in early development stages. Although all major features have been implemented, APIs can break at any point, 
 
 > [!NOTE]  
-> Just like you need `react-dom` or `react-native` to build an actual application, Nestix itself does not handle any platform-specific logics like rendering. If you want to know how to build an UI framework using Nestix, see [examples](#examples).
+> Just like you need `react-dom` or `react-native` to build an actual application, Nestix itself does not handle any platform-specific logics like rendering. If you want to know how to build an application or UI library using Nestix, see [examples](#examples).
 
 ## Examples
 For more examples, see [examples](./examples) folder.
