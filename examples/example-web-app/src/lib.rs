@@ -43,11 +43,11 @@ impl Component for App {
         });
 
         let button = create_element::<Button>(ButtonProps {
-            on_click: PropValue::from_value(Some(
+            on_click: PropValue::from_plain(Some(
                 Rc::new(move || count.mutate(|value| *value += 1)) as Rc<dyn Fn()>,
             )),
             children: Some(vec![create_element::<Text>(TextProps {
-                text: PropValue::from_value("Click".to_string()),
+                text: PropValue::from_plain("Click".to_string()),
             })]),
         });
         let root = create_element::<Root>(RootProps {
