@@ -1,0 +1,15 @@
+{
+  "name": "example-web-app",
+  "private": true,
+  "version": "0.0.0",
+  "type": "module",
+  "scripts": {
+    "wasm:build": "wasm-pack build --target web",
+    "web:dev": "vite",
+    "web:build": "vite build",
+    "web:preview": "vite preview"
+  },
+  "devDependencies": {
+    "vite": "^7.2.2"
+  }
+}
