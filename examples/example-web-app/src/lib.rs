@@ -43,7 +43,9 @@ impl Component for App {
         });
 
         let button = create_element::<Button>(ButtonProps {
-            on_click: Some(Rc::new(move || count.mutate(|value| *value += 1))),
+            on_click: PropValue::from_value(Some(
+                Rc::new(move || count.mutate(|value| *value += 1)) as Rc<dyn Fn()>,
+            )),
             children: Some(vec![create_element::<Text>(TextProps {
                 text: PropValue::from_value("Click".to_string()),
             })]),

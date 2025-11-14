@@ -1,14 +1,28 @@
-use std::rc::Rc;
+use std::{cell::RefCell, rc::Rc};
 
-use nestix::{Component, Element, closure, provide_context, use_context};
+use nestix::{Component, Element, closure, effect, prop::PropValue, provide_context, use_context};
 use wasm_bindgen::{JsCast, prelude::Closure};
 use web_sys::{Event, HtmlElement};
 
 use crate::ParentContext;
 
+thread_local! {
+    static HANDLERS: RefCell<ButtonEventHandlers> = RefCell::new(ButtonEventHandlers::new());
+}
+
+struct ButtonEventHandlers {
+    on_click: Option<Closure<dyn Fn(Event)>>,
+}
+
+impl ButtonEventHandlers {
+    fn new() -> Self {
+        Self { on_click: None }
+    }
+}
+
 pub struct ButtonProps {
     pub children: Option<Vec<Element>>,
-    pub on_click: Option<Rc<dyn Fn()>>,
+    pub on_click: PropValue<Option<Rc<dyn Fn()>>>,
 }
 
 pub struct Button;
@@ -30,20 +44,33 @@ impl Component for Button {
             .unwrap();
         parent.html_element.append_child(&html_element).unwrap();
 
-        let cb = if let Some(on_click) = &props.on_click {
-            Some(Closure::wrap(Box::new(closure!([on_click] |_: Event| {
-                on_click();
-            })) as Box<dyn Fn(_)>))
-        } else {
-            None
-        };
+        effect(closure!(
+            [html_element, props.on_click] || {
+                let cb = if let Some(on_click) = on_click.get() {
+                    Some(Closure::wrap(Box::new(closure!([on_click] |_: Event| {
+                        on_click();
+                    })) as Box<dyn Fn(_)>))
+                } else {
+                    None
+                };
 
-        if let Some(cb) = cb {
-            html_element
-                .add_event_listener_with_callback("click", cb.as_ref().unchecked_ref())
-                .unwrap();
-            cb.forget();
-        }
+                if let Some(cb) = cb {
+                    html_element
+                        .add_event_listener_with_callback("click", cb.as_ref().unchecked_ref())
+                        .unwrap();
+
+                    HANDLERS.with(|cell| {
+                        let mut handlers = cell.borrow_mut();
+                        handlers.on_click.replace(cb);
+                    });
+                } else {
+                    HANDLERS.with(|cell| {
+                        let mut handlers = cell.borrow_mut();
+                        handlers.on_click.take();
+                    });
+                }
+            }
+        ));
 
         provide_context(ParentContext { html_element });
 
