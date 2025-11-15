@@ -16,14 +16,14 @@ pub fn create_model() -> Rc<Model> {
 
 pub struct Model {
     elements: RefCell<Vec<Element>>,
-    subscriber_stack: RefCell<Vec<Shared<dyn Fn()>>>,
+    effect_stack: RefCell<Vec<Shared<dyn Fn()>>>,
 }
 
 impl Model {
     fn new() -> Self {
         Self {
             elements: RefCell::new(Vec::new()),
-            subscriber_stack: RefCell::new(Vec::new()),
+            effect_stack: RefCell::new(Vec::new()),
         }
     }
 
@@ -67,18 +67,18 @@ impl Model {
         elements.last().cloned()
     }
 
-    pub(crate) fn current_subscriber(&self) -> Option<Shared<dyn Fn()>> {
-        let subscriber_stack = self.subscriber_stack.borrow();
-        subscriber_stack.last().cloned()
+    pub(crate) fn current_effect(&self) -> Option<Shared<dyn Fn()>> {
+        let effect_stack = self.effect_stack.borrow();
+        effect_stack.last().cloned()
     }
 
-    pub(crate) fn push_subscriber(&self, subscriber: Shared<dyn Fn()>) {
-        let mut subscriber_stack = self.subscriber_stack.borrow_mut();
-        subscriber_stack.push(subscriber);
+    pub(crate) fn push_effect(&self, effect: Shared<dyn Fn()>) {
+        let mut effect_stack = self.effect_stack.borrow_mut();
+        effect_stack.push(effect);
     }
 
-    pub(crate) fn pop_subscriber(&self) {
-        let mut subscriber_stack = self.subscriber_stack.borrow_mut();
-        subscriber_stack.pop();
+    pub(crate) fn pop_effect(&self) {
+        let mut effect_stack = self.effect_stack.borrow_mut();
+        effect_stack.pop();
     }
 }

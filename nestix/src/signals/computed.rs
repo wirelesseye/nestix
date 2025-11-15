@@ -12,20 +12,20 @@ pub struct Computed<T> {
     model: Weak<Model>,
     compute: Rc<dyn Fn() -> T>,
     updater: Shared<dyn Fn()>,
-    subscribers: Rc<RefCell<HashSet<Shared<dyn Fn()>>>>,
+    effects: Rc<RefCell<HashSet<Shared<dyn Fn()>>>>,
 }
 
 impl<T> Computed<T> {
     pub fn get(&self) -> T {
         let model = self.model.upgrade().unwrap();
-        if let Some(subscriber) = model.current_subscriber() {
-            let mut subscribers = self.subscribers.borrow_mut();
-            subscribers.insert(subscriber);
+        if let Some(effect) = model.current_effect() {
+            let mut effects = self.effects.borrow_mut();
+            effects.insert(effect);
         }
 
-        model.push_subscriber(self.updater.clone());
+        model.push_effect(self.updater.clone());
         let value = (self.compute)();
-        model.pop_subscriber();
+        model.pop_effect();
 
         value
     }
@@ -37,7 +37,7 @@ impl<T> Clone for Computed<T> {
             model: self.model.clone(),
             compute: self.compute.clone(),
             updater: self.updater.clone(),
-            subscribers: self.subscribers.clone(),
+            effects: self.effects.clone(),
         }
     }
 }
@@ -45,7 +45,7 @@ impl<T> Clone for Computed<T> {
 impl<T> PartialEq for Computed<T> {
     fn eq(&self, other: &Self) -> bool {
         Rc::ptr_eq(&self.compute, &other.compute)
-            && Rc::ptr_eq(&self.subscribers, &other.subscribers)
+            && Rc::ptr_eq(&self.effects, &other.effects)
     }
 }
 
@@ -58,13 +58,13 @@ impl<T: Clone> Signal<T> for Computed<T> {
 pub fn computed<T: 'static>(compute: impl Fn() -> T + 'static) -> Computed<T> {
     let model = current_model().unwrap();
     let compute = Rc::new(compute);
-    let subscribers = Rc::new(RefCell::new(HashSet::<Shared<dyn Fn()>>::new()));
+    let effects = Rc::new(RefCell::new(HashSet::<Shared<dyn Fn()>>::new()));
 
     let updater = callback!(
-        [subscribers] || {
-            let subscribers = subscribers.borrow().clone();
-            for subscriber in subscribers {
-                subscriber();
+        [effects] || {
+            let effects = effects.borrow().clone();
+            for effect in effects {
+                effect();
             }
         }
     );
@@ -73,6 +73,6 @@ pub fn computed<T: 'static>(compute: impl Fn() -> T + 'static) -> Computed<T> {
         model: Rc::downgrade(&model),
         compute,
         updater,
-        subscribers,
+        effects,
     }
 }

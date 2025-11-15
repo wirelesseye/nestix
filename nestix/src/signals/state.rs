@@ -13,35 +13,46 @@ use crate::{
 pub struct State<T> {
     model: Weak<Model>,
     value: Rc<RefCell<T>>,
-    subscribers: Rc<RefCell<HashSet<Shared<dyn Fn()>>>>,
+    effects: Rc<RefCell<HashSet<Shared<dyn Fn()>>>>,
 }
 
 impl<T> State<T> {
     pub fn borrow(&'_ self) -> Ref<'_, T> {
         let model = self.model.upgrade().unwrap();
-        if let Some(subscriber) = model.current_subscriber() {
-            let mut subscribers = self.subscribers.borrow_mut();
-            subscribers.insert(subscriber);
+        if let Some(effect) = model.current_effect() {
+            let mut effects = self.effects.borrow_mut();
+            effects.insert(effect);
         }
         self.value.borrow()
     }
 
     pub fn set(&self, value: T) {
         self.value.replace(value);
-        let subscribers = self.subscribers.borrow().clone();
-        for subscriber in subscribers {
-            subscriber();
+        let effects = self.effects.borrow().clone();
+        for effect in effects {
+            effect();
         }
     }
 
-    pub fn mutate(&self, updater: impl Fn(&mut T)) {
+    pub fn update(&self, updater: impl Fn(&T) -> T) {
+        let prev = self.value.borrow();
+        let next = updater(&prev);
+        self.value.replace(next);
+
+        let effects = self.effects.borrow().clone();
+        for effect in effects {
+            effect();
+        }
+    }
+
+    pub fn mutate(&self, mutator: impl Fn(&mut T)) {
         {
             let mut value = self.value.borrow_mut();
-            updater(&mut value);
+            mutator(&mut value);
         }
-        let subscribers = self.subscribers.borrow().clone();
-        for subscriber in subscribers {
-            subscriber();
+        let effects = self.effects.borrow().clone();
+        for effect in effects {
+            effect();
         }
     }
 }
@@ -63,7 +74,7 @@ impl<T> Clone for State<T> {
         Self {
             model: self.model.clone(),
             value: self.value.clone(),
-            subscribers: self.subscribers.clone(),
+            effects: self.effects.clone(),
         }
     }
 }
@@ -73,6 +84,6 @@ pub fn create_state<T>(value: T) -> State<T> {
     State {
         model: Rc::downgrade(&model),
         value: Rc::new(RefCell::new(value)),
-        subscribers: Rc::new(RefCell::new(HashSet::new())),
+        effects: Rc::new(RefCell::new(HashSet::new())),
     }
 }
