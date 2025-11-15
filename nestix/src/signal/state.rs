@@ -5,15 +5,15 @@ use std::{
 };
 
 use crate::{
-    Subscriber,
     model::{Model, current_model},
+    shared::Shared,
     signal::Signal,
 };
 
 pub struct State<T> {
     model: Weak<Model>,
     value: Rc<RefCell<T>>,
-    subscribers: Rc<RefCell<HashSet<Subscriber>>>,
+    subscribers: Rc<RefCell<HashSet<Shared<dyn Fn()>>>>,
 }
 
 impl<T> State<T> {
@@ -30,7 +30,7 @@ impl<T> State<T> {
         self.value.replace(value);
         let subscribers = self.subscribers.borrow().clone();
         for subscriber in subscribers {
-            subscriber.update();
+            subscriber();
         }
     }
 
@@ -41,7 +41,7 @@ impl<T> State<T> {
         }
         let subscribers = self.subscribers.borrow().clone();
         for subscriber in subscribers {
-            subscriber.update();
+            subscriber();
         }
     }
 }

@@ -5,7 +5,7 @@ use std::{
     rc::Rc,
 };
 
-use crate::{Element, Subscriber};
+use crate::{Element, shared::Shared};
 
 thread_local! {
     static CURRENT_MODEL: RefCell<Option<Rc<Model>>> = RefCell::new(None);
@@ -21,7 +21,7 @@ pub fn create_model() -> Rc<Model> {
 
 pub struct Model {
     scopes: RefCell<Vec<HashMap<TypeId, Rc<dyn Any>>>>,
-    subscriber_stack: RefCell<Vec<Subscriber>>,
+    subscriber_stack: RefCell<Vec<Shared<dyn Fn()>>>,
 }
 
 impl Model {
@@ -95,12 +95,12 @@ impl Model {
         scope.insert(TypeId::of::<T>(), context.into());
     }
 
-    pub(crate) fn current_subscriber(&self) -> Option<Subscriber> {
+    pub(crate) fn current_subscriber(&self) -> Option<Shared<dyn Fn()>> {
         let subscriber_stack = self.subscriber_stack.borrow();
         subscriber_stack.last().cloned()
     }
 
-    pub(crate) fn push_subscriber(&self, subscriber: Subscriber) {
+    pub(crate) fn push_subscriber(&self, subscriber: Shared<dyn Fn()>) {
         let mut subscriber_stack = self.subscriber_stack.borrow_mut();
         subscriber_stack.push(subscriber);
     }

@@ -4,6 +4,7 @@ pub mod element;
 pub mod model;
 pub mod prop;
 pub mod signal;
+pub mod shared;
 
 pub use component::*;
 pub use context::*;

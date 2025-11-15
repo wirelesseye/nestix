@@ -6,13 +6,13 @@ use std::{
 
 use nestix_macros::closure;
 
-use crate::{Model, Signal, Subscriber, model::current_model};
+use crate::{Model, Signal, model::current_model, shared::Shared};
 
 pub struct Computed<T> {
     model: Weak<Model>,
     compute: Rc<dyn Fn() -> T>,
-    subscriber: Subscriber,
-    subscribers: Rc<RefCell<HashSet<Subscriber>>>,
+    subscriber: Shared<dyn Fn()>,
+    subscribers: Rc<RefCell<HashSet<Shared<dyn Fn()>>>>,
 }
 
 impl<T> Computed<T> {
@@ -58,16 +58,16 @@ impl<T: Clone> Signal<T> for Computed<T> {
 pub fn computed<T: 'static>(compute: impl Fn() -> T + 'static) -> Computed<T> {
     let model = current_model().unwrap();
     let compute = Rc::new(compute);
-    let subscribers = Rc::new(RefCell::new(HashSet::<Subscriber>::new()));
+    let subscribers = Rc::new(RefCell::new(HashSet::<Shared<dyn Fn()>>::new()));
 
-    let subscriber = Subscriber::new(closure!(
+    let subscriber = Shared::from(Rc::new(closure!(
         [subscribers] || {
             let subscribers = subscribers.borrow().clone();
             for subscriber in subscribers {
-                subscriber.update();
+                subscriber();
             }
         }
-    ));
+    )) as Rc<dyn Fn()>);
 
     Computed {
         model: Rc::downgrade(&model),
