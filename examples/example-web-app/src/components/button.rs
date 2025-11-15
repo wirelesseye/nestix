@@ -1,6 +1,8 @@
-use std::{cell::RefCell, rc::Rc};
+use std::cell::RefCell;
 
-use nestix::{Component, Element, closure, effect, prop::PropValue, provide_context, use_context};
+use nestix::{
+    Component, Element, Shared, closure, components::{ContextProvider, ContextProviderProps}, create_element, effect, prop::PropValue, use_context
+};
 use wasm_bindgen::{JsCast, prelude::Closure};
 use web_sys::{Event, HtmlElement};
 
@@ -22,7 +24,7 @@ impl ButtonEventHandlers {
 
 pub struct ButtonProps {
     pub children: Option<Vec<Element>>,
-    pub on_click: PropValue<Option<Rc<dyn Fn()>>>,
+    pub on_click: PropValue<Option<Shared<dyn Fn()>>>,
 }
 
 pub struct Button;
@@ -31,8 +33,6 @@ impl Component for Button {
     type Props = ButtonProps;
 
     fn render(model: &std::rc::Rc<nestix::model::Model>, element: &nestix::Element) {
-        model.enter_scope();
-
         let props = element.props().downcast_ref::<Self::Props>().unwrap();
         let parent = use_context::<ParentContext>().unwrap();
 
@@ -72,14 +72,10 @@ impl Component for Button {
             }
         ));
 
-        provide_context(ParentContext { html_element });
-
-        if let Some(children) = &props.children {
-            for child in children {
-                model.render(child);
-            }
-        }
-
-        model.exit_scope();
+        let element = create_element::<ContextProvider<ParentContext>>(ContextProviderProps {
+            value: PropValue::from_plain(ParentContext { html_element }),
+            children: PropValue::from_plain(props.children.clone()),
+        });
+        model.render(&element);
     }
 }

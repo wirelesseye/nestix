@@ -1,6 +1,6 @@
 use std::rc::Rc;
 
-use crate::signal::Signal;
+use crate::signals::Signal;
 
 enum PropValueInner<T> {
     Plain(Rc<T>),

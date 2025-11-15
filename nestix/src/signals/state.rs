@@ -7,7 +7,7 @@ use std::{
 use crate::{
     model::{Model, current_model},
     shared::Shared,
-    signal::Signal,
+    signals::Signal,
 };
 
 pub struct State<T> {

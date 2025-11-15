@@ -1,9 +1,4 @@
-use std::{
-    any::{Any, TypeId},
-    cell::{Ref, RefCell, RefMut},
-    collections::HashMap,
-    rc::Rc,
-};
+use std::{cell::RefCell, rc::Rc};
 
 use crate::{Element, shared::Shared};
 
@@ -20,14 +15,14 @@ pub fn create_model() -> Rc<Model> {
 }
 
 pub struct Model {
-    scopes: RefCell<Vec<HashMap<TypeId, Rc<dyn Any>>>>,
+    elements: RefCell<Vec<Element>>,
     subscriber_stack: RefCell<Vec<Shared<dyn Fn()>>>,
 }
 
 impl Model {
     fn new() -> Self {
         Self {
-            scopes: RefCell::new(Vec::new()),
+            elements: RefCell::new(Vec::new()),
             subscriber_stack: RefCell::new(Vec::new()),
         }
     }
@@ -44,7 +39,9 @@ impl Model {
             }
         });
 
+        self.enter_scope(element.clone());
         (element.component_id().render_fn)(&self, element);
+        self.exit_scope();
 
         CURRENT_MODEL.with(|cell| {
             let mut model = cell.borrow_mut();
@@ -52,47 +49,22 @@ impl Model {
         });
     }
 
-    pub fn enter_scope(&self) {
-        let mut scopes = self.scopes.borrow_mut();
-        if let Some(last) = scopes.last() {
-            let new_scope = last.clone();
-            scopes.push(new_scope);
-        } else {
-            scopes.push(HashMap::new());
+    fn enter_scope(&self, element: Element) {
+        let mut elements = self.elements.borrow_mut();
+        if let Some(last) = elements.last() {
+            element.set_contexts(last.contexts());
         }
+        elements.push(element);
     }
 
-    pub fn exit_scope(&self) {
-        let mut scopes = self.scopes.borrow_mut();
-        scopes.pop();
+    fn exit_scope(&self) {
+        let mut elements = self.elements.borrow_mut();
+        elements.pop();
     }
 
-    fn current_scope(&'_ self) -> Option<Ref<'_, HashMap<TypeId, Rc<dyn Any>>>> {
-        let scopes = self.scopes.borrow();
-        if scopes.is_empty() {
-            None
-        } else {
-            Some(Ref::map(scopes, |scopes| scopes.last().unwrap()))
-        }
-    }
-
-    fn current_scope_mut(&'_ self) -> Option<RefMut<'_, HashMap<TypeId, Rc<dyn Any>>>> {
-        let scopes = self.scopes.borrow_mut();
-        if scopes.is_empty() {
-            None
-        } else {
-            Some(RefMut::map(scopes, |scopes| scopes.last_mut().unwrap()))
-        }
-    }
-
-    pub(crate) fn get_context<T: 'static>(&self) -> Option<Rc<dyn Any>> {
-        let scope = self.current_scope().unwrap();
-        scope.get(&TypeId::of::<T>()).cloned()
-    }
-
-    pub(crate) fn set_context<T: 'static>(&self, context: impl Into<Rc<T>>) {
-        let mut scope = self.current_scope_mut().unwrap();
-        scope.insert(TypeId::of::<T>(), context.into());
+    pub(crate) fn current_element(&self) -> Option<Element> {
+        let elements = self.elements.borrow();
+        elements.last().cloned()
     }
 
     pub(crate) fn current_subscriber(&self) -> Option<Shared<dyn Fn()>> {

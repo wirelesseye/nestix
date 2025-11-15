@@ -12,8 +12,6 @@ impl Component for Text {
     type Props = TextProps;
 
     fn render(model: &std::rc::Rc<nestix::model::Model>, element: &nestix::Element) {
-        model.enter_scope();
-
         let props = element.props().downcast_ref::<Self::Props>().unwrap();
 
         let parent = use_context::<ParentContext>().unwrap();
@@ -25,7 +23,5 @@ impl Component for Text {
         ));
 
         parent.html_element.append_child(&text_node).unwrap();
-
-        model.exit_scope();
     }
 }

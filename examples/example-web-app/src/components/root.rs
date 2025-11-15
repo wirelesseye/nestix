@@ -1,4 +1,9 @@
-use nestix::{Component, Element, provide_context};
+use nestix::{
+    Component, Element,
+    components::{ContextProvider, ContextProviderProps},
+    create_element,
+    prop::PropValue,
+};
 use wasm_bindgen::JsCast;
 use web_sys::HtmlElement;
 
@@ -14,8 +19,6 @@ impl Component for Root {
     type Props = RootProps;
 
     fn render(model: &std::rc::Rc<nestix::model::Model>, element: &nestix::Element) {
-        model.enter_scope();
-
         let props = element.props().downcast_ref::<Self::Props>().unwrap();
 
         let document = web_sys::window().unwrap().document().unwrap();
@@ -26,14 +29,11 @@ impl Component for Root {
             .unwrap()
             .dyn_into::<HtmlElement>()
             .unwrap();
-        provide_context(ParentContext { html_element });
 
-        if let Some(children) = &props.children {
-            for child in children {
-                model.render(child);
-            }
-        }
-
-        model.exit_scope();
+        let element = create_element::<ContextProvider<ParentContext>>(ContextProviderProps {
+            value: PropValue::from_plain(ParentContext { html_element }),
+            children: PropValue::from_plain(props.children.clone()),
+        });
+        model.render(&element);
     }
 }

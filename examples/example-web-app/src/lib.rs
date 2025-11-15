@@ -1,10 +1,13 @@
 mod components;
 
-use std::{mem, rc::Rc};
+use std::mem;
 
 use components::*;
 use nestix::{
-    Component, closure, computed, create_element, create_model, create_state, prop::PropValue,
+    Component, callback, closure,
+    components::{Show, ShowProps},
+    computed, create_element, create_model, create_state,
+    prop::PropValue,
 };
 use wasm_bindgen::prelude::wasm_bindgen;
 use web_sys::HtmlElement;
@@ -22,6 +25,7 @@ fn init() {
 
 struct App;
 
+#[derive(Clone)]
 struct ParentContext {
     html_element: HtmlElement,
 }
@@ -30,31 +34,37 @@ impl Component for App {
     type Props = ();
 
     fn render(model: &std::rc::Rc<nestix::model::Model>, element: &nestix::Element) {
-        model.enter_scope();
-
         let count = create_state(0);
         let count_text = computed(closure!([count] || count.get().to_string()));
 
-        let text = create_element::<Text>(TextProps {
-            text: PropValue::from_signal(count_text),
-        });
         let div = create_element::<Div>(DivProps {
-            children: Some(vec![text]),
+            children: Some(vec![create_element::<Text>(TextProps {
+                text: PropValue::from_signal(count_text),
+            })]),
         });
 
         let button = create_element::<Button>(ButtonProps {
-            on_click: PropValue::from_plain(Some(
-                Rc::new(move || count.mutate(|value| *value += 1)) as Rc<dyn Fn()>,
-            )),
+            on_click: PropValue::from_plain(Some(callback!(
+                [count] || count.mutate(|value| *value += 1)
+            ))),
             children: Some(vec![create_element::<Text>(TextProps {
                 text: PropValue::from_plain("Click".to_string()),
             })]),
         });
+
+        let is_even = computed(closure!([count] || count.get() % 2 == 0));
+        let even_msg = create_element::<Show>(ShowProps {
+            when: PropValue::from_signal(is_even),
+            element: PropValue::from_plain(create_element::<Div>(DivProps {
+                children: Some(vec![create_element::<Text>(TextProps {
+                    text: PropValue::from_plain("Is Even!".to_string()),
+                })]),
+            })),
+        });
+
         let root = create_element::<Root>(RootProps {
-            children: Some(vec![div, button]),
+            children: Some(vec![div, button, even_msg]),
         });
         model.render(&root);
-
-        model.exit_scope();
     }
 }

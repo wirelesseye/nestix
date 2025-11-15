@@ -1,4 +1,4 @@
-use std::{hash::Hash, ops::Deref, rc::Rc};
+use std::{fmt::Debug, hash::Hash, ops::Deref, rc::Rc};
 
 pub struct Shared<T: ?Sized> {
     value: Rc<T>,
@@ -45,5 +45,13 @@ impl<T: ?Sized> Deref for Shared<T> {
 impl<T: ?Sized> From<Rc<T>> for Shared<T> {
     fn from(value: Rc<T>) -> Self {
         Self { value }
+    }
+}
+
+impl<T: ?Sized> Debug for Shared<T> {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.debug_struct("Shared")
+            .field("value", &format!("{:p}", Rc::as_ptr(&self.value)))
+            .finish()
     }
 }
