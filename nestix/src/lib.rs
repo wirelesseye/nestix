@@ -11,5 +11,6 @@ pub use context::*;
 pub use element::*;
 pub use model::*;
 pub use signal::*;
+pub use shared::*;
 
 pub use nestix_macros::closure;

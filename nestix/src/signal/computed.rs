@@ -4,14 +4,14 @@ use std::{
     rc::{Rc, Weak},
 };
 
-use nestix_macros::closure;
+use nestix_macros::callback;
 
 use crate::{Model, Signal, model::current_model, shared::Shared};
 
 pub struct Computed<T> {
     model: Weak<Model>,
     compute: Rc<dyn Fn() -> T>,
-    subscriber: Shared<dyn Fn()>,
+    updater: Shared<dyn Fn()>,
     subscribers: Rc<RefCell<HashSet<Shared<dyn Fn()>>>>,
 }
 
@@ -23,7 +23,7 @@ impl<T> Computed<T> {
             subscribers.insert(subscriber);
         }
 
-        model.push_subscriber(self.subscriber.clone());
+        model.push_subscriber(self.updater.clone());
         let value = (self.compute)();
         model.pop_subscriber();
 
@@ -36,7 +36,7 @@ impl<T> Clone for Computed<T> {
         Self {
             model: self.model.clone(),
             compute: self.compute.clone(),
-            subscriber: self.subscriber.clone(),
+            updater: self.updater.clone(),
             subscribers: self.subscribers.clone(),
         }
     }
@@ -60,19 +60,19 @@ pub fn computed<T: 'static>(compute: impl Fn() -> T + 'static) -> Computed<T> {
     let compute = Rc::new(compute);
     let subscribers = Rc::new(RefCell::new(HashSet::<Shared<dyn Fn()>>::new()));
 
-    let subscriber = Shared::from(Rc::new(closure!(
+    let updater = callback!(
         [subscribers] || {
             let subscribers = subscribers.borrow().clone();
             for subscriber in subscribers {
                 subscriber();
             }
         }
-    )) as Rc<dyn Fn()>);
+    );
 
     Computed {
         model: Rc::downgrade(&model),
         compute,
-        subscriber,
+        updater,
         subscribers,
     }
 }
