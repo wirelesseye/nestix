@@ -27,7 +27,7 @@ impl ButtonEventHandlers {
 }
 
 pub struct ButtonProps {
-    pub children: Option<Vec<Element>>,
+    pub children: PropValue<Option<Vec<Element>>>,
     pub on_click: PropValue<Option<Shared<dyn Fn()>>>,
 }
 
@@ -87,7 +87,7 @@ impl Component for Button {
 
         let element = create_element::<ContextProvider<ParentContext>>(ContextProviderProps {
             value: PropValue::from_plain(ParentContext { html_element }),
-            children: PropValue::from_plain(props.children.clone()),
+            children: props.children.clone(),
         });
         model.render(&element);
     }

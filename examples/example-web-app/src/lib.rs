@@ -48,9 +48,9 @@ impl Component for App {
             on_click: PropValue::from_plain(Some(callback!(
                 [count] || count.mutate(|value| *value += 1)
             ))),
-            children: Some(vec![create_element::<Text>(TextProps {
+            children: PropValue::from_plain(Some(vec![create_element::<Text>(TextProps {
                 text: PropValue::from_plain("Click".to_string()),
-            })]),
+            })])),
         });
 
         let is_even = computed(closure!([count] || count.get() % 2 == 0));
@@ -64,7 +64,7 @@ impl Component for App {
         });
 
         let root = create_element::<Root>(RootProps {
-            children: Some(vec![div, button, even_msg]),
+            children: PropValue::from_plain(Some(vec![div, button, even_msg])),
         });
         model.render(&root);
     }

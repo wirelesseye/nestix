@@ -10,7 +10,7 @@ use web_sys::HtmlElement;
 use crate::ParentContext;
 
 pub struct RootProps {
-    pub children: Option<Vec<Element>>,
+    pub children: PropValue<Option<Vec<Element>>>,
 }
 
 impl Props for RootProps {
@@ -40,7 +40,7 @@ impl Component for Root {
 
         let element = create_element::<ContextProvider<ParentContext>>(ContextProviderProps {
             value: PropValue::from_plain(ParentContext { html_element }),
-            children: PropValue::from_plain(props.children.clone()),
+            children: props.children.clone(),
         });
         model.render(&element);
     }
