@@ -2,7 +2,7 @@ use nestix::{
     Component, Element, closure,
     components::{ContextProvider, ContextProviderProps},
     create_element, on_destroy,
-    prop::PropValue,
+    prop::{PropValue, Props},
     use_context,
 };
 use wasm_bindgen::{JsCast, UnwrapThrowExt};
@@ -11,7 +11,15 @@ use web_sys::HtmlElement;
 use crate::ParentContext;
 
 pub struct DivProps {
-    pub children: Option<Vec<Element>>,
+    pub children: PropValue<Option<Vec<Element>>>,
+}
+
+impl Props for DivProps {
+    fn debug_fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.debug_struct("DivProps")
+            .field("children", &self.children)
+            .finish()
+    }
 }
 
 pub struct Div;
@@ -22,7 +30,6 @@ impl Component for Div {
     fn render(model: &std::rc::Rc<nestix::model::Model>, element: &nestix::Element) {
         let props = element.props().downcast_ref::<Self::Props>().unwrap();
         let parent = use_context::<ParentContext>().unwrap_throw();
-        log::debug!("{:?}", parent.html_element);
 
         let document = web_sys::window().unwrap().document().unwrap();
         let html_element = document
@@ -40,7 +47,7 @@ impl Component for Div {
 
         let element = create_element::<ContextProvider<ParentContext>>(ContextProviderProps {
             value: PropValue::from_plain(ParentContext { html_element }),
-            children: PropValue::from_plain(props.children.clone()),
+            children: props.children.clone(),
         });
         model.render(&element);
     }

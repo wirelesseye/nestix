@@ -1,4 +1,4 @@
-use std::{cell::RefCell, rc::Rc};
+use std::{cell::RefCell, collections::HashMap, rc::Rc};
 
 use crate::{Element, shared::Shared};
 
@@ -28,6 +28,7 @@ impl Model {
     }
 
     pub fn render(self: &Rc<Self>, element: &Element) {
+        let mut drop_model = false;
         CURRENT_MODEL.with(|cell| {
             let mut model = cell.borrow_mut();
             if let Some(model) = &*model {
@@ -35,6 +36,7 @@ impl Model {
                     panic!("an app model already initialized");
                 }
             } else {
+                drop_model = true;
                 model.replace(self.clone());
             }
         });
@@ -43,16 +45,18 @@ impl Model {
         (element.component_id().render_fn)(&self, element);
         self.exit_scope();
 
-        CURRENT_MODEL.with(|cell| {
-            let mut model = cell.borrow_mut();
-            model.take();
-        });
+        if drop_model {
+            CURRENT_MODEL.with(|cell| {
+                let mut model = cell.borrow_mut();
+                model.take();
+            });
+        }
     }
 
     fn enter_scope(&self, element: Element) {
         let mut elements = self.elements.borrow_mut();
         if let Some(last) = elements.last() {
-            element.set_contexts(last.contexts());
+            element.extend_contexts(last.contexts());
         }
         elements.push(element);
     }

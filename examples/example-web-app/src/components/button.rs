@@ -1,7 +1,11 @@
 use std::cell::RefCell;
 
 use nestix::{
-    Component, Element, Shared, closure, components::{ContextProvider, ContextProviderProps}, create_element, effect, prop::PropValue, use_context
+    Component, Element, Shared, closure,
+    components::{ContextProvider, ContextProviderProps},
+    create_element, effect,
+    prop::{PropValue, Props},
+    use_context,
 };
 use wasm_bindgen::{JsCast, prelude::Closure};
 use web_sys::{Event, HtmlElement};
@@ -25,6 +29,15 @@ impl ButtonEventHandlers {
 pub struct ButtonProps {
     pub children: Option<Vec<Element>>,
     pub on_click: PropValue<Option<Shared<dyn Fn()>>>,
+}
+
+impl Props for ButtonProps {
+    fn debug_fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.debug_struct("ButtonProps")
+            .field("children", &self.children)
+            .field("on_click", &self.on_click)
+            .finish()
+    }
 }
 
 pub struct Button;

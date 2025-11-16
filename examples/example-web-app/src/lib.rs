@@ -35,12 +35,13 @@ impl Component for App {
 
     fn render(model: &std::rc::Rc<nestix::model::Model>, element: &nestix::Element) {
         let count = create_state(0);
-        let count_text = computed(closure!([count] || count.get().to_string()));
 
         let div = create_element::<Div>(DivProps {
-            children: Some(vec![create_element::<Text>(TextProps {
-                text: PropValue::from_signal(count_text),
-            })]),
+            children: PropValue::from_plain(Some(vec![create_element::<Text>(TextProps {
+                text: PropValue::from_signal(computed(closure!(
+                    [count] || format!("Count: {}", count.get())
+                ))),
+            })])),
         });
 
         let button = create_element::<Button>(ButtonProps {
@@ -55,11 +56,11 @@ impl Component for App {
         let is_even = computed(closure!([count] || count.get() % 2 == 0));
         let even_msg = create_element::<Show>(ShowProps {
             when: PropValue::from_signal(is_even),
-            element: PropValue::from_plain(create_element::<Div>(DivProps {
-                children: Some(vec![create_element::<Text>(TextProps {
+            children: PropValue::from_plain(Some(vec![create_element::<Div>(DivProps {
+                children: PropValue::from_plain(Some(vec![create_element::<Text>(TextProps {
                     text: PropValue::from_plain("Is Even!".to_string()),
-                })]),
-            })),
+                })])),
+            })])),
         });
 
         let root = create_element::<Root>(RootProps {
