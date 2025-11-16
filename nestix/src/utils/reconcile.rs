@@ -3,74 +3,66 @@ use std::{
     hash::Hash,
 };
 
-pub struct ReconcileResult<T> {
-    pub removed: Vec<T>,
-    pub added: Vec<(T, Option<T>)>,
-    pub moved: Vec<(T, Option<T>)>,
+pub struct ReconcileResult {
+    pub removed: Vec<usize>,
+    pub added: Vec<usize>,
+    pub moved: Vec<usize>,
 }
 
-pub fn reconcile<T: Clone + Eq + PartialEq + Hash>(
+pub fn reconcile<T: Eq + Hash>(
     prev: &[T],
     next: &[T],
-) -> ReconcileResult<T> {
-    let prev_set: HashSet<_> = prev.iter().cloned().collect();
-    let next_set: HashSet<_> = next.iter().cloned().collect();
+) -> ReconcileResult {
+    let prev_set: HashSet<_> = prev.iter().collect();
+    let next_set: HashSet<_> = next.iter().collect();
 
-    let removed: Vec<T> = prev_set.difference(&next_set).cloned().collect();
+    let prev_index: HashMap<_, _> =
+        prev.iter().enumerate().map(|(i, e)| (e, i)).collect();
+    // let next_index: HashMap<_, _> =
+    //     next.iter().enumerate().map(|(i, e)| (e, i)).collect();
 
-    let prev_index: HashMap<_, _> = prev
+    let removed = prev
         .iter()
-        .cloned()
         .enumerate()
-        .map(|(i, e)| (e, i))
-        .collect();
-    // let next_index: HashMap<_, _> = next
-    //     .iter()
-    //     .cloned()
-    //     .enumerate()
-    //     .map(|(i, e)| (e, i))
-    //     .collect();
+        .filter(|(_, e)| !next_set.contains(*e))
+        .map(|(i, _)| i)
+        .collect::<Vec<_>>();
 
-    let previous_in_next = |idx: usize| {
-        if idx == 0 {
-            None
-        } else {
-            Some(next[idx - 1].clone())
-        }
-    };
-
-    let added: Vec<(T, Option<T>)> = next
+    let added = next
         .iter()
-        .filter(|e| !prev_set.contains(*e))
         .enumerate()
-        .map(|(i, e)| (e.clone(), previous_in_next(i)))
-        .collect();
+        .filter(|(_, e)| !prev_set.contains(*e))
+        .map(|(i, _)| i)
+        .collect::<Vec<_>>();
 
-    let moved: Vec<(T, Option<T>)> = next
+    // indices in next whose predecessor changed
+    let moved = next
         .iter()
-        .filter(|e| prev_set.contains(*e)) // only elements that existed before
         .enumerate()
-        .filter_map(|(i, e)| {
-            let e = e.clone();
-            let old_idx = prev_index[&e];
+        .filter(|(_, e)| prev_set.contains(*e)) // only existing elements
+        .filter_map(|(next_i, e)| {
+            let prev_i = prev_index[e];
 
-            // Compute previous neighbor in prev
-            let old_prev = if old_idx == 0 {
+            let old_pred = if prev_i == 0 {
                 None
             } else {
-                Some(prev[old_idx - 1].clone())
+                Some(&prev[prev_i - 1])
             };
 
-            let new_prev = previous_in_next(i);
+            let new_pred = if next_i == 0 {
+                None
+            } else {
+                Some(&next[next_i - 1])
+            };
 
-            // Movement occurs if previous neighbor changed
-            if old_prev != new_prev {
-                Some((e, new_prev))
+            // movement is defined by predecessor change
+            if old_pred != new_pred {
+                Some(next_i)
             } else {
                 None
             }
         })
-        .collect();
+        .collect::<Vec<_>>();
 
     ReconcileResult {
         removed,

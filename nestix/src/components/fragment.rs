@@ -42,15 +42,15 @@ impl Component for Fragment {
                             moved,
                         } = reconcile(prev, next);
 
-                        for element in removed {
-                            element.destroy();
+                        for i in removed {
+                            prev[i].destroy();
                         }
 
-                        for (element, prev) in added {
-                            model.render(&element);
+                        for i in added {
+                            model.render(&next[i]);
                         }
 
-                        for (element, prev) in moved {
+                        for i in moved {
                             // TODO
                         }
                     }
