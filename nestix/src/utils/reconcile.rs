@@ -8,6 +8,7 @@ pub struct ReconcileResult {
     pub removed: Vec<usize>,
     pub added: Vec<usize>,
     pub moved: Vec<usize>,
+    pub mapping: Vec<Option<usize>>,
 }
 
 pub fn reconcile<T: Eq + Hash>(
@@ -19,8 +20,11 @@ pub fn reconcile<T: Eq + Hash>(
 
     let prev_index: HashMap<_, _> =
         prev.iter().enumerate().map(|(i, e)| (e, i)).collect();
-    // let next_index: HashMap<_, _> =
-    //     next.iter().enumerate().map(|(i, e)| (e, i)).collect();
+    
+    let mapping = next
+        .iter()
+        .map(|e| prev_index.get(e).copied())
+        .collect::<Vec<_>>();
 
     let removed = prev
         .iter()
@@ -64,10 +68,11 @@ pub fn reconcile<T: Eq + Hash>(
             }
         })
         .collect::<Vec<_>>();
-
+    
     ReconcileResult {
         removed,
         added,
         moved,
+        mapping,
     }
 }

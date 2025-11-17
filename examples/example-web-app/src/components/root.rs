@@ -10,15 +10,14 @@ use web_sys::HtmlElement;
 
 use crate::ParentContext;
 
+#[derive(Debug)]
 pub struct RootProps {
     pub children: PropValue<Option<Vec<Element>>>,
 }
 
 impl Props for RootProps {
     fn debug_fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        f.debug_struct("RootProps")
-            .field("children", &self.children)
-            .finish()
+        std::fmt::Debug::fmt(&self, f)
     }
 }
 

@@ -8,15 +8,14 @@ use crate::{
     utils::reconcile::{ReconcileResult, reconcile},
 };
 
+#[derive(Debug)]
 pub struct FragmentProps {
     pub children: PropValue<Option<Vec<Element>>>,
 }
 
 impl Props for FragmentProps {
     fn debug_fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        f.debug_struct("FragmentProps")
-            .field("children", &self.children)
-            .finish()
+        std::fmt::Debug::fmt(&self, f)
     }
 }
 
@@ -43,6 +42,7 @@ impl Component for Fragment {
                             removed,
                             added,
                             moved,
+                            mapping: _,
                         } = result;
 
                         for prev_i in removed {
@@ -99,6 +99,7 @@ impl Component for Fragment {
                     }
                     _ => (),
                 }
+                
                 *prev = next;
             }
         ));

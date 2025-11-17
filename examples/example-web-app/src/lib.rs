@@ -1,16 +1,12 @@
 mod components;
 
-use std::mem;
+use std::{mem, rc::Rc};
 
 use components::*;
 use nestix::{
-    Component,
-    callback,
-    closure,
-    computed,
-    create_element,
-    create_model,
-    create_state,
+    Component, Element, Shared, callback, closure,
+    components::{For, ForProps},
+    computed, create_element, create_model, create_state,
     prop::PropValue,
 };
 use wasm_bindgen::prelude::wasm_bindgen;
@@ -39,6 +35,7 @@ impl Component for App {
 
     fn render(model: &std::rc::Rc<nestix::model::Model>, element: &nestix::Element) {
         let count = create_state(0);
+        let list_data = create_state(vec![0]);
 
         let div = create_element::<Div>(DivProps {
             children: PropValue::from_plain(Some(vec![create_element::<Text>(TextProps {
@@ -50,31 +47,34 @@ impl Component for App {
 
         let button = create_element::<Button>(ButtonProps {
             on_click: PropValue::from_plain(Some(callback!(
-                [count] || count.mutate(|value| *value += 1)
+                [count, list_data] || {
+                    count.mutate(|value| *value += 1);
+                    list_data.mutate(|data| data.push(count.get_untrack()));
+                }
             ))),
             children: PropValue::from_plain(Some(vec![create_element::<Text>(TextProps {
                 text: PropValue::from_plain("Click".to_string()),
             })])),
         });
+        
+        let list = create_element::<For<i32>>(ForProps {
+            data: PropValue::from_signal(list_data),
+            constructor: PropValue::from_plain(Shared::from(Rc::new(|item: i32, i: usize| {
+                create_element::<Div>(DivProps {
+                    children: PropValue::from_plain(Some(vec![create_element::<Text>(
+                        TextProps {
+                            text: PropValue::from_plain(item.to_string()),
+                        },
+                    )])),
+                })
+            })
+                as Rc<dyn Fn(i32, usize) -> Element>)),
+        });
 
         let root = create_element::<Root>(RootProps {
-            children: PropValue::from_signal(computed(closure!(
-                [div, button] || {
-                    let mut children = vec![div.clone(), button.clone()];
-                    for i in 0..count.get() {
-                        let div = create_element::<Div>(DivProps {
-                            children: PropValue::from_plain(Some(vec![create_element::<Text>(
-                                TextProps {
-                                    text: PropValue::from_plain(i.to_string()),
-                                },
-                            )])),
-                        });
-                        children.push(div);
-                    }
-                    Some(children)
-                }
-            ))),
+            children: PropValue::from_plain(Some(vec![div, button, list])),
         });
+
         model.render(&root);
     }
 }

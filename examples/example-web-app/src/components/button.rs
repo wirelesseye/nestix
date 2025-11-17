@@ -26,6 +26,7 @@ impl ButtonEventHandlers {
     }
 }
 
+#[derive(Debug)]
 pub struct ButtonProps {
     pub children: PropValue<Option<Vec<Element>>>,
     pub on_click: PropValue<Option<Shared<dyn Fn()>>>,
@@ -33,10 +34,7 @@ pub struct ButtonProps {
 
 impl Props for ButtonProps {
     fn debug_fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        f.debug_struct("ButtonProps")
-            .field("children", &self.children)
-            .field("on_click", &self.on_click)
-            .finish()
+        std::fmt::Debug::fmt(&self, f)
     }
 }
 
