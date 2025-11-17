@@ -1,10 +1,10 @@
 mod components;
 
-use std::{mem, rc::Rc};
+use std::mem;
 
 use components::*;
 use nestix::{
-    Component, Element, Shared, callback, closure,
+    Component, callback, closure,
     components::{For, ForProps},
     computed, create_element, create_model, create_state,
     prop::PropValue,
@@ -56,10 +56,10 @@ impl Component for App {
                 text: PropValue::from_plain("Click".to_string()),
             })])),
         });
-        
+
         let list = create_element::<For<i32>>(ForProps {
             data: PropValue::from_signal(list_data),
-            constructor: PropValue::from_plain(Shared::from(Rc::new(|item: i32, i: usize| {
+            constructor: PropValue::from_plain(callback!(|item: i32, i: usize| {
                 create_element::<Div>(DivProps {
                     children: PropValue::from_plain(Some(vec![create_element::<Text>(
                         TextProps {
@@ -67,8 +67,7 @@ impl Component for App {
                         },
                     )])),
                 })
-            })
-                as Rc<dyn Fn(i32, usize) -> Element>)),
+            })),
         });
 
         let root = create_element::<Root>(RootProps {
