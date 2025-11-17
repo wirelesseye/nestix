@@ -29,9 +29,10 @@ impl Component for Fragment {
         let props = element.props().downcast_ref::<Self::Props>().unwrap();
         let prev: Rc<RefCell<Option<Vec<Element>>>> = Rc::new(RefCell::new(None));
         let handle = element.handle();
+        let contexts = element.contexts();
 
         effect(closure!(
-            [model, prev, handle, props.children] || {
+            [model, prev, props.children] || {
                 let mut prev = prev.borrow_mut();
                 let next = children.get();
 
@@ -60,6 +61,7 @@ impl Component for Fragment {
                                     child.provide_context(PredecessorContext { handle });
                                 }
                             }
+                            child.extend_contexts(contexts.clone());
                             model.render(child);
                             if let Some(child_handle) = child.handle().get_untrack() {
                                 handle.set(Some(child_handle));
@@ -88,6 +90,7 @@ impl Component for Fragment {
                     }
                     (None, Some(next)) => {
                         for child in next {
+                            child.extend_contexts(contexts.clone());
                             model.render(&child);
                             if let Some(child_handle) = child.handle().get_untrack() {
                                 handle.set(Some(child_handle));
