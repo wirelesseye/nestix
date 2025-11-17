@@ -16,4 +16,4 @@ pub use model::*;
 pub use shared::*;
 pub use signals::*;
 
-pub use nestix_macros::{callback, closure};
+pub use nestix_macros::{callback, closure, props};

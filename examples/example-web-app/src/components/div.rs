@@ -2,23 +2,18 @@ use nestix::{
     Component, Element, closure,
     components::{ContextProvider, ContextProviderProps},
     create_element, on_destroy,
-    prop::{PropValue, Props},
-    provide_handle, use_context, use_predecessor,
+    prop::PropValue,
+    props, provide_handle, use_context, use_predecessor,
 };
 use wasm_bindgen::{JsCast, UnwrapThrowExt};
 use web_sys::{HtmlElement, Text};
 
 use crate::ParentContext;
 
+#[props(debug)]
 #[derive(Debug)]
 pub struct DivProps {
-    pub children: PropValue<Option<Vec<Element>>>,
-}
-
-impl Props for DivProps {
-    fn debug_fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        std::fmt::Debug::fmt(&self, f)
-    }
+    pub children: Option<Vec<Element>>,
 }
 
 pub struct Div;

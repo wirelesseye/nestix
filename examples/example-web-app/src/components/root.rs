@@ -2,23 +2,18 @@ use nestix::{
     Component, Element,
     components::{ContextProvider, ContextProviderProps},
     create_element,
-    prop::{PropValue, Props},
-    provide_handle,
+    prop::{PropValue},
+    props, provide_handle,
 };
 use wasm_bindgen::JsCast;
 use web_sys::HtmlElement;
 
 use crate::ParentContext;
 
+#[props(debug)]
 #[derive(Debug)]
 pub struct RootProps {
-    pub children: PropValue<Option<Vec<Element>>>,
-}
-
-impl Props for RootProps {
-    fn debug_fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        std::fmt::Debug::fmt(&self, f)
-    }
+    pub children: Option<Vec<Element>>,
 }
 
 pub struct Root;

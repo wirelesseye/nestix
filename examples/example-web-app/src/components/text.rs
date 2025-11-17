@@ -1,20 +1,11 @@
-use nestix::{
-    Component, closure, effect,
-    prop::{PropValue, Props},
-    provide_handle, use_context,
-};
+use nestix::{Component, closure, effect, props, provide_handle, use_context};
 
 use crate::ParentContext;
 
+#[props(debug)]
 #[derive(Debug)]
 pub struct TextProps {
-    pub text: PropValue<String>,
-}
-
-impl Props for TextProps {
-    fn debug_fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        std::fmt::Debug::fmt(&self, f)
-    }
+    pub text: String,
 }
 
 pub struct Text;

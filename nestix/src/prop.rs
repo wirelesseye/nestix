@@ -2,26 +2,8 @@ use std::{any::Any, fmt::Debug, rc::Rc};
 
 use crate::signals::Signal;
 
-pub(crate) trait AsAny: Any {
-    fn as_any(&self) -> &dyn Any;
-
-    fn as_any_mut(&mut self) -> &mut dyn Any;
-}
-
-impl<T: Any> AsAny for T {
-    #[inline]
-    fn as_any(&self) -> &dyn Any {
-        self
-    }
-
-    #[inline]
-    fn as_any_mut(&mut self) -> &mut dyn Any {
-        self
-    }
-}
-
 #[allow(private_bounds)]
-pub trait Props: AsAny + 'static {
+pub trait Props: Any + 'static {
     fn debug_fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         write!(f, "Props(..)")
     }

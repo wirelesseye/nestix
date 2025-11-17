@@ -4,8 +4,8 @@ use nestix::{
     Component, Element, Shared, closure,
     components::{ContextProvider, ContextProviderProps},
     create_element, effect,
-    prop::{PropValue, Props},
-    provide_handle, use_context,
+    prop::PropValue,
+    props, provide_handle, use_context,
 };
 use wasm_bindgen::{JsCast, prelude::Closure};
 use web_sys::{Event, HtmlElement};
@@ -26,16 +26,11 @@ impl ButtonEventHandlers {
     }
 }
 
+#[props(debug)]
 #[derive(Debug)]
 pub struct ButtonProps {
-    pub children: PropValue<Option<Vec<Element>>>,
-    pub on_click: PropValue<Option<Shared<dyn Fn()>>>,
-}
-
-impl Props for ButtonProps {
-    fn debug_fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        std::fmt::Debug::fmt(&self, f)
-    }
+    pub children: Option<Vec<Element>>,
+    pub on_click: Option<Shared<dyn Fn()>>,
 }
 
 pub struct Button;

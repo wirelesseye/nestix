@@ -1,22 +1,16 @@
 use std::{cell::RefCell, rc::Rc};
 
-use nestix_macros::closure;
+use nestix_macros::{closure, props};
 
 use crate::{
     Component, Element, PredecessorContext, effect, on_destroy,
-    prop::{PropValue, Props},
     utils::reconcile::{ReconcileResult, reconcile},
 };
 
+#[props(debug)]
 #[derive(Debug)]
 pub struct FragmentProps {
-    pub children: PropValue<Option<Vec<Element>>>,
-}
-
-impl Props for FragmentProps {
-    fn debug_fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        std::fmt::Debug::fmt(&self, f)
-    }
+    pub children: Option<Vec<Element>>,
 }
 
 pub struct Fragment;
@@ -99,7 +93,7 @@ impl Component for Fragment {
                     }
                     _ => (),
                 }
-                
+
                 *prev = next;
             }
         ));
