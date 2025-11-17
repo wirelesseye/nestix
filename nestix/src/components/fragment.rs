@@ -3,7 +3,7 @@ use std::{cell::RefCell, rc::Rc};
 use nestix_macros::closure;
 
 use crate::{
-    Component, Element, effect, on_destroy,
+    Component, Element, PredecessorContext, effect, on_destroy,
     prop::{PropValue, Props},
     utils::reconcile::{ReconcileResult, reconcile},
 };
@@ -28,40 +28,70 @@ impl Component for Fragment {
     fn render(model: &std::rc::Rc<crate::Model>, element: &crate::Element) {
         let props = element.props().downcast_ref::<Self::Props>().unwrap();
         let prev: Rc<RefCell<Option<Vec<Element>>>> = Rc::new(RefCell::new(None));
+        let handle = element.handle();
 
         effect(closure!(
-            [model, prev, props.children] || {
+            [model, prev, handle, props.children] || {
                 let mut prev = prev.borrow_mut();
                 let next = children.get();
 
                 match (&*prev, &next) {
                     (Some(prev), Some(next)) => {
+                        let result = reconcile(prev, next);
                         let ReconcileResult {
                             removed,
                             added,
                             moved,
-                        } = reconcile(prev, next);
+                        } = result;
 
-                        for i in removed {
-                            prev[i].destroy();
+                        for prev_i in removed {
+                            prev[prev_i].destroy();
                         }
 
-                        for i in added {
-                            model.render(&next[i]);
+                        for next_i in added {
+                            let pred = if next_i == 0 {
+                                None
+                            } else {
+                                Some(&next[next_i - 1])
+                            };
+                            let child = &next[next_i];
+                            if let Some(pred) = pred {
+                                if let Some(handle) = pred.handle().get_untrack() {
+                                    child.provide_context(PredecessorContext { handle });
+                                }
+                            }
+                            model.render(child);
+                            if let Some(child_handle) = child.handle().get_untrack() {
+                                handle.set(Some(child_handle));
+                            }
                         }
 
-                        for i in moved {
-                            // TODO
+                        for next_i in moved {
+                            let pred = if next_i == 0 {
+                                None
+                            } else {
+                                Some(&next[next_i - 1])
+                            };
+                            let child = &next[next_i];
+                            if let Some(pred) = pred {
+                                if let Some(handle) = pred.handle().get_untrack() {
+                                    child.provide_context(PredecessorContext { handle });
+                                }
+                            }
+                            child.move_after(pred);
                         }
                     }
                     (Some(prev), None) => {
-                        for element in prev {
-                            element.destroy();
+                        for child in prev {
+                            child.destroy();
                         }
                     }
                     (None, Some(next)) => {
-                        for element in next {
-                            model.render(&element);
+                        for child in next {
+                            model.render(&child);
+                            if let Some(child_handle) = child.handle().get_untrack() {
+                                handle.set(Some(child_handle));
+                            }
                         }
                     }
                     _ => (),
@@ -74,8 +104,8 @@ impl Component for Fragment {
             [prev] || {
                 let prev = prev.borrow();
                 if let Some(prev) = &*prev {
-                    for element in prev {
-                        element.destroy();
+                    for child in prev {
+                        child.destroy();
                     }
                 }
             }

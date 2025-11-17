@@ -5,7 +5,7 @@ use nestix::{
     components::{ContextProvider, ContextProviderProps},
     create_element, effect,
     prop::{PropValue, Props},
-    use_context,
+    provide_handle, use_context,
 };
 use wasm_bindgen::{JsCast, prelude::Closure};
 use web_sys::{Event, HtmlElement};
@@ -84,6 +84,8 @@ impl Component for Button {
                 }
             }
         ));
+
+        provide_handle(html_element.clone());
 
         let element = create_element::<ContextProvider<ParentContext>>(ContextProviderProps {
             value: PropValue::from_plain(ParentContext { html_element }),

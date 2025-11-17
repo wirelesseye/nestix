@@ -3,6 +3,7 @@ use std::{
     hash::Hash,
 };
 
+#[derive(Debug)]
 pub struct ReconcileResult {
     pub removed: Vec<usize>,
     pub added: Vec<usize>,

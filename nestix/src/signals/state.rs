@@ -1,28 +1,27 @@
 use std::{
     cell::{Ref, RefCell},
     collections::HashSet,
-    rc::{Rc, Weak},
+    rc::Rc,
 };
 
-use crate::{
-    model::{Model, current_model},
-    shared::Shared,
-    signals::Signal,
-};
+use crate::{current_effect, shared::Shared, signals::Signal};
 
+#[derive(Debug)]
 pub struct State<T> {
-    model: Weak<Model>,
     value: Rc<RefCell<T>>,
     effects: Rc<RefCell<HashSet<Shared<dyn Fn()>>>>,
 }
 
 impl<T> State<T> {
     pub fn borrow(&'_ self) -> Ref<'_, T> {
-        let model = self.model.upgrade().unwrap();
-        if let Some(effect) = model.current_effect() {
+        if let Some(effect) = current_effect() {
             let mut effects = self.effects.borrow_mut();
             effects.insert(effect);
         }
+        self.borrow_untrack()
+    }
+
+    pub fn borrow_untrack(&'_ self) -> Ref<'_, T> {
         self.value.borrow()
     }
 
@@ -61,18 +60,25 @@ impl<T: Clone> State<T> {
     pub fn get(&self) -> T {
         (*self.borrow()).clone()
     }
+
+    pub fn get_untrack(&self) -> T {
+        (*self.borrow_untrack()).clone()
+    }
 }
 
 impl<T: Clone> Signal<T> for State<T> {
     fn get(&self) -> T {
         self.get()
     }
+
+    fn get_untrack(&self) -> T {
+        self.get_untrack()
+    }
 }
 
 impl<T> Clone for State<T> {
     fn clone(&self) -> Self {
         Self {
-            model: self.model.clone(),
             value: self.value.clone(),
             effects: self.effects.clone(),
         }
@@ -80,9 +86,7 @@ impl<T> Clone for State<T> {
 }
 
 pub fn create_state<T>(value: T) -> State<T> {
-    let model = current_model().unwrap();
     State {
-        model: Rc::downgrade(&model),
         value: Rc::new(RefCell::new(value)),
         effects: Rc::new(RefCell::new(HashSet::new())),
     }

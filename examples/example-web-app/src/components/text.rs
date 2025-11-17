@@ -1,7 +1,7 @@
 use nestix::{
     Component, closure, effect,
     prop::{PropValue, Props},
-    use_context,
+    provide_handle, use_context,
 };
 
 use crate::ParentContext;
@@ -33,6 +33,8 @@ impl Component for Text {
         effect(closure!(
             [props.text, text_node] || text_node.set_data(&text.get())
         ));
+
+        provide_handle(text_node.clone());
 
         parent.html_element.append_child(&text_node).unwrap();
     }

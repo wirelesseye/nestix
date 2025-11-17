@@ -1,15 +1,10 @@
-use std::{
-    cell::RefCell,
-    collections::HashSet,
-    rc::{Rc, Weak},
-};
+use std::{cell::RefCell, collections::HashSet, rc::Rc};
 
 use nestix_macros::callback;
 
-use crate::{Model, Signal, model::current_model, shared::Shared};
+use crate::{Signal, current_effect, pop_effect, push_effect, shared::Shared};
 
 pub struct Computed<T> {
-    model: Weak<Model>,
     compute: Rc<dyn Fn() -> T>,
     updater: Shared<dyn Fn()>,
     effects: Rc<RefCell<HashSet<Shared<dyn Fn()>>>>,
@@ -17,15 +12,17 @@ pub struct Computed<T> {
 
 impl<T> Computed<T> {
     pub fn get(&self) -> T {
-        let model = self.model.upgrade().unwrap();
-        if let Some(effect) = model.current_effect() {
+        if let Some(effect) = current_effect() {
             let mut effects = self.effects.borrow_mut();
             effects.insert(effect);
         }
+        self.get_untrack()
+    }
 
-        model.push_effect(self.updater.clone());
+    pub fn get_untrack(&self) -> T {
+        push_effect(self.updater.clone());
         let value = (self.compute)();
-        model.pop_effect();
+        pop_effect();
 
         value
     }
@@ -34,7 +31,6 @@ impl<T> Computed<T> {
 impl<T> Clone for Computed<T> {
     fn clone(&self) -> Self {
         Self {
-            model: self.model.clone(),
             compute: self.compute.clone(),
             updater: self.updater.clone(),
             effects: self.effects.clone(),
@@ -44,8 +40,7 @@ impl<T> Clone for Computed<T> {
 
 impl<T> PartialEq for Computed<T> {
     fn eq(&self, other: &Self) -> bool {
-        Rc::ptr_eq(&self.compute, &other.compute)
-            && Rc::ptr_eq(&self.effects, &other.effects)
+        Rc::ptr_eq(&self.compute, &other.compute) && Rc::ptr_eq(&self.effects, &other.effects)
     }
 }
 
@@ -53,10 +48,13 @@ impl<T: Clone> Signal<T> for Computed<T> {
     fn get(&self) -> T {
         self.get()
     }
+
+    fn get_untrack(&self) -> T {
+        self.get_untrack()
+    }
 }
 
 pub fn computed<T: 'static>(compute: impl Fn() -> T + 'static) -> Computed<T> {
-    let model = current_model().unwrap();
     let compute = Rc::new(compute);
     let effects = Rc::new(RefCell::new(HashSet::<Shared<dyn Fn()>>::new()));
 
@@ -70,7 +68,6 @@ pub fn computed<T: 'static>(compute: impl Fn() -> T + 'static) -> Computed<T> {
     );
 
     Computed {
-        model: Rc::downgrade(&model),
         compute,
         updater,
         effects,

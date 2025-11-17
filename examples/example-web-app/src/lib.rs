@@ -4,9 +4,14 @@ use std::mem;
 
 use components::*;
 use nestix::{
-    Component, callback, closure,
-    components::{Show, ShowProps},
-    computed, create_element, create_model, create_state,
+    Component,
+    callback,
+    closure,
+    // components::{Show, ShowProps},
+    computed,
+    create_element,
+    create_model,
+    create_state,
     prop::PropValue,
 };
 use wasm_bindgen::prelude::wasm_bindgen;
@@ -53,18 +58,23 @@ impl Component for App {
             })])),
         });
 
-        let is_even = computed(closure!([count] || count.get() % 2 == 0));
-        let even_msg = create_element::<Show>(ShowProps {
-            when: PropValue::from_signal(is_even),
-            children: PropValue::from_plain(Some(vec![create_element::<Div>(DivProps {
-                children: PropValue::from_plain(Some(vec![create_element::<Text>(TextProps {
-                    text: PropValue::from_plain("Is Even!".to_string()),
-                })])),
+        let even_msg = create_element::<Div>(DivProps {
+            children: PropValue::from_plain(Some(vec![create_element::<Text>(TextProps {
+                text: PropValue::from_plain("Is Even!".to_string()),
             })])),
         });
 
         let root = create_element::<Root>(RootProps {
-            children: PropValue::from_plain(Some(vec![div, button, even_msg])),
+            children: PropValue::from_signal(computed(closure!(
+                [div, button, even_msg] || {
+                    let is_even = count.get() % 2 == 0;
+                    if is_even {
+                        Some(vec![div.clone(), even_msg.clone(), button.clone()])
+                    } else {
+                        Some(vec![div.clone(), button.clone()])
+                    }
+                }
+            ))),
         });
         model.render(&root);
     }

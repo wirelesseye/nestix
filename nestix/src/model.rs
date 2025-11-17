@@ -1,13 +1,13 @@
-use std::{cell::RefCell, collections::HashMap, rc::Rc};
+use std::{cell::RefCell, rc::Rc};
 
-use crate::{Element, shared::Shared};
+use crate::Element;
 
 thread_local! {
     static CURRENT_MODEL: RefCell<Option<Rc<Model>>> = RefCell::new(None);
 }
 
 pub(crate) fn current_model() -> Option<Rc<Model>> {
-    CURRENT_MODEL.with(|cell| cell.borrow().clone())
+    CURRENT_MODEL.with_borrow(|model| model.clone())
 }
 
 pub fn create_model() -> Rc<Model> {
@@ -16,14 +16,12 @@ pub fn create_model() -> Rc<Model> {
 
 pub struct Model {
     elements: RefCell<Vec<Element>>,
-    effect_stack: RefCell<Vec<Shared<dyn Fn()>>>,
 }
 
 impl Model {
     fn new() -> Self {
         Self {
             elements: RefCell::new(Vec::new()),
-            effect_stack: RefCell::new(Vec::new()),
         }
     }
 
@@ -69,20 +67,5 @@ impl Model {
     pub(crate) fn current_element(&self) -> Option<Element> {
         let elements = self.elements.borrow();
         elements.last().cloned()
-    }
-
-    pub(crate) fn current_effect(&self) -> Option<Shared<dyn Fn()>> {
-        let effect_stack = self.effect_stack.borrow();
-        effect_stack.last().cloned()
-    }
-
-    pub(crate) fn push_effect(&self, effect: Shared<dyn Fn()>) {
-        let mut effect_stack = self.effect_stack.borrow_mut();
-        effect_stack.push(effect);
-    }
-
-    pub(crate) fn pop_effect(&self) {
-        let mut effect_stack = self.effect_stack.borrow_mut();
-        effect_stack.pop();
     }
 }
