@@ -38,11 +38,6 @@ impl Component for Button {
     type Props = ButtonProps;
 
     fn render(model: &std::rc::Rc<nestix::model::Model>, element: &nestix::Element) {
-        let button_props = ButtonProps::builder()
-            .children(prop_value!(None))
-            .on_click(prop_value!(None))
-            .build();
-
         let props = element.props().downcast_ref::<Self::Props>().unwrap();
         let parent = use_context::<ParentContext>().unwrap();
 

@@ -1,10 +1,11 @@
 use proc_macro::TokenStream;
 
-mod closure;
 mod callback;
-mod util;
+mod closure;
 mod derive_props;
 mod prop_value;
+mod props;
+mod util;
 
 #[proc_macro]
 pub fn closure(input: TokenStream) -> TokenStream {
@@ -24,4 +25,9 @@ pub fn derive_props(attr: TokenStream, input: TokenStream) -> TokenStream {
 #[proc_macro]
 pub fn prop_value(input: TokenStream) -> TokenStream {
     prop_value::prop_value(input)
+}
+
+#[proc_macro]
+pub fn props(input: TokenStream) -> TokenStream {
+    props::props(input)
 }

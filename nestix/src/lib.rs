@@ -16,4 +16,4 @@ pub use model::*;
 pub use shared::*;
 pub use signals::*;
 
-pub use nestix_macros::{callback, closure, prop_value, derive_props};
+pub use nestix_macros::{callback, closure, derive_props, prop_value, props};
