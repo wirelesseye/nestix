@@ -1,8 +1,8 @@
-use nestix::{Component, closure, effect, props, provide_handle, use_context};
+use nestix::{Component, closure, derive_props, effect, provide_handle, use_context};
 
 use crate::ParentContext;
 
-#[props(debug)]
+#[derive_props(debug)]
 #[derive(Debug)]
 pub struct TextProps {
     text: String,

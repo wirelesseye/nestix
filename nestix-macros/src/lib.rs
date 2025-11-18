@@ -3,7 +3,7 @@ use proc_macro::TokenStream;
 mod closure;
 mod callback;
 mod util;
-mod props;
+mod derive_props;
 mod prop_value;
 
 #[proc_macro]
@@ -17,8 +17,8 @@ pub fn callback(input: TokenStream) -> TokenStream {
 }
 
 #[proc_macro_attribute]
-pub fn props(attr: TokenStream, input: TokenStream) -> TokenStream {
-    props::props(attr, input)
+pub fn derive_props(attr: TokenStream, input: TokenStream) -> TokenStream {
+    derive_props::derive_props(attr, input)
 }
 
 #[proc_macro]

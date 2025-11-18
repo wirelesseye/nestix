@@ -4,7 +4,7 @@ use nestix::{
     Component, Element, Shared, closure,
     components::{ContextProvider, ContextProviderProps},
     create_element, effect,
-    prop_value, props, provide_handle, use_context,
+    prop_value, derive_props, provide_handle, use_context,
 };
 use wasm_bindgen::{JsCast, prelude::Closure};
 use web_sys::{Event, HtmlElement};
@@ -25,7 +25,7 @@ impl ButtonEventHandlers {
     }
 }
 
-#[props(debug)]
+#[derive_props(debug)]
 #[derive(Debug)]
 pub struct ButtonProps {
     children: Option<Vec<Element>>,

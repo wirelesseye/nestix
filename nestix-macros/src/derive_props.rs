@@ -9,7 +9,7 @@ use syn::{
 
 use crate::util::{FoundCrateExt, crate_name};
 
-pub fn props(attrs: TokenStream, input: TokenStream) -> TokenStream {
+pub fn derive_props(attrs: TokenStream, input: TokenStream) -> TokenStream {
     let attrs = parse_macro_input!(attrs as PropsAttrs);
     let item = parse_macro_input!(input as ItemStruct);
     generate_props(attrs, item)
