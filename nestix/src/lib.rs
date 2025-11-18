@@ -3,7 +3,7 @@ pub mod components;
 pub mod context;
 pub mod element;
 pub mod model;
-pub mod prop;
+pub mod props;
 pub mod shared;
 pub mod signals;
 

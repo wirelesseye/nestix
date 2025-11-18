@@ -2,6 +2,12 @@ use std::{any::Any, fmt::Debug, rc::Rc};
 
 use crate::signals::Signal;
 
+#[doc(hidden)]
+pub mod __internal {
+    pub struct Set;
+    pub struct Unset;
+}
+
 #[allow(private_bounds)]
 pub trait Props: Any + 'static {
     fn debug_fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {

@@ -2,7 +2,7 @@ use nestix::{
     Component, Element,
     components::{ContextProvider, ContextProviderProps},
     create_element,
-    prop::{PropValue},
+    props::{PropValue},
     props, provide_handle,
 };
 use wasm_bindgen::JsCast;
@@ -13,7 +13,7 @@ use crate::ParentContext;
 #[props(debug)]
 #[derive(Debug)]
 pub struct RootProps {
-    pub children: Option<Vec<Element>>,
+    children: Option<Vec<Element>>,
 }
 
 pub struct Root;

@@ -6,7 +6,7 @@ use crate::{
     Component, Element,
     components::{Fragment, FragmentProps},
     create_element, effect,
-    prop::{PropValue, Props},
+    props::{PropValue, Props},
 };
 
 pub struct ContextProviderProps<T> {

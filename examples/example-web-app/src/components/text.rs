@@ -5,7 +5,7 @@ use crate::ParentContext;
 #[props(debug)]
 #[derive(Debug)]
 pub struct TextProps {
-    pub text: String,
+    text: String,
 }
 
 pub struct Text;

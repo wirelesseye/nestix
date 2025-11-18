@@ -4,7 +4,7 @@ use nestix_macros::closure;
 
 use crate::{
     Component, Element, PredecessorContext, Shared, effect, on_destroy,
-    prop::{PropValue, Props},
+    props::{PropValue, Props},
     utils::reconcile::{ReconcileResult, reconcile},
 };
 
