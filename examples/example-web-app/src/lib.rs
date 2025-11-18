@@ -38,12 +38,10 @@ impl Component for App {
 
         let div = create_element::<Div>(props!(DivProps(
             .children = Some(vec![create_element::<Text>(
-                TextProps::builder()
-                    .text(prop_value!(computed(closure!(
-                        [count] || format!("Count: {}", count.get())
-                    ))))
-                    .build(),
-            )])
+                props!(TextProps(.text = computed(closure!(
+                    [count] || format!("Count: {}", count.get())
+                )))),
+            )]),
         )));
 
         let button = create_element::<Button>(props!(ButtonProps(
@@ -54,9 +52,7 @@ impl Component for App {
                 }
             )),
             .children = Some(vec![create_element::<Text>(
-                TextProps::builder()
-                    .text(prop_value!("Click".to_string()))
-                    .build(),
+                props!(TextProps(.text = "Click".to_string())),
             )]),
         )));
 
@@ -64,13 +60,9 @@ impl Component for App {
             data: prop_value!(list_data),
             constructor: prop_value!(callback!(|item: i32, i: usize| {
                 create_element::<Div>(
-                    DivProps::builder()
-                        .children(prop_value!(Some(vec![create_element::<Text>(
-                            TextProps::builder()
-                                .text(prop_value!(item.to_string()))
-                                .build(),
-                        )])))
-                        .build(),
+                    props!(DivProps(.children = Some(vec![create_element::<Text>(
+                        props!(TextProps(.text = item.to_string()))
+                    )]))),
                 )
             })),
         });

@@ -54,6 +54,11 @@ fn generate_props(attrs: PropsAttrs, mut item: ItemStruct) -> Result<TokenStream
 
     let crate_path = crate_name().to_path();
 
+    let option_ty_map = item
+        .fields
+        .iter()
+        .map(|field| is_option_ty(&field.ty))
+        .collect::<Vec<_>>();
     for field in &mut item.fields {
         let ty = &field.ty;
         let path = parse_quote!(#crate_path::prop::PropValue<#ty>);
@@ -74,13 +79,17 @@ fn generate_props(attrs: PropsAttrs, mut item: ItemStruct) -> Result<TokenStream
     );
 
     let mut builder_fields = fields.clone();
-    for field in &mut builder_fields {
+    for (i, field) in builder_fields.iter_mut().enumerate() {
         let ty = &field.ty;
-        let path = parse_quote!(Option<#ty>);
-        field.ty = Type::Path(TypePath {
-            qself: None,
-            path: path,
-        });
+        let option_ty = option_ty_map[i];
+
+        if !option_ty {
+            let path = parse_quote!(Option<#ty>);
+            field.ty = Type::Path(TypePath {
+                qself: None,
+                path: path,
+            });
+        }
         field.vis = Visibility::Inherited;
     }
 
@@ -95,14 +104,25 @@ fn generate_props(attrs: PropsAttrs, mut item: ItemStruct) -> Result<TokenStream
     for (i, field) in fields.iter().enumerate() {
         let ident = field.ident.as_ref().unwrap();
         let ty = &field.ty;
+        let option_ty = option_ty_map[i];
 
         let ident_pascal = ident.to_string().to_case(Case::Pascal);
 
         let is_set_ident = Ident::new(&format!("{}IsSet", ident_pascal), ident.span());
+        let can_set_ident = Ident::new(&format!("{}CanSet", ident_pascal), ident.span());
+
         quote! {
             pub trait #is_set_ident {}
 
             impl #is_set_ident for Set {}
+
+            impl #is_set_ident for Defaulted {}
+
+            pub trait #can_set_ident {}
+
+            impl #can_set_ident for Unset {}
+
+            impl #can_set_ident for Defaulted {}
         }
         .to_tokens(&mut error_traits);
 
@@ -112,18 +132,34 @@ fn generate_props(attrs: PropsAttrs, mut item: ItemStruct) -> Result<TokenStream
         }
         let type_param_ident = Ident::new(&format!("{}State", ident_pascal), ident.span());
         quote! {#type_param_ident}.to_tokens(&mut type_parameters);
-        quote! {#type_param_ident=Unset}.to_tokens(&mut default_type_parameters);
+        if option_ty {
+            quote! {#type_param_ident=Defaulted}.to_tokens(&mut default_type_parameters);
+        } else {
+            quote! {#type_param_ident=Unset}.to_tokens(&mut default_type_parameters);
+        }
         quote! {#type_param_ident: #is_set_ident,}.to_tokens(&mut builder_build_type_bounds);
 
-        quote! {
-            #ident: None,
+        if option_ty {
+            quote! {
+                #ident: #crate_path::prop::PropValue::from_plain(None),
+            }
+            .to_tokens(&mut builder_default_fields);
+        
+            quote! {
+                #ident: self.#ident,
+            }
+            .to_tokens(&mut builder_build_fields);
+        } else {
+            quote! {
+                #ident: None,
+            }
+            .to_tokens(&mut builder_default_fields);
+            
+            quote! {
+                #ident: self.#ident.unwrap(),
+            }
+            .to_tokens(&mut builder_build_fields);
         }
-        .to_tokens(&mut builder_default_fields);
-
-        quote! {
-            #ident: self.#ident.unwrap(),
-        }
-        .to_tokens(&mut builder_build_fields);
 
         let mut method_type_params = TokenStream2::new();
         let mut method_type_args = TokenStream2::new();
@@ -138,12 +174,20 @@ fn generate_props(attrs: PropsAttrs, mut item: ItemStruct) -> Result<TokenStream
                 .as_ref()
                 .unwrap();
             if i == j {
-                quote! {Unset,}.to_tokens(&mut method_type_args);
+                quote! {S: #can_set_ident,}.to_tokens(&mut method_type_params);
+                quote! {S,}.to_tokens(&mut method_type_args);
                 quote! {Set,}.to_tokens(&mut method_result_type_args);
-                quote! {
-                    #field_ident: Some(value),
+                if option_ty {
+                    quote! {
+                        #field_ident: value,
+                    }
+                    .to_tokens(&mut method_fields);
+                } else {
+                    quote! {
+                        #field_ident: Some(value),
+                    }
+                    .to_tokens(&mut method_fields);
                 }
-                .to_tokens(&mut method_fields);
             } else {
                 let type_param_ident = Ident::new(&format!("{}State", ident_pascal), ident.span());
                 quote! {#type_param_ident,}.to_tokens(&mut method_type_params);
@@ -233,4 +277,18 @@ fn generate_props(attrs: PropsAttrs, mut item: ItemStruct) -> Result<TokenStream
             #impl_debug_output
         }
     })
+}
+
+fn is_option_ty(ty: &Type) -> bool {
+    match ty {
+        Type::Path(type_path) => {
+            let segments = &type_path.path.segments;
+            if segments.len() == 1 && segments.first().unwrap().ident == "Option" {
+                true
+            } else {
+                false
+            }
+        }
+        _ => false,
+    }
 }

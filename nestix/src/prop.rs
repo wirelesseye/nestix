@@ -1,11 +1,12 @@
 use std::{any::Any, fmt::Debug, marker::PhantomData, rc::Rc};
 
-use crate::{create_state, signals::Signal};
+use crate::signals::Signal;
 
 #[doc(hidden)]
 pub mod __internal {
     pub struct Set;
     pub struct Unset;
+    pub struct Defaulted;
 }
 
 #[allow(private_bounds)]
