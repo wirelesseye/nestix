@@ -7,7 +7,7 @@ use std::{
 };
 
 use crate::{
-    Component, ComponentID, Shared, State, component_id, create_state, current_model, props::Props,
+    Component, ComponentID, Shared, State, component_id, create_state, current_model, prop::Props,
     use_context,
 };
 

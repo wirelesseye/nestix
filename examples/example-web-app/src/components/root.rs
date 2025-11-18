@@ -2,8 +2,7 @@ use nestix::{
     Component, Element,
     components::{ContextProvider, ContextProviderProps},
     create_element,
-    props::{PropValue},
-    props, provide_handle,
+    prop_value, props, provide_handle,
 };
 use wasm_bindgen::JsCast;
 use web_sys::HtmlElement;
@@ -36,7 +35,7 @@ impl Component for Root {
         provide_handle(html_element.clone());
 
         let element = create_element::<ContextProvider<ParentContext>>(ContextProviderProps {
-            value: PropValue::from_plain(ParentContext { html_element }),
+            value: prop_value!(ParentContext { html_element }),
             children: props.children.clone(),
         });
         model.render(&element);

@@ -6,8 +6,7 @@ use components::*;
 use nestix::{
     Component, callback, closure,
     components::{For, ForProps},
-    computed, create_element, create_model, create_state,
-    props::PropValue,
+    computed, create_element, create_model, create_state, prop_value,
 };
 use wasm_bindgen::prelude::wasm_bindgen;
 use web_sys::HtmlElement;
@@ -39,9 +38,9 @@ impl Component for App {
 
         let div = create_element::<Div>(
             DivProps::builder()
-                .children(PropValue::from_plain(Some(vec![create_element::<Text>(
+                .children(prop_value!(Some(vec![create_element::<Text>(
                     TextProps::builder()
-                        .text(PropValue::from_signal(computed(closure!(
+                        .text(prop_value!(computed(closure!(
                             [count] || format!("Count: {}", count.get())
                         ))))
                         .build(),
@@ -51,28 +50,28 @@ impl Component for App {
 
         let button = create_element::<Button>(
             ButtonProps::builder()
-                .on_click(PropValue::from_plain(Some(callback!(
+                .on_click(prop_value!(Some(callback!(
                     [count, list_data] || {
                         count.mutate(|value| *value += 1);
                         list_data.mutate(|data| data.push(count.get_untrack()));
                     }
                 ))))
-                .children(PropValue::from_plain(Some(vec![create_element::<Text>(
+                .children(prop_value!(Some(vec![create_element::<Text>(
                     TextProps::builder()
-                        .text(PropValue::from_plain("Click".to_string()))
+                        .text(prop_value!("Click".to_string()))
                         .build(),
                 )])))
                 .build(),
         );
 
         let list = create_element::<For<i32>>(ForProps {
-            data: PropValue::from_signal(list_data),
-            constructor: PropValue::from_plain(callback!(|item: i32, i: usize| {
+            data: prop_value!(list_data),
+            constructor: prop_value!(callback!(|item: i32, i: usize| {
                 create_element::<Div>(
                     DivProps::builder()
-                        .children(PropValue::from_plain(Some(vec![create_element::<Text>(
+                        .children(prop_value!(Some(vec![create_element::<Text>(
                             TextProps::builder()
-                                .text(PropValue::from_plain(item.to_string()))
+                                .text(prop_value!(item.to_string()))
                                 .build(),
                         )])))
                         .build(),
@@ -82,7 +81,7 @@ impl Component for App {
 
         let root = create_element::<Root>(
             RootProps::builder()
-                .children(PropValue::from_plain(Some(vec![div, button, list])))
+                .children(prop_value!(Some(vec![div, button, list])))
                 .build(),
         );
 

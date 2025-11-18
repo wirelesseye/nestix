@@ -3,9 +3,8 @@ use std::cell::RefCell;
 use nestix::{
     Component, Element, Shared, closure,
     components::{ContextProvider, ContextProviderProps},
-    create_element, effect, props,
-    props::PropValue,
-    provide_handle, use_context,
+    create_element, effect,
+    prop_value, props, provide_handle, use_context,
 };
 use wasm_bindgen::{JsCast, prelude::Closure};
 use web_sys::{Event, HtmlElement};
@@ -39,6 +38,11 @@ impl Component for Button {
     type Props = ButtonProps;
 
     fn render(model: &std::rc::Rc<nestix::model::Model>, element: &nestix::Element) {
+        let button_props = ButtonProps::builder()
+            .children(prop_value!(None))
+            .on_click(prop_value!(None))
+            .build();
+
         let props = element.props().downcast_ref::<Self::Props>().unwrap();
         let parent = use_context::<ParentContext>().unwrap();
 
@@ -81,7 +85,7 @@ impl Component for Button {
         provide_handle(html_element.clone());
 
         let element = create_element::<ContextProvider<ParentContext>>(ContextProviderProps {
-            value: PropValue::from_plain(ParentContext { html_element }),
+            value: prop_value!(ParentContext { html_element }),
             children: props.children.clone(),
         });
         model.render(&element);

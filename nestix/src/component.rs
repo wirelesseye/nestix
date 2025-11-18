@@ -1,6 +1,6 @@
 use std::{any::TypeId, hash::Hash, rc::Rc};
 
-use crate::{Element, model::Model, props::Props};
+use crate::{Element, model::Model, prop::Props};
 
 pub trait Component: 'static {
     type Props: Props;

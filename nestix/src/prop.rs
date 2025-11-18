@@ -1,6 +1,6 @@
-use std::{any::Any, fmt::Debug, rc::Rc};
+use std::{any::Any, fmt::Debug, marker::PhantomData, rc::Rc};
 
-use crate::signals::Signal;
+use crate::{create_state, signals::Signal};
 
 #[doc(hidden)]
 pub mod __internal {
@@ -93,3 +93,43 @@ impl<T> PartialEq for PropValue<T> {
 }
 
 impl<T> Eq for PropValue<T> {}
+
+#[doc(hidden)]
+pub struct PlainTag<T>(PhantomData<T>);
+
+impl<T> PlainTag<T> {
+    #[inline]
+    pub fn new(self, value: T) -> PropValue<T> {
+        PropValue::from_plain(value)
+    }
+}
+
+#[doc(hidden)]
+pub trait PlainKind<T> {
+    #[inline]
+    fn prop_value_tag(&self) -> PlainTag<T> {
+        PlainTag(PhantomData)
+    }
+}
+
+impl<T> PlainKind<T> for &T {}
+
+#[doc(hidden)]
+pub struct SignalTag<T>(PhantomData<T>);
+
+impl<T> SignalTag<T> {
+    #[inline]
+    pub fn new<S: Signal<T> + 'static>(self, value: S) -> PropValue<T> {
+        PropValue::from_signal(value)
+    }
+}
+
+#[doc(hidden)]
+pub trait SignalKind<T> {
+    #[inline]
+    fn prop_value_tag(&self) -> SignalTag<T> {
+        SignalTag(PhantomData)
+    }
+}
+
+impl<T, S: Signal<T>> SignalKind<T> for S {}

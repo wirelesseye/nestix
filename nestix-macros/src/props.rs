@@ -1,6 +1,6 @@
 use convert_case::{Case, Casing};
 use proc_macro::TokenStream;
-use proc_macro2::{Span, TokenStream as TokenStream2};
+use proc_macro2::TokenStream as TokenStream2;
 use quote::{ToTokens, format_ident, quote};
 use syn::{
     Ident, ItemStruct, Token, Type, TypePath, Visibility, parse::Parse, parse_macro_input,
@@ -56,7 +56,7 @@ fn generate_props(attrs: PropsAttrs, mut item: ItemStruct) -> Result<TokenStream
 
     for field in &mut item.fields {
         let ty = &field.ty;
-        let path = parse_quote!(#crate_path::props::PropValue<#ty>);
+        let path = parse_quote!(#crate_path::prop::PropValue<#ty>);
         field.ty = Type::Path(TypePath {
             qself: None,
             path: path,
@@ -98,7 +98,7 @@ fn generate_props(attrs: PropsAttrs, mut item: ItemStruct) -> Result<TokenStream
 
         let ident_pascal = ident.to_string().to_case(Case::Pascal);
 
-        let is_set_ident = Ident::new(&format!("{}IsSet", ident_pascal), Span::call_site());
+        let is_set_ident = Ident::new(&format!("{}IsSet", ident_pascal), ident.span());
         quote! {
             pub trait #is_set_ident {}
 
@@ -192,7 +192,7 @@ fn generate_props(attrs: PropsAttrs, mut item: ItemStruct) -> Result<TokenStream
 
         mod #builder_mod_name {
             use super::*;
-            use #crate_path::props::__internal::*;
+            use #crate_path::prop::__internal::*;
 
             #error_traits
 
@@ -229,7 +229,7 @@ fn generate_props(attrs: PropsAttrs, mut item: ItemStruct) -> Result<TokenStream
             }
         }
 
-        impl #crate_path::props::Props for #ident {
+        impl #crate_path::prop::Props for #ident {
             #impl_debug_output
         }
     })
