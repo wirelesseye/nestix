@@ -1,10 +1,10 @@
 use convert_case::{Case, Casing};
 use proc_macro::TokenStream;
-use proc_macro2::TokenStream as TokenStream2;
+use proc_macro2::{Span, TokenStream as TokenStream2};
 use quote::{ToTokens, format_ident, quote};
 use syn::{
-    Ident, ItemStruct, Token, Type, TypePath, Visibility, parse::Parse, parse_macro_input,
-    parse_quote, punctuated::Punctuated, spanned::Spanned,
+    GenericParam, Ident, ItemStruct, Token, Type, TypePath, Visibility, parenthesized,
+    parse::Parse, parse_macro_input, parse_quote, punctuated::Punctuated, spanned::Spanned,
 };
 
 use crate::util::{FoundCrateExt, crate_name};
@@ -20,15 +20,27 @@ pub fn derive_props(attrs: TokenStream, input: TokenStream) -> TokenStream {
 #[derive(Default)]
 struct PropsAttrs {
     debug: bool,
+    impl_generic_params: Punctuated<GenericParam, Token![,]>,
 }
 
 impl Parse for PropsAttrs {
     fn parse(input: syn::parse::ParseStream) -> syn::Result<Self> {
         let mut attrs = PropsAttrs::default();
-        let idents = Punctuated::<Ident, Token![,]>::parse_terminated(input)?;
-        for ident in idents {
+
+        loop {
+            if input.is_empty() {
+                break;
+            }
+
+            let ident: Ident = input.parse()?;
             match ident.to_string().as_str() {
                 "debug" => attrs.debug = true,
+                "generics" => {
+                    let inner;
+                    parenthesized!(inner in input);
+                    attrs.impl_generic_params =
+                        Punctuated::<GenericParam, Token![,]>::parse_terminated(&inner)?;
+                }
                 _ => {
                     return Err(syn::Error::new(
                         ident.span(),
@@ -36,7 +48,12 @@ impl Parse for PropsAttrs {
                     ));
                 }
             }
+
+            if input.peek(Token![,]) {
+                input.parse::<Token![,]>()?;
+            }
         }
+
         Ok(attrs)
     }
 }
@@ -53,6 +70,10 @@ fn generate_props(attrs: PropsAttrs, mut item: ItemStruct) -> Result<TokenStream
     }
 
     let crate_path = crate_name().to_path();
+    let PropsAttrs {
+        debug,
+        impl_generic_params,
+    } = attrs;
 
     let option_ty_map = item
         .fields
@@ -69,8 +90,20 @@ fn generate_props(attrs: PropsAttrs, mut item: ItemStruct) -> Result<TokenStream
     }
 
     let ItemStruct {
-        vis, ident, fields, ..
+        vis,
+        ident,
+        generics,
+        fields,
+        ..
     } = &item;
+    let mut generic_params = generics.params.clone();
+    for param in &mut generic_params {
+        match param {
+            GenericParam::Type(type_param) => type_param.default = None,
+            GenericParam::Const(const_param) => const_param.default = None,
+            _ => (),
+        }
+    }
 
     let builder_ident = format_ident!("{}Builder", ident);
     let builder_mod_name = Ident::new(
@@ -93,9 +126,15 @@ fn generate_props(attrs: PropsAttrs, mut item: ItemStruct) -> Result<TokenStream
         field.vis = Visibility::Inherited;
     }
 
-    let mut type_parameters = TokenStream2::new();
+    let mut type_params = TokenStream2::new();
     let mut error_traits = TokenStream2::new();
-    let mut default_type_parameters = TokenStream2::new();
+    let mut default_type_params = if generic_params.is_empty() {
+        TokenStream2::new()
+    } else {
+        quote! {
+            #generic_params,
+        }
+    };
     let mut builder_default_fields = TokenStream2::new();
     let mut builder_build_fields = TokenStream2::new();
     let mut builder_build_type_bounds = TokenStream2::new();
@@ -108,8 +147,8 @@ fn generate_props(attrs: PropsAttrs, mut item: ItemStruct) -> Result<TokenStream
 
         let ident_pascal = ident.to_string().to_case(Case::Pascal);
 
-        let is_set_ident = Ident::new(&format!("{}IsSet", ident_pascal), ident.span());
-        let can_set_ident = Ident::new(&format!("{}CanSet", ident_pascal), ident.span());
+        let is_set_ident = Ident::new(&format!("{}IsSet", ident_pascal), Span::call_site());
+        let can_set_ident = Ident::new(&format!("{}CanSet", ident_pascal), Span::call_site());
 
         quote! {
             pub trait #is_set_ident {}
@@ -126,16 +165,12 @@ fn generate_props(attrs: PropsAttrs, mut item: ItemStruct) -> Result<TokenStream
         }
         .to_tokens(&mut error_traits);
 
-        if i > 0 {
-            quote! {,}.to_tokens(&mut type_parameters);
-            quote! {,}.to_tokens(&mut default_type_parameters);
-        }
         let type_param_ident = Ident::new(&format!("{}State", ident_pascal), ident.span());
-        quote! {#type_param_ident}.to_tokens(&mut type_parameters);
+        quote! {#type_param_ident,}.to_tokens(&mut type_params);
         if option_ty {
-            quote! {#type_param_ident=Defaulted}.to_tokens(&mut default_type_parameters);
+            quote! {#type_param_ident=Defaulted,}.to_tokens(&mut default_type_params);
         } else {
-            quote! {#type_param_ident=Unset}.to_tokens(&mut default_type_parameters);
+            quote! {#type_param_ident=Unset,}.to_tokens(&mut default_type_params);
         }
         quote! {#type_param_ident: #is_set_ident,}.to_tokens(&mut builder_build_type_bounds);
 
@@ -144,7 +179,7 @@ fn generate_props(attrs: PropsAttrs, mut item: ItemStruct) -> Result<TokenStream
                 #ident: #crate_path::prop::PropValue::from_plain(None),
             }
             .to_tokens(&mut builder_default_fields);
-        
+
             quote! {
                 #ident: self.#ident,
             }
@@ -154,16 +189,34 @@ fn generate_props(attrs: PropsAttrs, mut item: ItemStruct) -> Result<TokenStream
                 #ident: None,
             }
             .to_tokens(&mut builder_default_fields);
-            
+
             quote! {
                 #ident: self.#ident.unwrap(),
             }
             .to_tokens(&mut builder_build_fields);
         }
 
-        let mut method_type_params = TokenStream2::new();
-        let mut method_type_args = TokenStream2::new();
-        let mut method_result_type_args = TokenStream2::new();
+        let mut method_type_params = if impl_generic_params.is_empty() {
+            TokenStream2::new()
+        } else {
+            quote! {
+                #impl_generic_params,
+            }
+        };
+        let mut method_type_args = if generic_params.is_empty() {
+            TokenStream2::new()
+        } else {
+            quote! {
+                #generic_params,
+            }
+        };
+        let mut method_result_type_args = if generic_params.is_empty() {
+            TokenStream2::new()
+        } else {
+            quote! {
+                #generic_params,
+            }
+        };
         let mut method_fields = TokenStream2::new();
         for j in 0..builder_fields.len() {
             let field_ident = builder_fields
@@ -173,9 +226,11 @@ fn generate_props(attrs: PropsAttrs, mut item: ItemStruct) -> Result<TokenStream
                 .ident
                 .as_ref()
                 .unwrap();
+            let field_ident_pascal = field_ident.to_string().to_case(Case::Pascal);
+
             if i == j {
-                quote! {S: #can_set_ident,}.to_tokens(&mut method_type_params);
-                quote! {S,}.to_tokens(&mut method_type_args);
+                quote! {_S: #can_set_ident,}.to_tokens(&mut method_type_params);
+                quote! {_S,}.to_tokens(&mut method_type_args);
                 quote! {Set,}.to_tokens(&mut method_result_type_args);
                 if option_ty {
                     quote! {
@@ -189,7 +244,8 @@ fn generate_props(attrs: PropsAttrs, mut item: ItemStruct) -> Result<TokenStream
                     .to_tokens(&mut method_fields);
                 }
             } else {
-                let type_param_ident = Ident::new(&format!("{}State", ident_pascal), ident.span());
+                let type_param_ident =
+                    Ident::new(&format!("{}State", field_ident_pascal), field_ident.span());
                 quote! {#type_param_ident,}.to_tokens(&mut method_type_params);
                 quote! {#type_param_ident,}.to_tokens(&mut method_type_args);
                 quote! {#type_param_ident,}.to_tokens(&mut method_result_type_args);
@@ -215,13 +271,13 @@ fn generate_props(attrs: PropsAttrs, mut item: ItemStruct) -> Result<TokenStream
 
     match &mut builder_fields {
         syn::Fields::Named(fields_named) => {
-            let field = parse_quote!(_phantom: std::marker::PhantomData<(#type_parameters)>);
+            let field = parse_quote!(_phantom: std::marker::PhantomData<(#type_params)>);
             fields_named.named.push(field);
         }
         _ => unreachable!(),
     }
 
-    let impl_debug_output = if attrs.debug {
+    let impl_debug_output = if debug {
         quote! {
             fn debug_fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
                 std::fmt::Debug::fmt(&self, f)
@@ -229,6 +285,16 @@ fn generate_props(attrs: PropsAttrs, mut item: ItemStruct) -> Result<TokenStream
         }
     } else {
         quote! {}
+    };
+
+    let build_type_params = if generic_params.is_empty() {
+        quote! {
+            #type_params
+        }
+    } else {
+        quote! {
+            #generic_params, #type_params
+        }
     };
 
     Ok(quote! {
@@ -240,9 +306,9 @@ fn generate_props(attrs: PropsAttrs, mut item: ItemStruct) -> Result<TokenStream
 
             #error_traits
 
-            pub struct #builder_ident<#default_type_parameters> #builder_fields
+            pub struct #builder_ident<#default_type_params> #builder_fields
 
-            impl std::default::Default for #builder_ident {
+            impl<#impl_generic_params> std::default::Default for #builder_ident <#generic_params> {
                 fn default() -> Self {
                     Self {
                         #builder_default_fields
@@ -253,11 +319,11 @@ fn generate_props(attrs: PropsAttrs, mut item: ItemStruct) -> Result<TokenStream
 
             #builder_field_methods
 
-            impl<#type_parameters> #builder_ident<#type_parameters>
+            impl<#build_type_params> #builder_ident<#build_type_params>
             where
                 #builder_build_type_bounds
             {
-                pub fn build(self) -> #ident {
+                pub fn build(self) -> #ident <#generic_params> {
                     #ident {
                         #builder_build_fields
                     }
@@ -267,13 +333,13 @@ fn generate_props(attrs: PropsAttrs, mut item: ItemStruct) -> Result<TokenStream
 
         #vis use #builder_mod_name::#builder_ident;
 
-        impl #ident {
-            pub fn builder() -> #builder_ident {
+        impl<#impl_generic_params> #ident <#generic_params> {
+            pub fn builder() -> #builder_ident <#generic_params> {
                 #builder_ident::default()
             }
         }
 
-        impl #crate_path::prop::Props for #ident {
+        impl<#impl_generic_params> #crate_path::prop::Props for #ident <#generic_params> {
             #impl_debug_output
         }
     })

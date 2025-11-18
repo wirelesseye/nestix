@@ -134,3 +134,20 @@ pub trait SignalKind<T> {
 }
 
 impl<T, S: Signal<T>> SignalKind<T> for S {}
+
+#[doc(hidden)]
+pub struct PropValueTag<T>(PhantomData<T>);
+
+impl<T> PropValueTag<T> {
+    #[inline]
+    pub fn new(self, value: PropValue<T>) -> PropValue<T> {
+        value
+    }
+}
+
+impl<T> PropValue<T> {
+    #[inline]
+    pub fn prop_value_tag(&self) -> PropValueTag<T> {
+        PropValueTag(PhantomData)
+    }
+}

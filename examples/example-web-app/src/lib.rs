@@ -6,7 +6,7 @@ use components::*;
 use nestix::{
     Component, callback, closure,
     components::{For, ForProps},
-    computed, create_element, create_model, create_state, prop_value, props,
+    computed, create_element, create_model, create_state, props,
 };
 use wasm_bindgen::prelude::wasm_bindgen;
 use web_sys::HtmlElement;
@@ -56,16 +56,16 @@ impl Component for App {
             )]),
         )));
 
-        let list = create_element::<For<i32>>(ForProps {
-            data: prop_value!(list_data),
-            constructor: prop_value!(callback!(|item: i32, i: usize| {
+        let list = create_element::<For<i32>>(props!(ForProps(
+            .data = list_data,
+            .constructor = callback!(|item: i32, i: usize| {
                 create_element::<Div>(
                     props!(DivProps(.children = Some(vec![create_element::<Text>(
                         props!(TextProps(.text = item.to_string()))
                     )]))),
                 )
-            })),
-        });
+            })
+        )));
 
         let root = create_element::<Root>(props!(RootProps(
             .children = Some(vec![div, button, list])

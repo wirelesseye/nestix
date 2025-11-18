@@ -1,20 +1,17 @@
-use std::{cell::RefCell, fmt::Debug, hash::Hash, marker::PhantomData, rc::Rc};
+use std::{cell::RefCell, hash::Hash, marker::PhantomData, rc::Rc};
 
-use nestix_macros::closure;
+use nestix_macros::{closure, derive_props};
 
 use crate::{
     Component, Element, PredecessorContext, Shared, effect, on_destroy,
-    prop::{PropValue, Props},
     utils::reconcile::{ReconcileResult, reconcile},
 };
 
-#[derive(Debug)]
+#[derive_props(generics(T: 'static))]
 pub struct ForProps<T> {
-    pub data: PropValue<Vec<T>>,
-    pub constructor: PropValue<Shared<dyn Fn(T, usize) -> Element>>,
+    data: Vec<T>,
+    constructor: Shared<dyn Fn(T, usize) -> Element>,
 }
-
-impl<T: 'static> Props for ForProps<T> {}
 
 pub struct For<T>(PhantomData<T>);
 
