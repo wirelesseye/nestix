@@ -38,51 +38,56 @@ impl Component for Button {
 
     fn render(model: &std::rc::Rc<nestix::model::Model>, element: &nestix::Element) {
         let props = element.props().downcast_ref::<Self::Props>().unwrap();
-        let parent = use_context::<ParentContext>().unwrap();
 
-        let document = web_sys::window().unwrap().document().unwrap();
-        let html_element = document
-            .create_element("button")
-            .unwrap()
-            .dyn_into::<HtmlElement>()
-            .unwrap();
-        parent.html_element.append_child(&html_element).unwrap();
+        #[allow(non_snake_case)]
+        fn Button(props: &ButtonProps) -> Element {
+            let parent = use_context::<ParentContext>().unwrap();
 
-        effect(closure!(
-            [html_element, props.on_click] || {
-                let cb = if let Some(on_click) = on_click.get() {
-                    Some(Closure::wrap(Box::new(closure!([on_click] |_: Event| {
-                        on_click();
-                    })) as Box<dyn Fn(_)>))
-                } else {
-                    None
-                };
+            let document = web_sys::window().unwrap().document().unwrap();
+            let html_element = document
+                .create_element("button")
+                .unwrap()
+                .dyn_into::<HtmlElement>()
+                .unwrap();
+            parent.html_element.append_child(&html_element).unwrap();
 
-                if let Some(cb) = cb {
-                    html_element
-                        .add_event_listener_with_callback("click", cb.as_ref().unchecked_ref())
-                        .unwrap();
+            effect(closure!(
+                [html_element, props.on_click] || {
+                    let cb = if let Some(on_click) = on_click.get() {
+                        Some(Closure::wrap(Box::new(closure!([on_click] |_: Event| {
+                            on_click();
+                        })) as Box<dyn Fn(_)>))
+                    } else {
+                        None
+                    };
 
-                    HANDLERS.with(|cell| {
-                        let mut handlers = cell.borrow_mut();
-                        handlers.on_click.replace(cb);
-                    });
-                } else {
-                    HANDLERS.with(|cell| {
-                        let mut handlers = cell.borrow_mut();
-                        handlers.on_click.take();
-                    });
+                    if let Some(cb) = cb {
+                        html_element
+                            .add_event_listener_with_callback("click", cb.as_ref().unchecked_ref())
+                            .unwrap();
+
+                        HANDLERS.with(|cell| {
+                            let mut handlers = cell.borrow_mut();
+                            handlers.on_click.replace(cb);
+                        });
+                    } else {
+                        HANDLERS.with(|cell| {
+                            let mut handlers = cell.borrow_mut();
+                            handlers.on_click.take();
+                        });
+                    }
                 }
-            }
-        ));
+            ));
 
-        provide_handle(html_element.clone());
+            provide_handle(html_element.clone());
 
-        let element =
             create_element::<ContextProvider<ParentContext>>(props!(ContextProviderProps(
                 .value = ParentContext { html_element },
                 .children = props.children.clone()
-            )));
+            )))
+        }
+
+        let element = Button(props);
         model.render(&element);
     }
 }

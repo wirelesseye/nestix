@@ -4,7 +4,7 @@ use std::mem;
 
 use components::*;
 use nestix::{
-    Component, callback, closure,
+    Component, Element, callback, closure,
     components::{For, ForProps},
     computed, create_element, create_model, create_state, props,
 };
@@ -33,44 +33,48 @@ impl Component for App {
     type Props = ();
 
     fn render(model: &std::rc::Rc<nestix::model::Model>, element: &nestix::Element) {
-        let count = create_state(0);
-        let list_data = create_state(vec![0]);
+        #[allow(non_snake_case)]
+        fn App() -> Element {
+            let count = create_state(0);
+            let list_data = create_state(vec![0]);
 
-        let div = create_element::<Div>(props!(DivProps(
-            .children = Some(vec![create_element::<Text>(
-                props!(TextProps(.text = computed(closure!(
-                    [count] || format!("Count: {}", count.get())
-                )))),
-            )]),
-        )));
+            let div = create_element::<Div>(props!(DivProps(
+                .children = Some(vec![create_element::<Text>(
+                    props!(TextProps(.text = computed(closure!(
+                        [count] || format!("Count: {}", count.get())
+                    )))),
+                )]),
+            )));
 
-        let button = create_element::<Button>(props!(ButtonProps(
-            .on_click = Some(callback!(
-                [count, list_data] || {
-                    count.mutate(|value| *value += 1);
-                    list_data.mutate(|data| data.push(count.get_untrack()));
-                }
-            )),
-            .children = Some(vec![create_element::<Text>(
-                props!(TextProps(.text = "Click".to_string())),
-            )]),
-        )));
+            let button = create_element::<Button>(props!(ButtonProps(
+                .on_click = Some(callback!(
+                    [count, list_data] || {
+                        count.mutate(|value| *value += 1);
+                        list_data.mutate(|data| data.push(count.get_untrack()));
+                    }
+                )),
+                .children = Some(vec![create_element::<Text>(
+                    props!(TextProps(.text = "Click".to_string())),
+                )]),
+            )));
 
-        let list = create_element::<For<i32>>(props!(ForProps(
-            .data = list_data,
-            .constructor = callback!(|item: i32, i: usize| {
-                create_element::<Div>(
-                    props!(DivProps(.children = Some(vec![create_element::<Text>(
-                        props!(TextProps(.text = item.to_string()))
-                    )]))),
-                )
-            })
-        )));
+            let list = create_element::<For<i32>>(props!(ForProps(
+                .data = list_data,
+                .constructor = callback!(|item: i32, i: usize| {
+                    create_element::<Div>(
+                        props!(DivProps(.children = Some(vec![create_element::<Text>(
+                            props!(TextProps(.text = item.to_string()))
+                        )]))),
+                    )
+                })
+            )));
 
-        let root = create_element::<Root>(props!(RootProps(
-            .children = Some(vec![div, button, list])
-        )));
+            create_element::<Root>(props!(RootProps(
+                .children = Some(vec![div, button, list])
+            )))
+        }
 
-        model.render(&root);
+        let element = App();
+        model.render(&element);
     }
 }

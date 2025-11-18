@@ -10,7 +10,7 @@ pub mod __internal {
 }
 
 #[allow(private_bounds)]
-pub trait Props: Any + 'static {
+pub trait Props: Any {
     fn debug_fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         write!(f, "Props(..)")
     }

@@ -3,7 +3,7 @@ use std::{cell::RefCell, rc::Rc};
 use nestix_macros::{closure, derive_props};
 
 use crate::{
-    Component, Element, PredecessorContext, effect, on_destroy,
+    Component, Element, PredecessorContext, current_model, effect, on_destroy,
     utils::reconcile::{ReconcileResult, reconcile},
 };
 
@@ -20,93 +20,101 @@ impl Component for Fragment {
 
     fn render(model: &std::rc::Rc<crate::Model>, element: &crate::Element) {
         let props = element.props().downcast_ref::<Self::Props>().unwrap();
-        let prev: Rc<RefCell<Option<Vec<Element>>>> = Rc::new(RefCell::new(None));
-        let handle = element.handle();
-        let contexts = element.contexts();
 
-        effect(closure!(
-            [model, prev, props.children] || {
-                let mut prev = prev.borrow_mut();
-                let next = children.get();
+        #[allow(non_snake_case)]
+        fn Fragment(props: &FragmentProps) {
+            let model = current_model().unwrap();
+            let element = model.current_element().unwrap();
+            let prev: Rc<RefCell<Option<Vec<Element>>>> = Rc::new(RefCell::new(None));
+            let handle = element.handle();
+            let contexts = element.contexts();
 
-                match (&*prev, &next) {
-                    (Some(prev), Some(next)) => {
-                        let result = reconcile(prev, next);
-                        let ReconcileResult {
-                            removed,
-                            added,
-                            moved,
-                            mapping: _,
-                        } = result;
+            effect(closure!(
+                [model, prev, props.children] || {
+                    let mut prev = prev.borrow_mut();
+                    let next = children.get();
 
-                        for prev_i in removed {
-                            prev[prev_i].destroy();
-                        }
+                    match (&*prev, &next) {
+                        (Some(prev), Some(next)) => {
+                            let result = reconcile(prev, next);
+                            let ReconcileResult {
+                                removed,
+                                added,
+                                moved,
+                                mapping: _,
+                            } = result;
 
-                        for next_i in added {
-                            let pred = if next_i == 0 {
-                                None
-                            } else {
-                                Some(&next[next_i - 1])
-                            };
-                            let child = &next[next_i];
-                            if let Some(pred) = pred {
-                                if let Some(handle) = pred.handle().get_untrack() {
-                                    child.provide_context(PredecessorContext { handle });
+                            for prev_i in removed {
+                                prev[prev_i].destroy();
+                            }
+
+                            for next_i in added {
+                                let pred = if next_i == 0 {
+                                    None
+                                } else {
+                                    Some(&next[next_i - 1])
+                                };
+                                let child = &next[next_i];
+                                if let Some(pred) = pred {
+                                    if let Some(handle) = pred.handle().get_untrack() {
+                                        child.provide_context(PredecessorContext { handle });
+                                    }
+                                }
+                                child.extend_contexts(contexts.clone());
+                                model.render(child);
+                                if let Some(child_handle) = child.handle().get_untrack() {
+                                    handle.set(Some(child_handle));
                                 }
                             }
-                            child.extend_contexts(contexts.clone());
-                            model.render(child);
-                            if let Some(child_handle) = child.handle().get_untrack() {
-                                handle.set(Some(child_handle));
+
+                            for next_i in moved {
+                                let pred = if next_i == 0 {
+                                    None
+                                } else {
+                                    Some(&next[next_i - 1])
+                                };
+                                let child = &next[next_i];
+                                if let Some(pred) = pred {
+                                    if let Some(handle) = pred.handle().get_untrack() {
+                                        child.provide_context(PredecessorContext { handle });
+                                    }
+                                }
+                                child.move_after(pred);
                             }
                         }
-
-                        for next_i in moved {
-                            let pred = if next_i == 0 {
-                                None
-                            } else {
-                                Some(&next[next_i - 1])
-                            };
-                            let child = &next[next_i];
-                            if let Some(pred) = pred {
-                                if let Some(handle) = pred.handle().get_untrack() {
-                                    child.provide_context(PredecessorContext { handle });
+                        (Some(prev), None) => {
+                            for child in prev {
+                                child.destroy();
+                            }
+                        }
+                        (None, Some(next)) => {
+                            for child in next {
+                                child.extend_contexts(contexts.clone());
+                                model.render(&child);
+                                if let Some(child_handle) = child.handle().get_untrack() {
+                                    handle.set(Some(child_handle));
                                 }
                             }
-                            child.move_after(pred);
                         }
+                        _ => (),
                     }
-                    (Some(prev), None) => {
+
+                    *prev = next;
+                }
+            ));
+
+            on_destroy(closure!(
+                [prev] || {
+                    let prev = prev.borrow();
+                    if let Some(prev) = &*prev {
                         for child in prev {
                             child.destroy();
                         }
                     }
-                    (None, Some(next)) => {
-                        for child in next {
-                            child.extend_contexts(contexts.clone());
-                            model.render(&child);
-                            if let Some(child_handle) = child.handle().get_untrack() {
-                                handle.set(Some(child_handle));
-                            }
-                        }
-                    }
-                    _ => (),
                 }
+            ));
+        }
 
-                *prev = next;
-            }
-        ));
-
-        on_destroy(closure!(
-            [prev] || {
-                let prev = prev.borrow();
-                if let Some(prev) = &*prev {
-                    for child in prev {
-                        child.destroy();
-                    }
-                }
-            }
-        ));
+        Fragment(props);
     }
 }

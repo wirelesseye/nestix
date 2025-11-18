@@ -21,39 +21,44 @@ impl Component for Div {
 
     fn render(model: &std::rc::Rc<nestix::model::Model>, element: &nestix::Element) {
         let props = element.props().downcast_ref::<Self::Props>().unwrap();
-        let parent = use_context::<ParentContext>().unwrap_throw();
-        let pred = use_predecessor();
 
-        let document = web_sys::window().unwrap().document().unwrap();
-        let html_element = document
-            .create_element("div")
-            .unwrap()
-            .dyn_into::<HtmlElement>()
-            .unwrap();
+        #[allow(non_snake_case)]
+        fn Div(props: &DivProps) -> Element {
+            let parent = use_context::<ParentContext>().unwrap_throw();
+            let pred = use_predecessor();
 
-        if let Some(pred) = pred {
-            if let Some(pred_html_element) = pred.downcast_ref::<HtmlElement>() {
-                pred_html_element.after_with_node_1(&html_element).unwrap();
-            } else if let Some(text) = pred.downcast_ref::<Text>() {
-                text.after_with_node_1(&html_element).unwrap();
+            let document = web_sys::window().unwrap().document().unwrap();
+            let html_element = document
+                .create_element("div")
+                .unwrap()
+                .dyn_into::<HtmlElement>()
+                .unwrap();
+
+            if let Some(pred) = pred {
+                if let Some(pred_html_element) = pred.downcast_ref::<HtmlElement>() {
+                    pred_html_element.after_with_node_1(&html_element).unwrap();
+                } else if let Some(text) = pred.downcast_ref::<Text>() {
+                    text.after_with_node_1(&html_element).unwrap();
+                }
+            } else {
+                parent.html_element.append_child(&html_element).unwrap();
             }
-        } else {
-            parent.html_element.append_child(&html_element).unwrap();
-        }
 
-        on_destroy(closure!(
-            [html_element] || {
-                html_element.remove();
-            }
-        ));
+            on_destroy(closure!(
+                [html_element] || {
+                    html_element.remove();
+                }
+            ));
 
-        provide_handle(html_element.clone());
+            provide_handle(html_element.clone());
 
-        let element =
             create_element::<ContextProvider<ParentContext>>(props!(ContextProviderProps(
                 .value = ParentContext { html_element },
                 .children = props.children.clone()
-            )));
+            )))
+        }
+
+        let element = Div(props);
         model.render(&element);
     }
 }
