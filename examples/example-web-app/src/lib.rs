@@ -26,13 +26,55 @@ struct ParentContext {
     html_element: HtmlElement,
 }
 
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+enum AppPage {
+    Counter,
+    TodoList,
+}
+
 #[component]
 fn App() -> Element {
-    let count = create_state(0);
-    let list_data = create_state(vec![0]);
+    let page = create_state(AppPage::Counter);
 
     layout! {
         Root {
+            Div {
+                Button(
+                    .on_click = Some(callback!([page] || {
+                        page.set(AppPage::Counter);
+                    })),
+                    .disabled = computed(closure!([page] || page.get() == AppPage::Counter)),
+                ) {
+                    Text(.text = "Counter".to_string())
+                }
+                Button(
+                    .on_click = Some(callback!([page] || {
+                        page.set(AppPage::TodoList);
+                    })),
+                    .disabled = computed(closure!([page] || page.get() == AppPage::TodoList)),
+                ) {
+                    Text(.text = "To-do List".to_string())
+                }
+            }
+            Div {
+                yield $(
+                    if page.get() == AppPage::Counter {
+                        layout! {Counter}
+                    } else {
+                        layout! {TodoList}
+                    }
+                )
+            }
+        }
+    }
+}
+
+#[component]
+fn Counter() -> Element {
+    let count = create_state(0);
+
+    layout! {
+        Div {
             Div {
                 Text(.text = computed(closure!(
                     [count] || format!("Count: {}", count.get())
@@ -41,11 +83,11 @@ fn App() -> Element {
 
             Button(
                 .on_click = Some(callback!(
-                    [count, list_data] || {
+                    [count] || {
                         count.mutate(|value| *value += 1);
-                        list_data.mutate(|data| data.push(count.get_untrack()));
                     }
                 )),
+                .disabled = false,
             ) {
                 Text(.text = "Click".to_string())
             }
@@ -61,6 +103,15 @@ fn App() -> Element {
                     None
                 }
             ),
+        }
+    }
+}
+
+#[component]
+fn TodoList() -> Element {
+    layout! {
+        Div {
+            Text(.text = "Todo".to_string())
         }
     }
 }

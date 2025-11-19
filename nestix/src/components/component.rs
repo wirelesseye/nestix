@@ -5,15 +5,20 @@ use crate::{Element, model::Model, prop::Props};
 pub mod __component_private {
     use std::rc::Rc;
 
-    use crate::{Element, Model};
+    use crate::{Element, Model, on_destroy};
 
     pub trait ComponentOutput {
         fn render(&self, model: &Rc<Model>);
+
+        fn handle_destroy(&self);
     }
 
     impl ComponentOutput for () {
         #[inline]
         fn render(&self, _model: &Rc<Model>) {}
+
+        #[inline]
+        fn handle_destroy(&self) {}
     }
 
     impl ComponentOutput for Option<Element> {
@@ -23,12 +28,30 @@ pub mod __component_private {
                 model.render(element);
             }
         }
+
+        #[inline]
+        fn handle_destroy(&self) {
+            if let Some(element) = self {
+                let element = element.clone();
+                on_destroy(move || {
+                    element.destroy();
+                });
+            }
+        }
     }
 
     impl ComponentOutput for Element {
         #[inline]
         fn render(&self, model: &Rc<Model>) {
             model.render(self);
+        }
+
+        #[inline]
+        fn handle_destroy(&self) {
+            let element = self.clone();
+            on_destroy(move || {
+                element.destroy();
+            });
         }
     }
 }

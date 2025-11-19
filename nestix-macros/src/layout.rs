@@ -1,5 +1,5 @@
 use proc_macro::TokenStream;
-use proc_macro2::TokenStream as TokenStream2;
+use proc_macro2::{TokenStream as TokenStream2, TokenTree};
 use quote::{ToTokens, format_ident, quote};
 use syn::{
     Expr, Ident, Token, Type, braced, bracketed, parenthesized,
@@ -175,6 +175,15 @@ fn generate_layout(input: &LayoutInput) -> Result<TokenStream2, syn::Error> {
         let mut tokens = TokenStream2::new();
         if let Some(props_tokens) = props_tokens {
             props_tokens.to_tokens(&mut tokens);
+            
+            let last = props_tokens.clone().into_iter().last();
+            let last_is_comma = match last {
+                Some(TokenTree::Punct(punct)) if punct.as_char() == ',' => true,
+                _ => false,
+            };
+            if !last_is_comma {
+                quote! {,}.to_tokens(&mut tokens);
+            }
         }
 
         if let Some(children) = children {

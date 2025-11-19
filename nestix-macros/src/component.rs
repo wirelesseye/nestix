@@ -125,7 +125,9 @@ fn generate_component(
                 #raw
 
                 let props = element.props().downcast_ref::<#props_type>().unwrap();
-                #crate_path::__component_private::ComponentOutput::render(&#ident(#render_args), model);
+                let output = #ident(#render_args);
+                #crate_path::__component_private::ComponentOutput::handle_destroy(&output);
+                #crate_path::__component_private::ComponentOutput::render(&output, model);
             }
         }
     })
