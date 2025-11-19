@@ -1,4 +1,3 @@
-pub mod component;
 pub mod components;
 pub mod context;
 pub mod element;
@@ -9,11 +8,11 @@ pub mod signals;
 
 mod utils;
 
-pub use component::*;
+pub use components::component::*;
 pub use context::*;
 pub use element::*;
 pub use model::*;
 pub use shared::*;
 pub use signals::*;
 
-pub use nestix_macros::{callback, closure, derive_props, layout, prop_value, props};
+pub use nestix_macros::{callback, closure, component, derive_props, layout, prop_value, props};

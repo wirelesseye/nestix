@@ -2,11 +2,12 @@ use proc_macro::TokenStream;
 
 mod callback;
 mod closure;
+mod component;
 mod derive_props;
+mod layout;
 mod prop_value;
 mod props;
 mod util;
-mod layout;
 
 #[proc_macro]
 pub fn closure(input: TokenStream) -> TokenStream {
@@ -37,4 +38,9 @@ pub fn props(input: TokenStream) -> TokenStream {
 #[proc_macro]
 pub fn layout(input: TokenStream) -> TokenStream {
     layout::layout(input)
+}
+
+#[proc_macro_attribute]
+pub fn component(attr: TokenStream, input: TokenStream) -> TokenStream {
+    component::component(attr, input)
 }

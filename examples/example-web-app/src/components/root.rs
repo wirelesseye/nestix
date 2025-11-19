@@ -1,5 +1,5 @@
 use nestix::{
-    Component, Element, components::ContextProvider, derive_props, layout, provide_handle,
+    Element, component, components::ContextProvider, derive_props, layout, provide_handle,
 };
 use wasm_bindgen::JsCast;
 use web_sys::HtmlElement;
@@ -12,36 +12,23 @@ pub struct RootProps {
     children: Option<Vec<Element>>,
 }
 
-pub struct Root;
+#[component]
+pub fn Root(props: &RootProps) -> Element {
+    let document = web_sys::window().unwrap().document().unwrap();
+    let body = document.body().expect("document should have a body");
+    let html_element = body
+        .query_selector("#root")
+        .unwrap()
+        .unwrap()
+        .dyn_into::<HtmlElement>()
+        .unwrap();
 
-impl Component for Root {
-    type Props = RootProps;
+    provide_handle(html_element.clone());
 
-    fn render(model: &std::rc::Rc<nestix::model::Model>, element: &nestix::Element) {
-        let props = element.props().downcast_ref::<Self::Props>().unwrap();
-
-        #[allow(non_snake_case)]
-        fn Root(props: &RootProps) -> Element {
-            let document = web_sys::window().unwrap().document().unwrap();
-            let body = document.body().expect("document should have a body");
-            let html_element = body
-                .query_selector("#root")
-                .unwrap()
-                .unwrap()
-                .dyn_into::<HtmlElement>()
-                .unwrap();
-
-            provide_handle(html_element.clone());
-
-            layout! {
-                ContextProvider<ParentContext>(
-                    .value = ParentContext { html_element },
-                    .children = props.children.clone(),
-                )
-            }
-        }
-
-        let element = Root(props);
-        model.render(&element);
+    layout! {
+        ContextProvider<ParentContext>(
+            .value = ParentContext { html_element },
+            .children = props.children.clone(),
+        )
     }
 }
