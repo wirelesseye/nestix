@@ -6,6 +6,7 @@ mod derive_props;
 mod prop_value;
 mod props;
 mod util;
+mod layout;
 
 #[proc_macro]
 pub fn closure(input: TokenStream) -> TokenStream {
@@ -30,4 +31,10 @@ pub fn prop_value(input: TokenStream) -> TokenStream {
 #[proc_macro]
 pub fn props(input: TokenStream) -> TokenStream {
     props::props(input)
+}
+
+/// layout! {}
+#[proc_macro]
+pub fn layout(input: TokenStream) -> TokenStream {
+    layout::layout(input)
 }

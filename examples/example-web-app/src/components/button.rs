@@ -1,9 +1,8 @@
 use std::cell::RefCell;
 
 use nestix::{
-    Component, Element, Shared, closure,
-    components::{ContextProvider, ContextProviderProps},
-    create_element, derive_props, effect, props, provide_handle, use_context,
+    Component, Element, Shared, closure, components::ContextProvider, derive_props, effect, layout,
+    provide_handle, use_context,
 };
 use wasm_bindgen::{JsCast, prelude::Closure};
 use web_sys::{Event, HtmlElement};
@@ -81,10 +80,12 @@ impl Component for Button {
 
             provide_handle(html_element.clone());
 
-            create_element::<ContextProvider<ParentContext>>(props!(ContextProviderProps(
-                .value = ParentContext { html_element },
-                .children = props.children.clone()
-            )))
+            layout! {
+                ContextProvider<ParentContext>(
+                    .value = ParentContext { html_element },
+                    .children = props.children.clone()
+                )
+            }
         }
 
         let element = Button(props);

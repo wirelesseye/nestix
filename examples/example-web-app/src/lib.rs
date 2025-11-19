@@ -4,9 +4,8 @@ use std::mem;
 
 use components::*;
 use nestix::{
-    Component, Element, callback, closure,
-    components::{For, ForProps},
-    computed, create_element, create_model, create_state, props,
+    Component, Element, callback, closure, components::For, computed, create_element, create_model,
+    create_state, layout, props,
 };
 use wasm_bindgen::prelude::wasm_bindgen;
 use web_sys::HtmlElement;
@@ -38,40 +37,35 @@ impl Component for App {
             let count = create_state(0);
             let list_data = create_state(vec![0]);
 
-            let div = create_element::<Div>(props!(DivProps(
-                .children = Some(vec![create_element::<Text>(
-                    props!(TextProps(.text = computed(closure!(
-                        [count] || format!("Count: {}", count.get())
-                    )))),
-                )]),
-            )));
-
-            let button = create_element::<Button>(props!(ButtonProps(
-                .on_click = Some(callback!(
-                    [count, list_data] || {
-                        count.mutate(|value| *value += 1);
-                        list_data.mutate(|data| data.push(count.get_untrack()));
+            layout! {
+                Root {
+                    Div {
+                        Text(.text = computed(closure!(
+                            [count] || format!("Count: {}", count.get())
+                        )))
                     }
-                )),
-                .children = Some(vec![create_element::<Text>(
-                    props!(TextProps(.text = "Click".to_string())),
-                )]),
-            )));
-
-            let list = create_element::<For<i32>>(props!(ForProps(
-                .data = list_data,
-                .constructor = callback!(|item: i32, i: usize| {
-                    create_element::<Div>(
-                        props!(DivProps(.children = Some(vec![create_element::<Text>(
-                            props!(TextProps(.text = item.to_string()))
-                        )]))),
-                    )
-                })
-            )));
-
-            create_element::<Root>(props!(RootProps(
-                .children = Some(vec![div, button, list])
-            )))
+                    Button(
+                        .on_click = Some(callback!(
+                            [count, list_data] || {
+                                count.mutate(|value| *value += 1);
+                                list_data.mutate(|data| data.push(count.get_untrack()));
+                            }
+                        )),
+                    ) {
+                        Text(.text = "Click".to_string())
+                    }
+                    For<i32>(
+                        .data = list_data,
+                        .constructor = callback!(|item: i32, i: usize| {
+                            create_element::<Div>(props!(DivProps(
+                                .children = Some(vec![create_element::<Text>(
+                                    props!(TextProps(.text = item.to_string()))
+                                )])
+                            )))
+                        })
+                    ),
+                }
+            }
         }
 
         let element = App();

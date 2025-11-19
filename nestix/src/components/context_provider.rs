@@ -1,12 +1,8 @@
 use std::marker::PhantomData;
 
-use nestix_macros::{closure, derive_props};
+use nestix_macros::{closure, derive_props, layout};
 
-use crate::{
-    Component, Element,
-    components::{Fragment, FragmentProps},
-    create_element, current_model, effect,
-};
+use crate::{Component, Element, components::Fragment, current_model, effect};
 
 #[derive_props(generics(T: 'static))]
 pub struct ContextProviderProps<T> {
@@ -31,9 +27,9 @@ impl<T: Clone + 'static> Component for ContextProvider<T> {
                 }
             ));
 
-            create_element::<Fragment>(FragmentProps {
-                children: props.children.clone(),
-            })
+            layout! {
+                Fragment(.children = props.children.clone())
+            }
         }
 
         let element = ContextProvider(props);

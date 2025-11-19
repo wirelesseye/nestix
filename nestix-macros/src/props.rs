@@ -2,7 +2,7 @@ use proc_macro::TokenStream;
 use proc_macro2::TokenStream as TokenStream2;
 use quote::{ToTokens, quote};
 use syn::{
-    Expr, Ident, Path, Token, parenthesized, parse::Parse, parse_macro_input,
+    Expr, Ident, Token, Type, parenthesized, parse::Parse, parse_macro_input,
     punctuated::Punctuated,
 };
 
@@ -55,8 +55,10 @@ fn generate_prop_field(input: &PropField) -> Result<TokenStream2, syn::Error> {
     let crate_path = crate_name().to_path();
 
     let PropField { dot, ident, expr } = input;
-    let prop_value = expr.as_ref().map(|expr| quote! {
-        #crate_path::prop_value!(#expr)
+    let prop_value = expr.as_ref().map(|expr| {
+        quote! {
+            #crate_path::prop_value!(#expr)
+        }
     });
 
     Ok(quote! {
@@ -65,23 +67,23 @@ fn generate_prop_field(input: &PropField) -> Result<TokenStream2, syn::Error> {
 }
 
 struct PropsInput {
-    path: Path,
+    ty: Type,
     named: Punctuated<PropField, Token![,]>,
 }
 
 impl Parse for PropsInput {
     fn parse(input: syn::parse::ParseStream) -> syn::Result<Self> {
-        let path: Path = input.parse()?;
+        let ty: Type = input.parse()?;
         let inner;
         parenthesized!(inner in input);
         let named: Punctuated<PropField, Token![,]> = Punctuated::parse_terminated(&inner)?;
 
-        Ok(Self { path, named })
+        Ok(Self { ty, named })
     }
 }
 
 fn generate_props(input: &PropsInput) -> Result<TokenStream2, syn::Error> {
-    let PropsInput { path, named } = input;
+    let PropsInput { ty, named } = input;
 
     let mut fields_output = TokenStream2::new();
     for field in named {
@@ -89,7 +91,7 @@ fn generate_props(input: &PropsInput) -> Result<TokenStream2, syn::Error> {
     }
 
     Ok(quote! {
-        #path::builder()
+        #ty::builder()
             #fields_output
             .build()
     })
