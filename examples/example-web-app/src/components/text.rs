@@ -14,6 +14,8 @@ pub fn Text(props: &TextProps) {
     let document = web_sys::window().unwrap().document().unwrap();
     let text_node = document.create_text_node(&props.text.get());
 
+    log::debug!("render {}", props.text.get());
+
     effect(closure!(
         [props.text, text_node] || text_node.set_data(&text.get())
     ));

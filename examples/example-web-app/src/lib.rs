@@ -4,8 +4,8 @@ use std::mem;
 
 use components::*;
 use nestix::{
-    Element, callback, closure, component, components::For, computed, create_element, create_model,
-    create_state, layout, props,
+    Element, callback, closure, component, computed, create_element, create_model, create_state,
+    layout,
 };
 use wasm_bindgen::prelude::wasm_bindgen;
 use web_sys::HtmlElement;
@@ -38,6 +38,7 @@ fn App() -> Element {
                     [count] || format!("Count: {}", count.get())
                 )))
             }
+
             Button(
                 .on_click = Some(callback!(
                     [count, list_data] || {
@@ -48,15 +49,17 @@ fn App() -> Element {
             ) {
                 Text(.text = "Click".to_string())
             }
-            For<i32>(
-                .data = list_data,
-                .constructor = callback!(|item: i32, _i: usize| {
-                    create_element::<Div>(props!(DivProps(
-                        .children = Some(vec![create_element::<Text>(
-                            props!(TextProps(.text = item.to_string()))
-                        )])
-                    )))
-                })
+
+            yield $option(
+                if count.get() % 2 == 0 {
+                    Some(layout! {
+                        Div {
+                            Text(.text = "Is even!".to_string())
+                        }
+                    })
+                } else {
+                    None
+                }
             ),
         }
     }

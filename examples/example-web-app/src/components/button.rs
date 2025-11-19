@@ -2,7 +2,7 @@ use std::cell::RefCell;
 
 use nestix::{
     Element, Shared, closure, component, components::ContextProvider, derive_props, effect, layout,
-    provide_handle, use_context,
+    on_destroy, provide_handle, use_context,
 };
 use wasm_bindgen::{JsCast, prelude::Closure};
 use web_sys::{Event, HtmlElement};
@@ -67,6 +67,12 @@ pub fn Button(props: &ButtonProps) -> Element {
                     handlers.on_click.take();
                 });
             }
+        }
+    ));
+
+    on_destroy(closure!(
+        [html_element] || {
+            html_element.remove();
         }
     ));
 

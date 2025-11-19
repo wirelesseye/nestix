@@ -1,11 +1,11 @@
 use proc_macro::TokenStream;
 use proc_macro2::TokenStream as TokenStream2;
-use quote::{ToTokens, quote};
+use quote::{ToTokens, format_ident, quote};
 use syn::{
-    Expr, Token, Type, braced, bracketed, parenthesized,
+    Expr, Ident, Token, Type, braced, bracketed, parenthesized,
     parse::Parse,
     parse_macro_input,
-    token::{Brace, Bracket, Paren},
+    token::{Brace, Paren},
 };
 
 use crate::util::{FoundCrateExt, crate_name};
@@ -51,9 +51,9 @@ impl Parse for LayoutInput {
     }
 }
 
-enum LayoutChildren {
-    Plain(Vec<LayoutChild>),
-    Mutable(Option<TokenStream2>, Vec<LayoutChild>),
+struct LayoutChildren {
+    items: Vec<LayoutChild>,
+    clone_vars_tokens: Option<TokenStream2>,
 }
 
 impl Parse for LayoutChildren {
@@ -61,24 +61,16 @@ impl Parse for LayoutChildren {
         let inner;
         braced!(inner in input);
 
-        let mutable = inner.peek(Token![mut]);
-        let copy_vars_tokens = if mutable {
-            inner.parse::<Token![mut]>()?;
-            let copy_vars_tokens = if inner.peek(Bracket) {
-                let copy_vars_input;
-                bracketed!(copy_vars_input in inner);
-                let copy_vars_tokens: TokenStream2 = copy_vars_input.parse()?;
-                Some(copy_vars_tokens)
-            } else {
-                None
-            };
-            inner.parse::<Token![;]>()?;
-            copy_vars_tokens
+        let clone_vars_tokens = if inner.peek(Token![@]) {
+            inner.parse::<Token![@]>()?;
+            let clone_vars_input;
+            bracketed!(clone_vars_input in inner);
+            Some(clone_vars_input.parse::<TokenStream2>()?)
         } else {
             None
         };
 
-        let mut children = Vec::new();
+        let mut items = Vec::new();
         let mut require_comma = false;
         loop {
             if require_comma {
@@ -90,50 +82,84 @@ impl Parse for LayoutChildren {
                 break;
             }
             let child: LayoutChild = inner.parse()?;
-            match &child {
-                LayoutChild::LayoutInput(layout_input) => {
+            match &child.value {
+                LayoutChildValue::LayoutInput(layout_input) => {
                     if layout_input.children.is_some() {
                         require_comma = false;
                     } else {
                         require_comma = true;
                     }
                 }
-                LayoutChild::Expr(_) => {
+                LayoutChildValue::Expr(_) | LayoutChildValue::OptionExpr(_) => {
                     require_comma = true;
                 }
             }
-            children.push(child);
+            items.push(child);
 
             if inner.is_empty() {
                 break;
             }
         }
 
-        if mutable {
-            Ok(LayoutChildren::Mutable(copy_vars_tokens, children))
-        } else {
-            Ok(LayoutChildren::Plain(children))
-        }
+        Ok(Self {
+            items,
+            clone_vars_tokens,
+        })
     }
 }
 
-enum LayoutChild {
+enum LayoutChildValue {
     LayoutInput(LayoutInput),
     Expr(Expr),
+    OptionExpr(Expr),
+}
+
+struct LayoutChild {
+    is_yield: bool,
+    value: LayoutChildValue,
 }
 
 impl Parse for LayoutChild {
     fn parse(input: syn::parse::ParseStream) -> syn::Result<Self> {
-        if input.peek(Token![$]) {
+        let is_yield = if input.peek(Token![yield]) {
+            input.parse::<Token![yield]>()?;
+            true
+        } else {
+            false
+        };
+
+        let value = if input.peek(Token![$]) {
             input.parse::<Token![$]>()?;
+
+            let mut option = false;
+
+            if input.peek(Ident) {
+                let ident: Ident = input.parse()?;
+                match ident.to_string().as_str() {
+                    "option" => option = true,
+                    other => {
+                        return Err(syn::Error::new(
+                            ident.span(),
+                            format!("unknown tag: {}", other),
+                        ));
+                    }
+                }
+            }
+
             let inner;
             parenthesized!(inner in input);
             let expr = Expr::parse_without_eager_brace(&inner)?;
-            Ok(Self::Expr(expr))
+            if option {
+                LayoutChildValue::OptionExpr(expr)
+            } else {
+                LayoutChildValue::Expr(expr)
+            }
         } else {
             let layout_input: LayoutInput = input.parse()?;
-            Ok(Self::LayoutInput(layout_input))
-        }
+            LayoutChildValue::LayoutInput(layout_input)
+        };
+
+        Ok(Self { is_yield, value })
     }
 }
 
@@ -171,46 +197,125 @@ fn generate_layout(input: &LayoutInput) -> Result<TokenStream2, syn::Error> {
 
 fn generate_layout_children(input: &LayoutChildren) -> Result<TokenStream2, syn::Error> {
     let crate_path = crate_name().to_path();
-    let children = match input {
-        LayoutChildren::Plain(children) => children,
-        LayoutChildren::Mutable(_, children) => children,
-    };
 
-    let mut children_output = TokenStream2::new();
-    for child in children {
-        match child {
-            LayoutChild::LayoutInput(layout_input) => {
+    let mut element_output = TokenStream2::new();
+    let mut push_element_outout = TokenStream2::new();
+
+    let clone_vars_tokens = &input.clone_vars_tokens;
+    let computed = clone_vars_tokens.is_some() || input.items.iter().any(|item| item.is_yield);
+
+    for (i, child) in input.items.iter().enumerate() {
+        let element_ident = format_ident!("__element_{}", i);
+        let LayoutChild { is_yield, value } = child;
+
+        match value {
+            LayoutChildValue::LayoutInput(layout_input) => {
                 let child_output = generate_layout(layout_input)?;
-                quote! {
-                    __children.push(#child_output);
+
+                if *is_yield {
+                    quote! {
+                        __children.push(#child_output);
+                    }
+                    .to_tokens(&mut push_element_outout);
+                } else {
+                    quote! {
+                        let #element_ident = #child_output;
+                    }
+                    .to_tokens(&mut element_output);
+
+                    if computed {
+                        quote! {
+                            __children.push(#element_ident.clone());
+                        }
+                        .to_tokens(&mut push_element_outout);
+                    } else {
+                        quote! {
+                            __children.push(#element_ident);
+                        }
+                        .to_tokens(&mut push_element_outout);
+                    }
                 }
-                .to_tokens(&mut children_output);
             }
-            LayoutChild::Expr(expr) => {
-                quote! {
-                    __children.push(#expr);
+            LayoutChildValue::Expr(expr) => {
+                if *is_yield {
+                    quote! {
+                        __children.push(#expr);
+                    }
+                    .to_tokens(&mut push_element_outout);
+                } else {
+                    quote! {
+                        let #element_ident = #expr;
+                    }
+                    .to_tokens(&mut element_output);
+
+                    if computed {
+                        quote! {
+                            __children.push(#element_ident.clone());
+                        }
+                        .to_tokens(&mut push_element_outout);
+                    } else {
+                        quote! {
+                            __children.push(#element_ident);
+                        }
+                        .to_tokens(&mut push_element_outout);
+                    }
                 }
-                .to_tokens(&mut children_output);
+            }
+            LayoutChildValue::OptionExpr(expr) => {
+                if *is_yield {
+                    quote! {
+                        if let Some(e) = {#expr} {
+                            __children.push(e);
+                        }
+                    }
+                    .to_tokens(&mut push_element_outout);
+                } else {
+                    quote! {
+                        let #element_ident = #expr;
+                    }
+                    .to_tokens(&mut element_output);
+
+                    if computed {
+                        quote! {
+                            if let Some(e) = &#element_ident {
+                                __children.push(e.clone());
+                            }
+                        }
+                        .to_tokens(&mut push_element_outout);
+                    } else {
+                        quote! {
+                            if let Some(e) = &#element_ident {
+                                __children.push(e);
+                            }
+                        }
+                        .to_tokens(&mut push_element_outout);
+                    }
+                }
             }
         }
     }
 
-    match input {
-        LayoutChildren::Plain(_) => Ok(quote! {
+    if computed {
+        Ok(quote! {
             .children = {
+                #element_output
+                #crate_path::computed(#crate_path::closure!(
+                    [#clone_vars_tokens] move || {
+                        let mut __children = Vec::new();
+                        #push_element_outout
+                        Some(__children)
+                    }
+                ))
+            }
+        })
+    } else {
+        Ok(quote! {
+            .children = {
+                #element_output
                 let mut __children = Vec::new();
-                #children_output
+                #push_element_outout
                 Some(__children)
             }
-        }),
-        LayoutChildren::Mutable(clone_vars_tokens, _) => Ok(quote! {
-            .children = #crate_path::computed(#crate_path::closure!(
-                [#clone_vars_tokens] || {
-                    let mut __children = Vec::new();
-                    #children_output
-                    Some(__children)
-                }
-            ))
-        }),
+        })
     }
 }
