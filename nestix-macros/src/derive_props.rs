@@ -7,7 +7,6 @@ use quote::{ToTokens, format_ident, quote};
 use syn::{
     Expr, GenericParam, Ident, ItemStruct, Meta, Token, Type, TypePath, Visibility, parenthesized,
     parse::Parse, parse_macro_input, parse_quote, punctuated::Punctuated, spanned::Spanned,
-    token::Paren,
 };
 
 use crate::util::{FoundCrateExt, crate_name};
@@ -97,10 +96,9 @@ impl Parse for FieldAttr {
                 "default" => {
                     attr.default = true;
 
-                    if input.peek(Paren) {
-                        let inner;
-                        parenthesized!(inner in input);
-                        let expr = Expr::parse_without_eager_brace(&inner)?;
+                    if input.peek(Token![=]) {
+                        input.parse::<Token![=]>()?;
+                        let expr = Expr::parse_without_eager_brace(&input)?;
                         attr.default_value = Some(expr);
                     }
                 }
