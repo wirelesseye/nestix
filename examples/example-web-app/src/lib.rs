@@ -1,14 +1,15 @@
 mod components;
 
-use std::mem;
+use std::{collections::HashMap, mem};
 
 use components::*;
+use nanoid_wasm::nanoid;
 use nestix::{
-    Element, callback, closure, component, computed, create_element, create_model, create_state,
-    layout,
+    Element, callback, closure, component, components::For, computed, create_element, create_model,
+    create_state, effect, layout,
 };
-use wasm_bindgen::prelude::wasm_bindgen;
-use web_sys::HtmlElement;
+use wasm_bindgen::{JsCast, prelude::wasm_bindgen};
+use web_sys::{HtmlElement, HtmlInputElement};
 
 #[wasm_bindgen(start)]
 fn init() {
@@ -53,7 +54,7 @@ fn App() -> Element {
                     })),
                     .disabled = computed(closure!([page] || page.get() == AppPage::TodoList)),
                 ) {
-                    Text(.text = "To-do List".to_string())
+                    Text(.text = "Todo List".to_string())
                 }
             }
             Div {
@@ -109,9 +110,64 @@ fn Counter() -> Element {
 
 #[component]
 fn TodoList() -> Element {
+    let items = create_state::<HashMap<String, String>>(HashMap::new());
+    let input = create_state::<Option<Element>>(None);
+
+    effect(closure!(
+        [input] || {
+            log::debug!("{:?}", input.get());
+        }
+    ));
+
+    let add = callback!(
+        [input, items] || {
+            if let Some(element) = input.get() {
+                let handle = element.handle().get();
+                if let Some(handle) = handle {
+                    let html_element = handle.downcast_ref::<HtmlElement>().unwrap();
+                    let input_element = html_element.dyn_ref::<HtmlInputElement>().unwrap();
+                    let value = input_element.value();
+                    items.mutate(|items| {
+                        items.insert(nanoid!(), value);
+                    });
+                    input_element.set_value("");
+                }
+            }
+        }
+    );
+
     layout! {
         Div {
-            Text(.text = "Todo".to_string())
+            Div {
+                input@Input(),
+                Button(.disabled = false, .on_click = Some(add)) {
+                    Text(.text = "Add".to_string())
+                }
+            }
+            Div {
+                For<(String, String), HashMap<String, String>, String>(
+                    .data = items.clone(),
+                    .key = callback!(|item: &(String, String)| item.0.clone()),
+                    .constructor = callback!([items] |item: &(String, String), _: usize| {
+                        layout! {
+                            Div {
+                                Button(
+                                    .disabled = false,
+                                    .on_click = Some(callback!([items, item] || {
+                                        items.mutate(|items| {
+                                            log::debug!("remove key {}", item.0);
+                                            items.remove(&item.0);
+                                        });
+                                    }))
+                                ) {
+                                    Text(.text = "X".to_string())
+                                }
+                                Text(.text = format!("{}", item.1)),
+                            }
+                        }
+                    })
+                )
+            }
         }
     }
 }

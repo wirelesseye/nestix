@@ -80,7 +80,7 @@ fn generate_component(
     let struct_fields = if generic_args.is_empty() {
         quote! {}
     } else {
-        quote! {(PhantomData<#generic_args>)}
+        quote! {(PhantomData<(#generic_args)>)}
     };
 
     let render_args = if sig.inputs.len() == 0 {

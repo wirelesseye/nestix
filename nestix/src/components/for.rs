@@ -7,28 +7,37 @@ use crate::{
     utils::reconcile::{ReconcileResult, reconcile},
 };
 
-#[derive_props(generics(T: 'static))]
-pub struct ForProps<T> {
-    data: Vec<T>,
-    constructor: Shared<dyn Fn(T, usize) -> Element>,
+#[derive_props(generics(T: 'static, I: 'static, K: 'static))]
+pub struct ForProps<T, I, K> {
+    data: I,
+    key: Shared<dyn Fn(&T) -> K>,
+    constructor: Shared<dyn Fn(&T, usize) -> Element>,
 }
 
-#[component(generics(T))]
-pub fn For<T: Clone + Eq + Hash + 'static>(props: &ForProps<T>) {
+#[component(generics(T, I, K))]
+pub fn For<
+    T: 'static,
+    I: IntoIterator<Item = T> + Clone + 'static,
+    K: Eq + Hash + 'static,
+>(
+    props: &ForProps<T, I, K>,
+) {
     let model = current_model().unwrap();
     let element = model.current_element().unwrap();
-    let prev_data: Rc<RefCell<Vec<T>>> = Rc::new(RefCell::new(vec![]));
+    let prev_keys: Rc<RefCell<Vec<K>>> = Rc::new(RefCell::new(vec![]));
     let children: Rc<RefCell<Vec<Element>>> = Rc::new(RefCell::new(vec![]));
     let handle = element.handle();
     let contexts = element.contexts();
 
     effect(closure!(
-        [model, props.data, props.constructor, children] || {
-            let mut prev_data = prev_data.borrow_mut();
-            let next_data = data.get();
+        [model, props.data, props.key, props.constructor, children] || {
+            let mut prev_keys = prev_keys.borrow_mut();
+            let key_fn = key.get();
+            let next_data = data.get().into_iter().collect::<Vec<_>>();
+            let next_keys = next_data.iter().map(|item| key_fn(item)).collect::<Vec<_>>();
             let mut children = children.borrow_mut();
 
-            let result = reconcile(&*prev_data, &next_data);
+            let result = reconcile(&*prev_keys, &next_keys);
             let ReconcileResult {
                 removed,
                 added,
@@ -45,7 +54,7 @@ pub fn For<T: Clone + Eq + Hash + 'static>(props: &ForProps<T>) {
                 let child = if let Some(orig_i) = orig_i {
                     children[*orig_i].clone()
                 } else {
-                    (constructor.get())(next_data[i].clone(), i)
+                    (constructor.get())(&next_data[i], i)
                 };
 
                 let pred = if i > 0 {
@@ -73,7 +82,7 @@ pub fn For<T: Clone + Eq + Hash + 'static>(props: &ForProps<T>) {
                 next_children.push(child);
             }
 
-            *prev_data = next_data;
+            *prev_keys = next_keys;
             *children = next_children;
         }
     ));

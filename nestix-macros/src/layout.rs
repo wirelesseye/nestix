@@ -18,6 +18,7 @@ pub fn layout(input: TokenStream) -> TokenStream {
 }
 
 struct LayoutInput {
+    receiver: Option<Ident>,
     ty: Type,
     props_tokens: Option<TokenStream2>,
     children: Option<LayoutChildren>,
@@ -25,6 +26,14 @@ struct LayoutInput {
 
 impl Parse for LayoutInput {
     fn parse(input: syn::parse::ParseStream) -> syn::Result<Self> {
+        let receiver = if input.peek2(Token![@]) {
+            let ident: Ident = input.parse()?;
+            input.parse::<Token![@]>()?;
+            Some(ident)
+        } else {
+            None
+        };
+
         let ty: Type = input.parse()?;
 
         let props_tokens = if input.peek(Paren) {
@@ -45,6 +54,7 @@ impl Parse for LayoutInput {
 
         Ok(Self {
             ty,
+            receiver,
             props_tokens,
             children,
         })
@@ -167,9 +177,18 @@ fn generate_layout(input: &LayoutInput) -> Result<TokenStream2, syn::Error> {
     let crate_path = crate_name().to_path();
     let LayoutInput {
         ty,
+        receiver,
         props_tokens,
         children,
     } = input;
+
+    let receiver_output = if let Some(receiver) = receiver {
+        quote! {
+            #receiver.set(Some(element.clone()));
+        }
+    } else {
+        quote! {}
+    };
 
     let props_output = if props_tokens.is_some() || children.is_some() {
         let mut tokens = TokenStream2::new();
@@ -177,11 +196,11 @@ fn generate_layout(input: &LayoutInput) -> Result<TokenStream2, syn::Error> {
             props_tokens.to_tokens(&mut tokens);
             
             let last = props_tokens.clone().into_iter().last();
-            let last_is_comma = match last {
+            let last_is_comma = match &last {
                 Some(TokenTree::Punct(punct)) if punct.as_char() == ',' => true,
                 _ => false,
             };
-            if !last_is_comma {
+            if last.is_some() && !last_is_comma {
                 quote! {,}.to_tokens(&mut tokens);
             }
         }
@@ -199,9 +218,11 @@ fn generate_layout(input: &LayoutInput) -> Result<TokenStream2, syn::Error> {
         quote! {()}
     };
 
-    Ok(quote! {
-        #crate_path::create_element::<#ty>(#props_output)
-    })
+    Ok(quote! {{
+        let element = #crate_path::create_element::<#ty>(#props_output);
+        #receiver_output
+        element
+    }})
 }
 
 fn generate_layout_children(input: &LayoutChildren) -> Result<TokenStream2, syn::Error> {

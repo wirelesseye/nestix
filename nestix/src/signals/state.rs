@@ -33,7 +33,7 @@ impl<T> State<T> {
         }
     }
 
-    pub fn update(&self, updater: impl Fn(&T) -> T) {
+    pub fn update(&self, updater: impl FnOnce(&T) -> T) {
         let prev = self.value.borrow();
         let next = updater(&prev);
         self.value.replace(next);
@@ -44,7 +44,7 @@ impl<T> State<T> {
         }
     }
 
-    pub fn mutate(&self, mutator: impl Fn(&mut T)) {
+    pub fn mutate(&self, mutator: impl FnOnce(&mut T)) {
         {
             let mut value = self.value.borrow_mut();
             mutator(&mut value);
