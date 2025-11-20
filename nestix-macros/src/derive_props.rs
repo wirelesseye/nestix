@@ -1,31 +1,34 @@
+use std::mem;
+
 use convert_case::{Case, Casing};
 use proc_macro::TokenStream;
 use proc_macro2::{Span, TokenStream as TokenStream2};
 use quote::{ToTokens, format_ident, quote};
 use syn::{
-    GenericParam, Ident, ItemStruct, Token, Type, TypePath, Visibility, parenthesized,
+    Expr, GenericParam, Ident, ItemStruct, Meta, Token, Type, TypePath, Visibility, parenthesized,
     parse::Parse, parse_macro_input, parse_quote, punctuated::Punctuated, spanned::Spanned,
+    token::Paren,
 };
 
 use crate::util::{FoundCrateExt, crate_name};
 
-pub fn derive_props(attrs: TokenStream, input: TokenStream) -> TokenStream {
-    let attrs = parse_macro_input!(attrs as PropsAttrs);
+pub fn derive_props(attr: TokenStream, input: TokenStream) -> TokenStream {
+    let attr = parse_macro_input!(attr as PropsAttr);
     let item = parse_macro_input!(input as ItemStruct);
-    generate_props(attrs, item)
+    generate_props(attr, item)
         .unwrap_or_else(|err| TokenStream2::from(err.to_compile_error()))
         .into()
 }
 
 #[derive(Default)]
-struct PropsAttrs {
+struct PropsAttr {
     debug: bool,
     impl_generic_params: Punctuated<GenericParam, Token![,]>,
 }
 
-impl Parse for PropsAttrs {
+impl Parse for PropsAttr {
     fn parse(input: syn::parse::ParseStream) -> syn::Result<Self> {
-        let mut attrs = PropsAttrs::default();
+        let mut attr = PropsAttr::default();
 
         loop {
             if input.is_empty() {
@@ -34,11 +37,11 @@ impl Parse for PropsAttrs {
 
             let ident: Ident = input.parse()?;
             match ident.to_string().as_str() {
-                "debug" => attrs.debug = true,
+                "debug" => attr.debug = true,
                 "generics" => {
                     let inner;
                     parenthesized!(inner in input);
-                    attrs.impl_generic_params =
+                    attr.impl_generic_params =
                         Punctuated::<GenericParam, Token![,]>::parse_terminated(&inner)?;
                 }
                 _ => {
@@ -54,11 +57,71 @@ impl Parse for PropsAttrs {
             }
         }
 
-        Ok(attrs)
+        Ok(attr)
     }
 }
 
-fn generate_props(attrs: PropsAttrs, mut item: ItemStruct) -> Result<TokenStream2, syn::Error> {
+struct FieldAttr {
+    default: bool,
+    default_value: Option<Expr>,
+}
+
+impl Default for FieldAttr {
+    fn default() -> Self {
+        Self {
+            default: false,
+            default_value: None,
+        }
+    }
+}
+
+impl FieldAttr {
+    fn merge(mut self, other: FieldAttr) -> Self {
+        self.default = self.default || other.default;
+        self.default_value = other.default_value;
+        self
+    }
+}
+
+impl Parse for FieldAttr {
+    fn parse(input: syn::parse::ParseStream) -> syn::Result<Self> {
+        let mut attr = FieldAttr::default();
+
+        loop {
+            if input.is_empty() {
+                break;
+            }
+
+            let ident: Ident = input.parse()?;
+            match ident.to_string().as_str() {
+                "default" => {
+                    attr.default = true;
+
+                    if input.peek(Paren) {
+                        let inner;
+                        parenthesized!(inner in input);
+                        let expr = Expr::parse_without_eager_brace(&inner)?;
+                        attr.default_value = Some(expr);
+                    }
+                }
+                _ => {
+                    return Err(syn::Error::new(
+                        ident.span(),
+                        format!("unknown attribute: {}", ident),
+                    ));
+                }
+            }
+
+            if input.peek(Token![,]) {
+                input.parse::<Token![,]>()?;
+            }
+        }
+
+        Ok(attr)
+    }
+}
+
+fn generate_props(attr: PropsAttr, mut item: ItemStruct) -> Result<TokenStream2, syn::Error> {
     match &item.fields {
         syn::Fields::Named(_) => (),
         other => {
@@ -70,17 +133,59 @@ fn generate_props(attrs: PropsAttrs, mut item: ItemStruct) -> Result<TokenStream
     }
 
     let crate_path = crate_name().to_path();
-    let PropsAttrs {
+    let PropsAttr {
         debug,
         impl_generic_params,
-    } = attrs;
+    } = attr;
 
-    let option_ty_map = item
+    let option_map = item
         .fields
         .iter()
         .map(|field| is_option_ty(&field.ty))
         .collect::<Vec<_>>();
+
+    let mut all_field_attrs = Vec::new();
     for field in &mut item.fields {
+        let attrs = mem::take(&mut field.attrs);
+        let mut retained_attrs = Vec::new();
+        let mut field_attrs = Vec::new();
+
+        for attr in attrs.into_iter() {
+            match &attr.meta {
+                Meta::Path(path) => {
+                    if let Some(ident) = path.get_ident() {
+                        if ident == "props" {
+                            return Err(syn::Error::new(
+                                ident.span(),
+                                "props: parameters required",
+                            ));
+                        } else {
+                            retained_attrs.push(attr);
+                        }
+                    } else {
+                        retained_attrs.push(attr);
+                    }
+                }
+                Meta::List(meta_list) => {
+                    if let Some(ident) = meta_list.path.get_ident() {
+                        if ident == "props" {
+                            let field_attr: FieldAttr = syn::parse2(meta_list.tokens.clone())?;
+                            field_attrs.push(field_attr);
+                        } else {
+                            retained_attrs.push(attr);
+                        }
+                    } else {
+                        retained_attrs.push(attr);
+                    }
+                }
+                _ => retained_attrs.push(attr),
+            }
+        }
+        field.attrs = retained_attrs;
+
+        let field_attrs = field_attrs.into_iter().reduce(FieldAttr::merge);
+        all_field_attrs.push(field_attrs);
+
         let ty = &field.ty;
         let path = parse_quote!(#crate_path::prop::PropValue<#ty>);
         field.ty = Type::Path(TypePath {
@@ -88,6 +193,19 @@ fn generate_props(attrs: PropsAttrs, mut item: ItemStruct) -> Result<TokenStream
             path: path,
         });
     }
+
+    let default_map = option_map
+        .iter()
+        .enumerate()
+        .map(|(i, option)| {
+            if let Some(attr) = &all_field_attrs[i] {
+                if attr.default {
+                    return true;
+                }
+            }
+            *option
+        })
+        .collect::<Vec<_>>();
 
     let ItemStruct {
         vis,
@@ -114,9 +232,9 @@ fn generate_props(attrs: PropsAttrs, mut item: ItemStruct) -> Result<TokenStream
     let mut builder_fields = fields.clone();
     for (i, field) in builder_fields.iter_mut().enumerate() {
         let ty = &field.ty;
-        let option_ty = option_ty_map[i];
+        let default = default_map[i];
 
-        if !option_ty {
+        if !default {
             let path = parse_quote!(Option<#ty>);
             field.ty = Type::Path(TypePath {
                 qself: None,
@@ -143,7 +261,7 @@ fn generate_props(attrs: PropsAttrs, mut item: ItemStruct) -> Result<TokenStream
     for (i, field) in fields.iter().enumerate() {
         let ident = field.ident.as_ref().unwrap();
         let ty = &field.ty;
-        let option_ty = option_ty_map[i];
+        let default = default_map[i];
 
         let ident_pascal = ident.to_string().to_case(Case::Pascal);
 
@@ -167,16 +285,27 @@ fn generate_props(attrs: PropsAttrs, mut item: ItemStruct) -> Result<TokenStream
 
         let type_param_ident = Ident::new(&format!("{}State", ident_pascal), ident.span());
         quote! {#type_param_ident,}.to_tokens(&mut type_params);
-        if option_ty {
+        if default {
             quote! {#type_param_ident=Defaulted,}.to_tokens(&mut default_type_params);
         } else {
             quote! {#type_param_ident=Unset,}.to_tokens(&mut default_type_params);
         }
         quote! {#type_param_ident: #is_set_ident,}.to_tokens(&mut builder_build_type_bounds);
 
-        if option_ty {
+        if default {
+            let field_attr = &all_field_attrs[i];
+            let default_value = if let Some(field_attr) = field_attr {
+                if let Some(default_value) = &field_attr.default_value {
+                    quote! {#default_value}
+                } else {
+                    quote! {std::default::Default::default()}
+                }
+            } else {
+                quote! {std::default::Default::default()}
+            };
+
             quote! {
-                #ident: #crate_path::prop::PropValue::from_plain(None),
+                #ident: #crate_path::prop::PropValue::from_plain(#default_value),
             }
             .to_tokens(&mut builder_default_fields);
 
@@ -232,7 +361,7 @@ fn generate_props(attrs: PropsAttrs, mut item: ItemStruct) -> Result<TokenStream
                 quote! {_S: #can_set_ident,}.to_tokens(&mut method_type_params);
                 quote! {_S,}.to_tokens(&mut method_type_args);
                 quote! {Set,}.to_tokens(&mut method_result_type_args);
-                if option_ty {
+                if default {
                     quote! {
                         #field_ident: value,
                     }

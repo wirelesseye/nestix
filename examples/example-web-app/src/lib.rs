@@ -88,7 +88,6 @@ fn Counter() -> Element {
                         count.mutate(|value| *value += 1);
                     }
                 )),
-                .disabled = false,
             ) {
                 Text(.text = "Click".to_string())
             }
@@ -140,7 +139,7 @@ fn TodoList() -> Element {
         Div {
             Div {
                 input@Input(),
-                Button(.disabled = false, .on_click = Some(add)) {
+                Button(.on_click = Some(add)) {
                     Text(.text = "Add".to_string())
                 }
             }
@@ -152,7 +151,6 @@ fn TodoList() -> Element {
                         layout! {
                             Div {
                                 Button(
-                                    .disabled = false,
                                     .on_click = Some(callback!([items, item] || {
                                         items.mutate(|items| {
                                             log::debug!("remove key {}", item.0);

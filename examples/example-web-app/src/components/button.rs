@@ -29,6 +29,7 @@ impl ButtonEventHandlers {
 pub struct ButtonProps {
     children: Option<Vec<Element>>,
     on_click: Option<Shared<dyn Fn()>>,
+    #[props(default)]
     disabled: bool,
 }
 
