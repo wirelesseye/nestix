@@ -46,7 +46,7 @@ fn App() -> Element {
                     })),
                     .disabled = computed(closure!([page] || page.get() == AppPage::Counter)),
                 ) {
-                    Text(.text = "Counter".to_string())
+                    Text(.text = "Counter")
                 }
                 Button(
                     .on_click = Some(callback!([page] || {
@@ -54,7 +54,7 @@ fn App() -> Element {
                     })),
                     .disabled = computed(closure!([page] || page.get() == AppPage::TodoList)),
                 ) {
-                    Text(.text = "Todo List".to_string())
+                    Text(.text = "Todo List")
                 }
             }
             Div {
@@ -89,14 +89,14 @@ fn Counter() -> Element {
                     }
                 )),
             ) {
-                Text(.text = "Click".to_string())
+                Text(.text = "Click")
             }
 
             yield $option(
                 if count.get() % 2 == 0 {
                     Some(layout! {
                         Div {
-                            Text(.text = "Is even!".to_string())
+                            Text(.text = "Is even!")
                         }
                     })
                 } else {
@@ -140,7 +140,7 @@ fn TodoList() -> Element {
             Div {
                 input@Input(),
                 Button(.on_click = Some(add)) {
-                    Text(.text = "Add".to_string())
+                    Text(.text = "Add")
                 }
             }
             Div {
@@ -158,7 +158,7 @@ fn TodoList() -> Element {
                                         });
                                     }))
                                 ) {
-                                    Text(.text = "X".to_string())
+                                    Text(.text = "X")
                                 }
                                 Text(.text = format!("{}", item.1)),
                             }

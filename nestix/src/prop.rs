@@ -52,9 +52,9 @@ pub struct PropValue<T> {
 }
 
 impl<T> PropValue<T> {
-    pub fn from_plain(value: impl Into<Rc<T>>) -> Self {
+    pub fn from_plain(value: T) -> Self {
         Self {
-            inner: PropValueInner::Plain(value.into()),
+            inner: PropValueInner::Plain(Rc::new(value)),
         }
     }
 
@@ -100,8 +100,8 @@ pub struct PlainTag<T>(PhantomData<T>);
 
 impl<T> PlainTag<T> {
     #[inline]
-    pub fn new(self, value: T) -> PropValue<T> {
-        PropValue::from_plain(value)
+    pub fn new(self, value: impl Into<T>) -> PropValue<T> {
+        PropValue::from_plain(value.into())
     }
 }
 
@@ -113,7 +113,7 @@ pub trait PlainKind<T> {
     }
 }
 
-impl<T> PlainKind<T> for &T {}
+impl<T, I: Into<T>> PlainKind<T> for &I {}
 
 #[doc(hidden)]
 pub struct SignalTag<T>(PhantomData<T>);
