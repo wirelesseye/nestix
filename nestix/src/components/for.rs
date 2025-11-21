@@ -25,7 +25,7 @@ pub fn For<T: 'static, I: IntoIterator<Item = T> + Clone + 'static, K: Eq + Hash
     let handle = element.handle();
     let contexts = element.contexts();
 
-    effect(closure!(
+    effect!(
         model, props.data, props.key, props.constructor, children => || {
             let mut prev_keys = prev_keys.borrow_mut();
             let key_fn = key.get();
@@ -81,7 +81,7 @@ pub fn For<T: 'static, I: IntoIterator<Item = T> + Clone + 'static, K: Eq + Hash
             *prev_keys = next_keys;
             *children = next_children;
         }
-    ));
+    );
 
     on_destroy(closure!(
         children => || {

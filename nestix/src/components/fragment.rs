@@ -21,7 +21,7 @@ pub fn Fragment(props: &FragmentProps) {
     let handle = element.handle();
     let contexts = element.contexts();
 
-    effect(closure!(
+    effect!(
         model, prev, props.children => || {
             let mut prev = prev.borrow_mut();
             let next = children.get();
@@ -93,7 +93,7 @@ pub fn Fragment(props: &FragmentProps) {
 
             *prev = next;
         }
-    ));
+    );
 
     on_destroy(closure!(
         prev => || {

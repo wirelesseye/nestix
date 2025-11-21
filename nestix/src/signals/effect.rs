@@ -8,3 +8,10 @@ pub fn effect(setup: impl Fn() + 'static) {
     callback();
     pop_effect();
 }
+
+#[macro_export]
+macro_rules! effect {
+    ($($tt:tt)*) => {
+        $crate::signals::effect($crate::closure!($($tt)*))
+    };
+}

@@ -50,7 +50,7 @@ pub fn Button(props: &ButtonProps) -> Element {
         handlers.insert(button_id.clone(), ButtonEventHandlers::new());
     });
 
-    effect(closure!(
+    effect!(
         html_element, button_id, props.on_click => || {
             let cb = if let Some(on_click) = on_click.get() {
                 Some(Closure::wrap(Box::new(closure!(on_click => |_: Event| {
@@ -76,14 +76,14 @@ pub fn Button(props: &ButtonProps) -> Element {
                 });
             }
         }
-    ));
+    );
 
-    effect(closure!(
+    effect!(
         html_element, props.disabled => || {
             let button = html_element.dyn_ref::<HtmlButtonElement>().unwrap();
             button.set_disabled(disabled.get());
         }
-    ));
+    );
 
     on_destroy(closure!(
         html_element, button_id => || {

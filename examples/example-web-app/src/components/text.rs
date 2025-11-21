@@ -14,9 +14,9 @@ pub fn Text(props: &TextProps) {
     let document = web_sys::window().unwrap().document().unwrap();
     let text_node = document.create_text_node(&props.text.get());
 
-    effect(closure!(
+    effect!(
         props.text, text_node => || text_node.set_data(&text.get())
-    ));
+    );
 
     provide_handle(text_node.clone());
 

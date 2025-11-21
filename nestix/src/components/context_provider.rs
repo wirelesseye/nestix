@@ -13,9 +13,9 @@ pub struct ContextProviderProps<T> {
 #[component(generics(T))]
 pub fn ContextProvider<T: Clone + 'static>(props: &ContextProviderProps<T>) -> Element {
     let element = current_model().unwrap().current_element().unwrap();
-    effect(closure!(props.value => || {
+    effect!(props.value => || {
         element.provide_context(value.get());
-    }));
+    });
 
     layout! {
         Fragment(.children = props.children.clone())

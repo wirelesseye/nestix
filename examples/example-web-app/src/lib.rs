@@ -5,7 +5,7 @@ use std::{collections::HashMap, mem};
 use components::*;
 use nanoid_wasm::nanoid;
 use nestix::{
-    Element, callback, closure, component, components::For, computed, create_element, create_model,
+    Element, callback, component, components::For, computed, create_element, create_model,
     create_state, effect, layout,
 };
 use wasm_bindgen::{JsCast, prelude::wasm_bindgen};
@@ -41,18 +41,18 @@ fn App() -> Element {
         Root {
             Div {
                 Button(
-                    .on_click = Some(callback!(page => || {
+                    .on_click = callback!(page => || {
                         page.set(AppPage::Counter);
-                    })),
-                    .disabled = computed(closure!(page => || page.get() == AppPage::Counter)),
+                    }),
+                    .disabled = computed!(page => || page.get() == AppPage::Counter),
                 ) {
                     Text(.text = "Counter")
                 }
                 Button(
-                    .on_click = Some(callback!(page => || {
+                    .on_click = callback!(page => || {
                         page.set(AppPage::TodoList);
-                    })),
-                    .disabled = computed(closure!(page => || page.get() == AppPage::TodoList)),
+                    }),
+                    .disabled = computed!(page => || page.get() == AppPage::TodoList),
                 ) {
                     Text(.text = "Todo List")
                 }
@@ -77,17 +77,17 @@ fn Counter() -> Element {
     layout! {
         Div {
             Div {
-                Text(.text = computed(closure!(
+                Text(.text = computed!(
                     count => || format!("Count: {}", count.get())
-                )))
+                ))
             }
 
             Button(
-                .on_click = Some(callback!(
+                .on_click = callback!(
                     count => || {
                         count.mutate(|value| *value += 1);
                     }
-                )),
+                ),
             ) {
                 Text(.text = "Click")
             }
@@ -112,9 +112,9 @@ fn TodoList() -> Element {
     let items = create_state::<HashMap<String, String>>(HashMap::new());
     let input = create_state::<Option<Element>>(None);
 
-    effect(closure!(input => || {
+    effect!(input => || {
         log::debug!("{:?}", input.get());
-    }));
+    });
 
     let add = callback!(
         input, items => || {
@@ -137,7 +137,7 @@ fn TodoList() -> Element {
         Div {
             Div {
                 input@Input(),
-                Button(.on_click = Some(add)) {
+                Button(.on_click = add) {
                     Text(.text = "Add")
                 }
             }
@@ -149,12 +149,12 @@ fn TodoList() -> Element {
                         layout! {
                             Div {
                                 Button(
-                                    .on_click = Some(callback!(items, item => || {
+                                    .on_click = callback!(items, item => || {
                                         items.mutate(|items| {
                                             log::debug!("remove key {}", item.0);
                                             items.remove(&item.0);
                                         });
-                                    }))
+                                    })
                                 ) {
                                     Text(.text = "X")
                                 }
