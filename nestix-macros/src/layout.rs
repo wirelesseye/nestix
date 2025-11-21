@@ -2,9 +2,10 @@ use proc_macro::TokenStream;
 use proc_macro2::{TokenStream as TokenStream2, TokenTree};
 use quote::{ToTokens, format_ident, quote};
 use syn::{
-    Expr, Ident, Token, Type, braced, bracketed, parenthesized,
+    Attribute, Expr, Ident, Meta, Token, Type, braced, parenthesized,
     parse::Parse,
     parse_macro_input,
+    spanned::Spanned,
     token::{Brace, Paren},
 };
 
@@ -70,28 +71,40 @@ impl Parse for LayoutChildren {
     fn parse(input: syn::parse::ParseStream) -> syn::Result<Self> {
         let inner;
         braced!(inner in input);
+        let input = inner;
 
-        let clone_vars_tokens = if inner.peek(Token![@]) {
-            inner.parse::<Token![@]>()?;
-            let clone_vars_input;
-            bracketed!(clone_vars_input in inner);
-            Some(clone_vars_input.parse::<TokenStream2>()?)
-        } else {
-            None
-        };
+        let mut clone_vars_tokens = None;
+
+        let attrs = Attribute::parse_inner(&input)?;
+        for attr in attrs {
+            match attr.meta {
+                Meta::List(meta_list) => {
+                    if let Some(ident) = meta_list.path.get_ident() {
+                        if ident == "clone" {
+                            clone_vars_tokens = Some(meta_list.tokens);
+                        } else {
+                            return Err(syn::Error::new(ident.span(), "unknown attribute"));
+                        }
+                    } else {
+                        return Err(syn::Error::new(meta_list.span(), "unknown attribute"));
+                    }
+                }
+                other => return Err(syn::Error::new(other.span(), "unknown attribute")),
+            }
+        }
 
         let mut items = Vec::new();
         let mut require_comma = false;
         loop {
             if require_comma {
-                inner.parse::<Token![,]>()?;
-            } else if inner.peek(Token![,]) {
-                inner.parse::<Token![,]>()?;
+                input.parse::<Token![,]>()?;
+            } else if input.peek(Token![,]) {
+                input.parse::<Token![,]>()?;
             }
-            if inner.is_empty() {
+            if input.is_empty() {
                 break;
             }
-            let child: LayoutChild = inner.parse()?;
+            let child: LayoutChild = input.parse()?;
             match &child.value {
                 LayoutChildValue::LayoutInput(layout_input) => {
                     if layout_input.children.is_some() {
@@ -106,7 +119,7 @@ impl Parse for LayoutChildren {
             }
             items.push(child);
 
-            if inner.is_empty() {
+            if input.is_empty() {
                 break;
             }
         }

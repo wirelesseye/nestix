@@ -1,6 +1,6 @@
 use std::marker::PhantomData;
 
-use nestix_macros::{closure, component, derive_props, layout};
+use nestix_macros::{component, derive_props, layout};
 
 use crate::{Element, components::Fragment, current_model, effect};
 
