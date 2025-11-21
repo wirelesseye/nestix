@@ -1,7 +1,7 @@
 use proc_macro::TokenStream;
 use proc_macro2::TokenStream as TokenStream2;
 use quote::{ToTokens, quote};
-use syn::{Expr, ExprClosure, Ident, Token, parse::Parse, parse_macro_input};
+use syn::{Expr, ExprClosure, Ident, Token, parse::Parse, parse_macro_input, spanned::Spanned};
 
 pub fn closure(input: TokenStream) -> TokenStream {
     let closure_input = parse_macro_input!(input as ClosureInput);
@@ -79,7 +79,11 @@ pub fn generate_closure(input: ClosureInput) -> Result<TokenStream2, syn::Error>
                 }
                 .to_tokens(&mut tokens);
             } else {
-                let ident = get_ident_from_expr(&expr).expect("explicit identifier needed");
+                let ident = if let Some(ident) = get_ident_from_expr(&expr) {
+                    ident
+                } else {
+                    return Err(syn::Error::new(expr.span(), "explicit identifier needed"));
+                };
                 quote! {
                     let #ident = #expr.clone();
                 }
