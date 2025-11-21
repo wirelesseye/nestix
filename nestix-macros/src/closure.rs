@@ -1,12 +1,8 @@
 use proc_macro::TokenStream;
 use proc_macro2::TokenStream as TokenStream2;
-use quote::{quote, ToTokens};
+use quote::{ToTokens, quote};
 use syn::{
-    bracketed,
-    parse::Parse,
-    parse_macro_input,
-    token::{self, Move},
-    Expr, ExprClosure, Ident, Token,
+    Expr, ExprClosure, Ident, Token, bracketed, parse::Parse, parse_macro_input, token::Bracket,
 };
 
 pub fn closure(input: TokenStream) -> TokenStream {
@@ -37,14 +33,15 @@ impl Parse for CloneVar {
 
 pub struct ClosureInput {
     pub clone_vars: Vec<CloneVar>,
-    pub expr_closure: ExprClosure,
+    pub expr_closure: Option<ExprClosure>,
+    pub closure_tokens: TokenStream2,
 }
 
 impl Parse for ClosureInput {
     fn parse(input: syn::parse::ParseStream) -> syn::Result<Self> {
         let mut clone_vars = Vec::new();
 
-        if input.peek(token::Bracket) {
+        if input.peek(Bracket) {
             let inner;
             bracketed!(inner in input);
             while !inner.is_empty() {
@@ -59,11 +56,13 @@ impl Parse for ClosureInput {
             }
         }
 
-        let expr_closure: ExprClosure = input.parse()?;
+        let closure_tokens: TokenStream2 = input.parse()?;
+        let expr_closure: Option<ExprClosure> = syn::parse2(closure_tokens.clone()).ok();
 
         Ok(Self {
             clone_vars,
             expr_closure,
+            closure_tokens,
         })
     }
 }
@@ -89,15 +88,19 @@ pub fn generate_closure(input: ClosureInput) -> Result<TokenStream2, syn::Error>
         }
         tokens
     };
-    let mut expr_closure = input.expr_closure;
 
-    if expr_closure.capture.is_none() && has_clone_vars {
-        expr_closure.capture = Some(Move::default());
+    let mut closure_tokens = input.closure_tokens;
+    if let Some(expr_closure) = input.expr_closure {
+        if expr_closure.capture.is_none() && has_clone_vars {
+            closure_tokens = quote! {
+                move #closure_tokens
+            };
+        }
     }
 
     Ok(quote! {{
         #clone_vars_output
-        #expr_closure
+        #closure_tokens
     }})
 }
 
