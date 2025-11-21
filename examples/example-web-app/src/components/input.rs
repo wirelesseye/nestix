@@ -1,6 +1,5 @@
 use nestix::{
-    Element, closure, component, derive_props, layout, on_destroy, provide_handle, use_context,
-    use_predecessor,
+    closure, component, derive_props, on_destroy, provide_handle, use_context, use_predecessor,
 };
 use wasm_bindgen::{JsCast, UnwrapThrowExt};
 use web_sys::{HtmlElement, Text};
@@ -34,7 +33,7 @@ pub fn Input(props: &InputProps) {
     }
 
     on_destroy(closure!(
-        [html_element] || {
+        html_element => || {
             html_element.remove();
         }
     ));

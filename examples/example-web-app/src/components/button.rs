@@ -51,9 +51,9 @@ pub fn Button(props: &ButtonProps) -> Element {
     });
 
     effect(closure!(
-        [html_element, button_id, props.on_click] || {
+        html_element, button_id, props.on_click => || {
             let cb = if let Some(on_click) = on_click.get() {
-                Some(Closure::wrap(Box::new(closure!([on_click] |_: Event| {
+                Some(Closure::wrap(Box::new(closure!(on_click => |_: Event| {
                     on_click();
                 })) as Box<dyn Fn(_)>))
             } else {
@@ -79,14 +79,14 @@ pub fn Button(props: &ButtonProps) -> Element {
     ));
 
     effect(closure!(
-        [html_element, props.disabled] || {
+        html_element, props.disabled => || {
             let button = html_element.dyn_ref::<HtmlButtonElement>().unwrap();
             button.set_disabled(disabled.get());
         }
     ));
 
     on_destroy(closure!(
-        [html_element, button_id] || {
+        html_element, button_id => || {
             html_element.remove();
             HANDLERS.with_borrow_mut(|handlers| handlers.remove(&button_id));
         }

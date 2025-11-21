@@ -41,18 +41,18 @@ fn App() -> Element {
         Root {
             Div {
                 Button(
-                    .on_click = Some(callback!([page] || {
+                    .on_click = Some(callback!(page => || {
                         page.set(AppPage::Counter);
                     })),
-                    .disabled = computed(closure!([page] || page.get() == AppPage::Counter)),
+                    .disabled = computed(closure!(page => || page.get() == AppPage::Counter)),
                 ) {
                     Text(.text = "Counter")
                 }
                 Button(
-                    .on_click = Some(callback!([page] || {
+                    .on_click = Some(callback!(page => || {
                         page.set(AppPage::TodoList);
                     })),
-                    .disabled = computed(closure!([page] || page.get() == AppPage::TodoList)),
+                    .disabled = computed(closure!(page => || page.get() == AppPage::TodoList)),
                 ) {
                     Text(.text = "Todo List")
                 }
@@ -78,13 +78,13 @@ fn Counter() -> Element {
         Div {
             Div {
                 Text(.text = computed(closure!(
-                    [count] || format!("Count: {}", count.get())
+                    count => || format!("Count: {}", count.get())
                 )))
             }
 
             Button(
                 .on_click = Some(callback!(
-                    [count] || {
+                    count => || {
                         count.mutate(|value| *value += 1);
                     }
                 )),
@@ -112,14 +112,12 @@ fn TodoList() -> Element {
     let items = create_state::<HashMap<String, String>>(HashMap::new());
     let input = create_state::<Option<Element>>(None);
 
-    effect(closure!(
-        [input] || {
-            log::debug!("{:?}", input.get());
-        }
-    ));
+    effect(closure!(input => || {
+        log::debug!("{:?}", input.get());
+    }));
 
     let add = callback!(
-        [input, items] || {
+        input, items => || {
             if let Some(element) = input.get() {
                 let handle = element.handle().get();
                 if let Some(handle) = handle {
@@ -147,11 +145,11 @@ fn TodoList() -> Element {
                 For<(String, String), HashMap<String, String>, String>(
                     .data = items.clone(),
                     .key = callback!(|item: &(String, String)| item.0.clone()),
-                    .constructor = callback!([items] |item: &(String, String), _: usize| {
+                    .constructor = callback!(items => |item: &(String, String), _: usize| {
                         layout! {
                             Div {
                                 Button(
-                                    .on_click = Some(callback!([items, item] || {
+                                    .on_click = Some(callback!(items, item => || {
                                         items.mutate(|items| {
                                             log::debug!("remove key {}", item.0);
                                             items.remove(&item.0);

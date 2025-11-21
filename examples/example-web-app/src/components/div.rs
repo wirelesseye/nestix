@@ -36,7 +36,7 @@ pub fn Div(props: &DivProps) -> Element {
     }
 
     on_destroy(closure!(
-        [html_element] || {
+        html_element => || {
             html_element.remove();
         }
     ));

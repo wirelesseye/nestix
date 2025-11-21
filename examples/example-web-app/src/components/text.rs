@@ -15,7 +15,7 @@ pub fn Text(props: &TextProps) {
     let text_node = document.create_text_node(&props.text.get());
 
     effect(closure!(
-        [props.text, text_node] || text_node.set_data(&text.get())
+        props.text, text_node => || text_node.set_data(&text.get())
     ));
 
     provide_handle(text_node.clone());

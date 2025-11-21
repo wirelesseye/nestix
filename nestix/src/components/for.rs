@@ -15,11 +15,7 @@ pub struct ForProps<T, I, K> {
 }
 
 #[component(generics(T, I, K))]
-pub fn For<
-    T: 'static,
-    I: IntoIterator<Item = T> + Clone + 'static,
-    K: Eq + Hash + 'static,
->(
+pub fn For<T: 'static, I: IntoIterator<Item = T> + Clone + 'static, K: Eq + Hash + 'static>(
     props: &ForProps<T, I, K>,
 ) {
     let model = current_model().unwrap();
@@ -30,7 +26,7 @@ pub fn For<
     let contexts = element.contexts();
 
     effect(closure!(
-        [model, props.data, props.key, props.constructor, children] || {
+        model, props.data, props.key, props.constructor, children => || {
             let mut prev_keys = prev_keys.borrow_mut();
             let key_fn = key.get();
             let next_data = data.get().into_iter().collect::<Vec<_>>();
@@ -88,7 +84,7 @@ pub fn For<
     ));
 
     on_destroy(closure!(
-        [children] || {
+        children => || {
             let children = children.borrow();
             for child in &*children {
                 child.destroy();

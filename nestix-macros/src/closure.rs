@@ -1,9 +1,7 @@
 use proc_macro::TokenStream;
 use proc_macro2::TokenStream as TokenStream2;
 use quote::{ToTokens, quote};
-use syn::{
-    Expr, ExprClosure, Ident, Token, bracketed, parse::Parse, parse_macro_input, token::Bracket,
-};
+use syn::{Expr, ExprClosure, Ident, Token, parse::Parse, parse_macro_input};
 
 pub fn closure(input: TokenStream) -> TokenStream {
     let closure_input = parse_macro_input!(input as ClosureInput);
@@ -41,19 +39,21 @@ impl Parse for ClosureInput {
     fn parse(input: syn::parse::ParseStream) -> syn::Result<Self> {
         let mut clone_vars = Vec::new();
 
-        if input.peek(Bracket) {
-            let inner;
-            bracketed!(inner in input);
-            while !inner.is_empty() {
-                let clone_var: CloneVar = inner.parse()?;
+        if !input.peek(Token![|]) {
+            while !input.peek(Token![=>]) {
+                let clone_var: CloneVar = input.parse()?;
                 clone_vars.push(clone_var);
 
-                if inner.peek(Token![,]) {
-                    inner.parse::<Token![,]>()?;
+                if input.peek(Token![,]) {
+                    input.parse::<Token![,]>()?;
                 } else {
                     break;
                 }
             }
+        }
+
+        if input.peek(Token![=>]) {
+            input.parse::<Token![=>]>()?;
         }
 
         let closure_tokens: TokenStream2 = input.parse()?;

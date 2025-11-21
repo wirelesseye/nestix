@@ -58,14 +58,12 @@ pub fn computed<T: 'static>(compute: impl Fn() -> T + 'static) -> Computed<T> {
     let compute = Rc::new(compute);
     let effects = Rc::new(RefCell::new(HashSet::<Shared<dyn Fn()>>::new()));
 
-    let updater = callback!(
-        [effects] || {
-            let effects = effects.borrow().clone();
-            for effect in effects {
-                effect();
-            }
+    let updater = callback!(effects => || {
+        let effects = effects.borrow().clone();
+        for effect in effects {
+            effect();
         }
-    );
+    });
 
     Computed {
         compute,

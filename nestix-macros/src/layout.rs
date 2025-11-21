@@ -194,7 +194,7 @@ fn generate_layout(input: &LayoutInput) -> Result<TokenStream2, syn::Error> {
         let mut tokens = TokenStream2::new();
         if let Some(props_tokens) = props_tokens {
             props_tokens.to_tokens(&mut tokens);
-            
+
             let last = props_tokens.clone().into_iter().last();
             let last_is_comma = match &last {
                 Some(TokenTree::Punct(punct)) if punct.as_char() == ',' => true,
@@ -330,7 +330,7 @@ fn generate_layout_children(input: &LayoutChildren) -> Result<TokenStream2, syn:
             .children = {
                 #element_output
                 #crate_path::computed(#crate_path::closure!(
-                    [#clone_vars_tokens] move || {
+                    #clone_vars_tokens => move || {
                         let mut __children = Vec::new();
                         #push_element_outout
                         Some(__children)
