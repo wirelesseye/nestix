@@ -1,4 +1,4 @@
-use nestix::{closure, component, derive_props, effect, provide_handle, use_context};
+use nestix::{component, derive_props, effect, provide_handle, use_context};
 
 use crate::ParentContext;
 

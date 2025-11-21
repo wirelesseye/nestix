@@ -94,33 +94,15 @@ impl Parse for LayoutChildren {
         }
 
         let mut items = Vec::new();
-        let mut require_comma = false;
         loop {
-            if require_comma {
-                input.parse::<Token![,]>()?;
-            } else if input.peek(Token![,]) {
-                input.parse::<Token![,]>()?;
-            }
             if input.is_empty() {
                 break;
             }
             let child: LayoutChild = input.parse()?;
-            match &child.value {
-                LayoutChildValue::LayoutInput(layout_input) => {
-                    if layout_input.children.is_some() {
-                        require_comma = false;
-                    } else {
-                        require_comma = true;
-                    }
-                }
-                LayoutChildValue::Expr(_) | LayoutChildValue::OptionExpr(_) => {
-                    require_comma = true;
-                }
-            }
             items.push(child);
 
-            if input.is_empty() {
-                break;
+            if input.peek(Token![,]) {
+                input.parse::<Token![,]>()?;
             }
         }
 

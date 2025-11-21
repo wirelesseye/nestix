@@ -11,7 +11,7 @@ use crate::ParentContext;
 pub struct InputProps {}
 
 #[component]
-pub fn Input(props: &InputProps) {
+pub fn Input(_props: &InputProps) {
     let parent = use_context::<ParentContext>().unwrap_throw();
     let pred = use_predecessor();
 
