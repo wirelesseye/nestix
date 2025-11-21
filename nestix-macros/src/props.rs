@@ -1,9 +1,8 @@
 use proc_macro::TokenStream;
-use proc_macro2::TokenStream as TokenStream2;
+use proc_macro2::{TokenStream as TokenStream2, TokenTree};
 use quote::{ToTokens, quote};
 use syn::{
-    Expr, Ident, Token, Type, parenthesized, parse::Parse, parse_macro_input,
-    punctuated::Punctuated,
+    Ident, Token, Type, parenthesized, parse::Parse, parse_macro_input, punctuated::Punctuated,
 };
 
 use crate::util::{FoundCrateExt, crate_name};
@@ -18,7 +17,7 @@ pub fn props(input: TokenStream) -> TokenStream {
 struct PropField {
     dot: Token![.],
     ident: Option<Ident>,
-    expr: Option<Expr>,
+    expr_tokens: Option<TokenStream2>,
 }
 
 impl Parse for PropField {
@@ -28,7 +27,7 @@ impl Parse for PropField {
             return Ok(Self {
                 dot,
                 ident: None,
-                expr: None,
+                expr_tokens: None,
             });
         }
 
@@ -38,15 +37,34 @@ impl Parse for PropField {
             return Ok(Self {
                 dot,
                 ident: Some(ident),
-                expr: None,
+                expr_tokens: None,
             });
         }
         input.parse::<Token![=]>()?;
-        let expr: Expr = input.parse()?;
+
+        let expr_tokens = input.step(|cursor| {
+            let mut rest = *cursor;
+            let mut tokens = TokenStream2::new();
+
+            while let Some((tt, next)) = rest.token_tree() {
+                match &tt {
+                    TokenTree::Punct(p) if p.as_char() == ',' => {
+                        return Ok((tokens, rest));
+                    }
+                    _ => {
+                        tokens.extend(std::iter::once(tt));
+                        rest = next;
+                    }
+                }
+            }
+
+            Ok((tokens, rest))
+        })?;
+
         Ok(Self {
             dot,
             ident: Some(ident),
-            expr: Some(expr),
+            expr_tokens: Some(expr_tokens),
         })
     }
 }
@@ -54,10 +72,14 @@ impl Parse for PropField {
 fn generate_prop_field(input: &PropField) -> Result<TokenStream2, syn::Error> {
     let crate_path = crate_name().to_path();
 
-    let PropField { dot, ident, expr } = input;
-    let prop_value = expr.as_ref().map(|expr| {
+    let PropField {
+        dot,
+        ident,
+        expr_tokens,
+    } = input;
+    let prop_value = expr_tokens.as_ref().map(|tokens| {
         quote! {
-            #crate_path::prop_value!(#expr)
+            #crate_path::prop_value!(#tokens)
         }
     });
 
