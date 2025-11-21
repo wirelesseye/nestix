@@ -11,7 +11,7 @@ use crate::{
 pub struct ForProps<T, I, K> {
     data: I,
     key: Shared<dyn Fn(&T) -> K>,
-    constructor: Shared<dyn Fn(&T, usize) -> Element>,
+    constructor: Shared<dyn Fn(&T) -> Element>,
 }
 
 #[component(generics(T, I, K))]
@@ -50,7 +50,7 @@ pub fn For<T: 'static, I: IntoIterator<Item = T> + Clone + 'static, K: Eq + Hash
                 let child = if let Some(orig_i) = orig_i {
                     children[*orig_i].clone()
                 } else {
-                    (constructor.get())(&next_data[i], i)
+                    (constructor.get())(&next_data[i])
                 };
 
                 let pred = if i > 0 {

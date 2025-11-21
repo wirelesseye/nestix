@@ -145,7 +145,7 @@ fn TodoList() -> Element {
                 For<(String, String), HashMap<String, String>, String>(
                     .data = items.clone(),
                     .key = callback!(|item: &(String, String)| item.0.clone()),
-                    .constructor = callback!(items => |item: &(String, String), _: usize| {
+                    .constructor = callback!(items => |item: &(String, String)| {
                         layout! {
                             Div {
                                 Button(
