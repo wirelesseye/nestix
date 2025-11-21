@@ -5,6 +5,7 @@ use crate::ParentContext;
 #[derive_props(debug)]
 #[derive(Debug)]
 pub struct TextProps {
+    #[props(start)]
     text: String,
 }
 

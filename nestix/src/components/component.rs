@@ -2,7 +2,8 @@ use std::{any::TypeId, hash::Hash, rc::Rc};
 
 use crate::{Element, model::Model, prop::Props};
 
-pub mod __component_private {
+#[doc(hidden)]
+pub mod __component_internal {
     use std::rc::Rc;
 
     use crate::{Element, Model, on_destroy};

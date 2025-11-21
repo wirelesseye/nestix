@@ -63,6 +63,7 @@ impl Parse for PropsAttr {
 struct FieldAttr {
     default: bool,
     default_value: Option<Expr>,
+    start: bool,
 }
 
 impl Default for FieldAttr {
@@ -70,6 +71,7 @@ impl Default for FieldAttr {
         Self {
             default: false,
             default_value: None,
+            start: false,
         }
     }
 }
@@ -78,6 +80,7 @@ impl FieldAttr {
     fn merge(mut self, other: FieldAttr) -> Self {
         self.default = self.default || other.default;
         self.default_value = other.default_value;
+        self.start = self.start || other.start;
         self
     }
 }
@@ -101,6 +104,9 @@ impl Parse for FieldAttr {
                         let expr = Expr::parse_without_eager_brace(&input)?;
                         attr.default_value = Some(expr);
                     }
+                }
+                "start" => {
+                    attr.start = true;
                 }
                 _ => {
                     return Err(syn::Error::new(
@@ -231,8 +237,13 @@ fn generate_props(attr: PropsAttr, mut item: ItemStruct) -> Result<TokenStream2,
     for (i, field) in builder_fields.iter_mut().enumerate() {
         let ty = &field.ty;
         let default = default_map[i];
+        let start = if let Some(attr) = &all_field_attrs[i] {
+            attr.start
+        } else {
+            false
+        };
 
-        if !default {
+        if !start && !default {
             let path = parse_quote!(Option<#ty>);
             field.ty = Type::Path(TypePath {
                 qself: None,
@@ -251,6 +262,8 @@ fn generate_props(attr: PropsAttr, mut item: ItemStruct) -> Result<TokenStream2,
             #generic_params,
         }
     };
+    let mut start_params = TokenStream2::new();
+    let mut start_args = TokenStream2::new();
     let mut builder_default_fields = TokenStream2::new();
     let mut builder_build_fields = TokenStream2::new();
     let mut builder_build_type_bounds = TokenStream2::new();
@@ -260,6 +273,11 @@ fn generate_props(attr: PropsAttr, mut item: ItemStruct) -> Result<TokenStream2,
         let ident = field.ident.as_ref().unwrap();
         let ty = &field.ty;
         let default = default_map[i];
+        let start = if let Some(attr) = &all_field_attrs[i] {
+            attr.start
+        } else {
+            false
+        };
 
         let ident_pascal = ident.to_string().to_case(Case::Pascal);
 
@@ -283,14 +301,37 @@ fn generate_props(attr: PropsAttr, mut item: ItemStruct) -> Result<TokenStream2,
 
         let type_param_ident = Ident::new(&format!("{}State", ident_pascal), ident.span());
         quote! {#type_param_ident,}.to_tokens(&mut type_params);
-        if default {
+
+        if start {
+            quote! {#type_param_ident=Set,}.to_tokens(&mut default_type_params);
+        } else if default {
             quote! {#type_param_ident=Defaulted,}.to_tokens(&mut default_type_params);
         } else {
             quote! {#type_param_ident=Unset,}.to_tokens(&mut default_type_params);
         }
         quote! {#type_param_ident: #is_set_ident,}.to_tokens(&mut builder_build_type_bounds);
 
-        if default {
+        if start {
+            quote! {
+                #ident,
+            }
+            .to_tokens(&mut builder_default_fields);
+
+            quote! {
+                #ident: self.#ident,
+            }
+            .to_tokens(&mut builder_build_fields);
+
+            quote! {
+                #ident: #ty,
+            }
+            .to_tokens(&mut start_params);
+
+            quote! {
+                #ident,
+            }
+            .to_tokens(&mut start_args);
+        } else if default {
             let field_attr = &all_field_attrs[i];
             let default_value = if let Some(field_attr) = field_attr {
                 if let Some(default_value) = &field_attr.default_value {
@@ -323,77 +364,79 @@ fn generate_props(attr: PropsAttr, mut item: ItemStruct) -> Result<TokenStream2,
             .to_tokens(&mut builder_build_fields);
         }
 
-        let mut method_type_params = if impl_generic_params.is_empty() {
-            TokenStream2::new()
-        } else {
-            quote! {
-                #impl_generic_params,
-            }
-        };
-        let mut method_type_args = if generic_params.is_empty() {
-            TokenStream2::new()
-        } else {
-            quote! {
-                #generic_params,
-            }
-        };
-        let mut method_result_type_args = if generic_params.is_empty() {
-            TokenStream2::new()
-        } else {
-            quote! {
-                #generic_params,
-            }
-        };
-        let mut method_fields = TokenStream2::new();
-        for j in 0..builder_fields.len() {
-            let field_ident = builder_fields
-                .iter()
-                .nth(j)
-                .unwrap()
-                .ident
-                .as_ref()
-                .unwrap();
-            let field_ident_pascal = field_ident.to_string().to_case(Case::Pascal);
-
-            if i == j {
-                quote! {_S: #can_set_ident,}.to_tokens(&mut method_type_params);
-                quote! {_S,}.to_tokens(&mut method_type_args);
-                quote! {Set,}.to_tokens(&mut method_result_type_args);
-                if default {
-                    quote! {
-                        #field_ident: value,
-                    }
-                    .to_tokens(&mut method_fields);
-                } else {
-                    quote! {
-                        #field_ident: Some(value),
-                    }
-                    .to_tokens(&mut method_fields);
-                }
+        if !start {
+            let mut method_type_params = if impl_generic_params.is_empty() {
+                TokenStream2::new()
             } else {
-                let type_param_ident =
-                    Ident::new(&format!("{}State", field_ident_pascal), field_ident.span());
-                quote! {#type_param_ident,}.to_tokens(&mut method_type_params);
-                quote! {#type_param_ident,}.to_tokens(&mut method_type_args);
-                quote! {#type_param_ident,}.to_tokens(&mut method_result_type_args);
                 quote! {
-                    #field_ident: self.#field_ident,
+                    #impl_generic_params,
                 }
-                .to_tokens(&mut method_fields);
-            }
-        }
+            };
+            let mut method_type_args = if generic_params.is_empty() {
+                TokenStream2::new()
+            } else {
+                quote! {
+                    #generic_params,
+                }
+            };
+            let mut method_result_type_args = if generic_params.is_empty() {
+                TokenStream2::new()
+            } else {
+                quote! {
+                    #generic_params,
+                }
+            };
+            let mut method_fields = TokenStream2::new();
+            for j in 0..builder_fields.len() {
+                let field_ident = builder_fields
+                    .iter()
+                    .nth(j)
+                    .unwrap()
+                    .ident
+                    .as_ref()
+                    .unwrap();
+                let field_ident_pascal = field_ident.to_string().to_case(Case::Pascal);
 
-        quote! {
-            impl<#method_type_params> #builder_ident<#method_type_args> {
-                pub fn #ident(self, value: #ty) -> #builder_ident<#method_result_type_args> {
-                    #builder_ident {
-                        #method_fields
-                        _phantom: std::marker::PhantomData,
+                if i == j {
+                    quote! {_S: #can_set_ident,}.to_tokens(&mut method_type_params);
+                    quote! {_S,}.to_tokens(&mut method_type_args);
+                    quote! {Set,}.to_tokens(&mut method_result_type_args);
+                    if default {
+                        quote! {
+                            #field_ident: value,
+                        }
+                        .to_tokens(&mut method_fields);
+                    } else {
+                        quote! {
+                            #field_ident: Some(value),
+                        }
+                        .to_tokens(&mut method_fields);
+                    }
+                } else {
+                    let type_param_ident =
+                        Ident::new(&format!("{}State", field_ident_pascal), field_ident.span());
+                    quote! {#type_param_ident,}.to_tokens(&mut method_type_params);
+                    quote! {#type_param_ident,}.to_tokens(&mut method_type_args);
+                    quote! {#type_param_ident,}.to_tokens(&mut method_result_type_args);
+                    quote! {
+                        #field_ident: self.#field_ident,
+                    }
+                    .to_tokens(&mut method_fields);
+                }
+            }
+
+            quote! {
+                impl<#method_type_params> #builder_ident<#method_type_args> {
+                    pub fn #ident(self, value: #ty) -> #builder_ident<#method_result_type_args> {
+                        #builder_ident {
+                            #method_fields
+                            _phantom: std::marker::PhantomData,
+                        }
                     }
                 }
             }
+            .to_tokens(&mut builder_field_methods);
         }
-        .to_tokens(&mut builder_field_methods);
     }
 
     match &mut builder_fields {
@@ -435,8 +478,8 @@ fn generate_props(attr: PropsAttr, mut item: ItemStruct) -> Result<TokenStream2,
 
             pub struct #builder_ident<#default_type_params> #builder_fields
 
-            impl<#impl_generic_params> std::default::Default for #builder_ident <#generic_params> {
-                fn default() -> Self {
+            impl<#impl_generic_params> #builder_ident <#generic_params> {
+                pub fn new(#start_params) -> Self {
                     Self {
                         #builder_default_fields
                         _phantom: std::marker::PhantomData,
@@ -461,8 +504,8 @@ fn generate_props(attr: PropsAttr, mut item: ItemStruct) -> Result<TokenStream2,
         #vis use #builder_mod_name::#builder_ident;
 
         impl<#impl_generic_params> #ident <#generic_params> {
-            pub fn builder() -> #builder_ident <#generic_params> {
-                #builder_ident::default()
+            pub fn builder(#start_params) -> #builder_ident <#generic_params> {
+                #builder_ident::new(#start_args)
             }
         }
 

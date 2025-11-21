@@ -46,7 +46,7 @@ fn App() -> Element {
                     }),
                     .disabled = computed!(page => || page.get() == AppPage::Counter),
                 ) {
-                    Text(.text = "Counter")
+                    Text("Counter")
                 }
                 Button(
                     .on_click = callback!(page => || {
@@ -54,7 +54,7 @@ fn App() -> Element {
                     }),
                     .disabled = computed!(page => || page.get() == AppPage::TodoList),
                 ) {
-                    Text(.text = "Todo List")
+                    Text("Todo List")
                 }
             }
             Div {
@@ -77,7 +77,7 @@ fn Counter() -> Element {
     layout! {
         Div {
             Div {
-                Text(.text = computed!(
+                Text(computed!(
                     count => || format!("Count: {}", count.get())
                 ))
             }
@@ -89,14 +89,14 @@ fn Counter() -> Element {
                     }
                 ),
             ) {
-                Text(.text = "Click")
+                Text("Click")
             }
 
             yield $option(
                 if count.get() % 2 == 0 {
                     Some(layout! {
                         Div {
-                            Text(.text = "Is even!")
+                            Text("Is even!")
                         }
                     })
                 } else {
@@ -138,7 +138,7 @@ fn TodoList() -> Element {
             Div {
                 input@Input(),
                 Button(.on_click = add) {
-                    Text(.text = "Add")
+                    Text("Add")
                 }
             }
             Div {
@@ -156,9 +156,9 @@ fn TodoList() -> Element {
                                         });
                                     })
                                 ) {
-                                    Text(.text = "X")
+                                    Text("X")
                                 }
-                                Text(.text = format!("{}", item.1)),
+                                Text(format!("{}", item.1)),
                             }
                         }
                     })

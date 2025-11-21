@@ -2,7 +2,8 @@ use proc_macro::TokenStream;
 use proc_macro2::{TokenStream as TokenStream2, TokenTree};
 use quote::{ToTokens, quote};
 use syn::{
-    Ident, Token, Type, parenthesized, parse::Parse, parse_macro_input, punctuated::Punctuated,
+    Expr, Ident, Token, Type, parenthesized, parse::Parse, parse_macro_input,
+    punctuated::Punctuated,
 };
 
 use crate::util::{FoundCrateExt, crate_name};
@@ -14,13 +15,13 @@ pub fn props(input: TokenStream) -> TokenStream {
         .into()
 }
 
-struct PropField {
+struct NamedField {
     dot: Token![.],
     ident: Option<Ident>,
     expr_tokens: Option<TokenStream2>,
 }
 
-impl Parse for PropField {
+impl Parse for NamedField {
     fn parse(input: syn::parse::ParseStream) -> syn::Result<Self> {
         let dot: Token![.] = input.parse()?;
         if !input.peek(Ident) {
@@ -69,10 +70,10 @@ impl Parse for PropField {
     }
 }
 
-fn generate_prop_field(input: &PropField) -> Result<TokenStream2, syn::Error> {
+fn generate_named_field(input: &NamedField) -> Result<TokenStream2, syn::Error> {
     let crate_path = crate_name().to_path();
 
-    let PropField {
+    let NamedField {
         dot,
         ident,
         expr_tokens,
@@ -88,9 +89,31 @@ fn generate_prop_field(input: &PropField) -> Result<TokenStream2, syn::Error> {
     })
 }
 
+fn parse_start_arg(input: syn::parse::ParseStream) -> syn::Result<TokenStream2> {
+    input.step(|cursor| {
+        let mut rest = *cursor;
+        let mut tokens = TokenStream2::new();
+
+        while let Some((tt, next)) = rest.token_tree() {
+            match &tt {
+                TokenTree::Punct(p) if p.as_char() == ',' => {
+                    return Ok((tokens, rest));
+                }
+                _ => {
+                    tokens.extend(std::iter::once(tt));
+                    rest = next;
+                }
+            }
+        }
+
+        Ok((tokens, rest))
+    })
+}
+
 struct PropsInput {
     ty: Type,
-    named: Punctuated<PropField, Token![,]>,
+    start: Punctuated<TokenStream2, Token![,]>,
+    named: Punctuated<NamedField, Token![,]>,
 }
 
 impl Parse for PropsInput {
@@ -98,23 +121,40 @@ impl Parse for PropsInput {
         let ty: Type = input.parse()?;
         let inner;
         parenthesized!(inner in input);
-        let named: Punctuated<PropField, Token![,]> = Punctuated::parse_terminated(&inner)?;
 
-        Ok(Self { ty, named })
+        let start = if !inner.peek(Token![.]) {
+            Punctuated::parse_terminated_with(&inner, parse_start_arg)?
+        } else {
+            Punctuated::new()
+        };
+
+        let named: Punctuated<NamedField, Token![,]> = Punctuated::parse_terminated(&inner)?;
+
+        Ok(Self { ty, start, named })
     }
 }
 
 fn generate_props(input: &PropsInput) -> Result<TokenStream2, syn::Error> {
-    let PropsInput { ty, named } = input;
+    let crate_path = crate_name().to_path();
 
-    let mut fields_output = TokenStream2::new();
+    let PropsInput { ty, start, named } = input;
+
+    let mut start_output = TokenStream2::new();
+    for field in start {
+        quote! {
+            #crate_path::prop_value!(#field)
+        }
+        .to_tokens(&mut start_output);
+    }
+
+    let mut named_output = TokenStream2::new();
     for field in named {
-        generate_prop_field(field)?.to_tokens(&mut fields_output);
+        generate_named_field(field)?.to_tokens(&mut named_output);
     }
 
     Ok(quote! {
-        #ty::builder()
-            #fields_output
+        #ty::builder(#start_output)
+            #named_output
             .build()
     })
 }
