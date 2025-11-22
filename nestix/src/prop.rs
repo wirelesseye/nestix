@@ -72,6 +72,13 @@ impl<T: Clone> PropValue<T> {
             PropValueInner::Signal(signal) => signal.get(),
         }
     }
+
+    pub fn get_untrack(&self) -> T {
+        match &self.inner {
+            PropValueInner::Plain(value) => (**value).clone(),
+            PropValueInner::Signal(signal) => signal.get_untrack(),
+        }
+    }
 }
 
 impl<T> Clone for PropValue<T> {
