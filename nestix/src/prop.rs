@@ -146,6 +146,7 @@ impl<T> PropValueTag<T> {
 }
 
 impl<T> PropValue<T> {
+    #[doc(hidden)]
     #[inline]
     pub fn prop_value_tag(&self) -> PropValueTag<T> {
         PropValueTag(PhantomData)
