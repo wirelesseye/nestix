@@ -1,3 +1,5 @@
+use std::ops::Deref;
+
 use proc_macro::TokenStream;
 use proc_macro2::{TokenStream as TokenStream2, TokenTree};
 use quote::{ToTokens, format_ident, quote};
@@ -113,10 +115,85 @@ impl Parse for LayoutChildren {
     }
 }
 
+struct IfValue {
+    cond: Expr,
+    items: Vec<LayoutChild>,
+    else_value: Option<Box<ElseValue>>,
+}
+
+enum ElseValue {
+    Else(Vec<LayoutChild>),
+    ElseIf(IfValue),
+}
+
+impl Parse for IfValue {
+    fn parse(input: syn::parse::ParseStream) -> syn::Result<Self> {
+        input.parse::<Token![if]>()?;
+        let cond: Expr = Expr::parse_without_eager_brace(input)?;
+
+        let inner;
+        braced!(inner in input);
+
+        let mut items = Vec::new();
+        loop {
+            if inner.is_empty() {
+                break;
+            }
+            let child: LayoutChild = inner.parse()?;
+            items.push(child);
+
+            if input.peek(Token![,]) {
+                input.parse::<Token![,]>()?;
+            }
+        }
+
+        let else_value = if input.peek(Token![else]) {
+            Some(Box::new(input.parse()?))
+        } else {
+            None
+        };
+
+        Ok(Self {
+            cond,
+            items,
+            else_value,
+        })
+    }
+}
+
+impl Parse for ElseValue {
+    fn parse(input: syn::parse::ParseStream) -> syn::Result<Self> {
+        input.parse::<Token![else]>()?;
+        if input.peek(Token![if]) {
+            let if_value: IfValue = input.parse()?;
+            Ok(Self::ElseIf(if_value))
+        } else {
+            let inner;
+            braced!(inner in input);
+
+            let mut items = Vec::new();
+            loop {
+                if inner.is_empty() {
+                    break;
+                }
+                let child: LayoutChild = inner.parse()?;
+                items.push(child);
+
+                if input.peek(Token![,]) {
+                    input.parse::<Token![,]>()?;
+                }
+            }
+
+            Ok(Self::Else(items))
+        }
+    }
+}
+
 enum LayoutChildValue {
     LayoutInput(LayoutInput),
     Expr(Expr),
     OptionExpr(Expr),
+    If(IfValue),
 }
 
 struct LayoutChild {
@@ -126,7 +203,7 @@ struct LayoutChild {
 
 impl Parse for LayoutChild {
     fn parse(input: syn::parse::ParseStream) -> syn::Result<Self> {
-        let is_yield = if input.peek(Token![yield]) {
+        let mut is_yield = if input.peek(Token![yield]) {
             input.parse::<Token![yield]>()?;
             true
         } else {
@@ -159,6 +236,10 @@ impl Parse for LayoutChild {
             } else {
                 LayoutChildValue::Expr(expr)
             }
+        } else if input.peek(Token![if]) {
+            let if_value: IfValue = input.parse()?;
+            is_yield = true;
+            LayoutChildValue::If(if_value)
         } else {
             let layout_input: LayoutInput = input.parse()?;
             LayoutChildValue::LayoutInput(layout_input)
@@ -220,6 +301,186 @@ fn generate_layout(input: &LayoutInput) -> Result<TokenStream2, syn::Error> {
     }})
 }
 
+fn generate_layout_child(
+    input: &LayoutChild,
+    computed: bool,
+    element_ident: &Ident,
+    push_element_outout: &mut TokenStream2,
+    element_output: &mut TokenStream2,
+) -> Result<(), syn::Error> {
+    let LayoutChild { is_yield, value } = input;
+
+    match value {
+        LayoutChildValue::LayoutInput(layout_input) => {
+            let child_output = generate_layout(layout_input)?;
+
+            if *is_yield {
+                quote! {
+                    __children.push(#child_output);
+                }
+                .to_tokens(push_element_outout);
+            } else {
+                quote! {
+                    let #element_ident = #child_output;
+                }
+                .to_tokens(element_output);
+
+                if computed {
+                    quote! {
+                        __children.push(#element_ident.clone());
+                    }
+                    .to_tokens(push_element_outout);
+                } else {
+                    quote! {
+                        __children.push(#element_ident);
+                    }
+                    .to_tokens(push_element_outout);
+                }
+            }
+        }
+        LayoutChildValue::Expr(expr) => {
+            if *is_yield {
+                quote! {
+                    __children.push(#expr);
+                }
+                .to_tokens(push_element_outout);
+            } else {
+                quote! {
+                    let #element_ident = #expr;
+                }
+                .to_tokens(element_output);
+
+                if computed {
+                    quote! {
+                        __children.push(#element_ident.clone());
+                    }
+                    .to_tokens(push_element_outout);
+                } else {
+                    quote! {
+                        __children.push(#element_ident);
+                    }
+                    .to_tokens(push_element_outout);
+                }
+            }
+        }
+        LayoutChildValue::OptionExpr(expr) => {
+            if *is_yield {
+                quote! {
+                    if let Some(e) = {#expr} {
+                        __children.push(e);
+                    }
+                }
+                .to_tokens(push_element_outout);
+            } else {
+                quote! {
+                    let #element_ident = #expr;
+                }
+                .to_tokens(element_output);
+
+                if computed {
+                    quote! {
+                        if let Some(e) = &#element_ident {
+                            __children.push(e.clone());
+                        }
+                    }
+                    .to_tokens(push_element_outout);
+                } else {
+                    quote! {
+                        if let Some(e) = &#element_ident {
+                            __children.push(e);
+                        }
+                    }
+                    .to_tokens(push_element_outout);
+                }
+            }
+        }
+        LayoutChildValue::If(if_value) => generate_if_value(
+            if_value,
+            computed,
+            element_ident,
+            push_element_outout,
+            element_output,
+        )?,
+    }
+
+    Ok(())
+}
+
+fn generate_if_value(
+    if_value: &IfValue,
+    computed: bool,
+    element_ident: &Ident,
+    push_element_outout: &mut TokenStream2,
+    element_output: &mut TokenStream2,
+) -> Result<(), syn::Error> {
+    let IfValue {
+        cond,
+        items,
+        else_value,
+    } = if_value;
+
+    let mut children_push_element_outout = TokenStream2::new();
+    for (i, item) in items.iter().enumerate() {
+        let child_ident = format_ident!("{}_if_{}", element_ident, i);
+        generate_layout_child(
+            item,
+            computed,
+            &child_ident,
+            &mut children_push_element_outout,
+            element_output,
+        )?;
+    }
+
+    let else_value_output = if let Some(else_value) = else_value {
+        match else_value.deref() {
+            ElseValue::Else(layout_childs) => {
+                let mut else_push_element_output = TokenStream2::new();
+                for (i, item) in layout_childs.iter().enumerate() {
+                    let child_ident = format_ident!("{}_else_{}", element_ident, i);
+                    generate_layout_child(
+                        item,
+                        computed,
+                        &child_ident,
+                        &mut else_push_element_output,
+                        element_output,
+                    )?;
+                }
+                quote! {
+                    else {
+                        #else_push_element_output
+                    }
+                }
+            }
+            ElseValue::ElseIf(if_value) => {
+                let mut else_if_push_element_output = TokenStream2::new();
+                let child_ident = format_ident!("{}_else", element_ident);
+                generate_if_value(
+                    if_value,
+                    computed,
+                    &child_ident,
+                    &mut else_if_push_element_output,
+                    element_output,
+                )?;
+                quote! {
+                    else #else_if_push_element_output
+                }
+            }
+        }
+    } else {
+        quote! {}
+    };
+
+    quote! {
+        if #cond {
+            #children_push_element_outout
+        }
+        #else_value_output
+    }
+    .to_tokens(push_element_outout);
+
+    Ok(())
+}
+
 fn generate_layout_children(input: &LayoutChildren) -> Result<TokenStream2, syn::Error> {
     let crate_path = crate_name().to_path();
 
@@ -231,93 +492,13 @@ fn generate_layout_children(input: &LayoutChildren) -> Result<TokenStream2, syn:
 
     for (i, child) in input.items.iter().enumerate() {
         let element_ident = format_ident!("__element_{}", i);
-        let LayoutChild { is_yield, value } = child;
-
-        match value {
-            LayoutChildValue::LayoutInput(layout_input) => {
-                let child_output = generate_layout(layout_input)?;
-
-                if *is_yield {
-                    quote! {
-                        __children.push(#child_output);
-                    }
-                    .to_tokens(&mut push_element_outout);
-                } else {
-                    quote! {
-                        let #element_ident = #child_output;
-                    }
-                    .to_tokens(&mut element_output);
-
-                    if computed {
-                        quote! {
-                            __children.push(#element_ident.clone());
-                        }
-                        .to_tokens(&mut push_element_outout);
-                    } else {
-                        quote! {
-                            __children.push(#element_ident);
-                        }
-                        .to_tokens(&mut push_element_outout);
-                    }
-                }
-            }
-            LayoutChildValue::Expr(expr) => {
-                if *is_yield {
-                    quote! {
-                        __children.push(#expr);
-                    }
-                    .to_tokens(&mut push_element_outout);
-                } else {
-                    quote! {
-                        let #element_ident = #expr;
-                    }
-                    .to_tokens(&mut element_output);
-
-                    if computed {
-                        quote! {
-                            __children.push(#element_ident.clone());
-                        }
-                        .to_tokens(&mut push_element_outout);
-                    } else {
-                        quote! {
-                            __children.push(#element_ident);
-                        }
-                        .to_tokens(&mut push_element_outout);
-                    }
-                }
-            }
-            LayoutChildValue::OptionExpr(expr) => {
-                if *is_yield {
-                    quote! {
-                        if let Some(e) = {#expr} {
-                            __children.push(e);
-                        }
-                    }
-                    .to_tokens(&mut push_element_outout);
-                } else {
-                    quote! {
-                        let #element_ident = #expr;
-                    }
-                    .to_tokens(&mut element_output);
-
-                    if computed {
-                        quote! {
-                            if let Some(e) = &#element_ident {
-                                __children.push(e.clone());
-                            }
-                        }
-                        .to_tokens(&mut push_element_outout);
-                    } else {
-                        quote! {
-                            if let Some(e) = &#element_ident {
-                                __children.push(e);
-                            }
-                        }
-                        .to_tokens(&mut push_element_outout);
-                    }
-                }
-            }
-        }
+        generate_layout_child(
+            child,
+            computed,
+            &element_ident,
+            &mut push_element_outout,
+            &mut element_output,
+        )?;
     }
 
     if computed {

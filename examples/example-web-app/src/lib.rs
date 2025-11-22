@@ -58,13 +58,11 @@ fn App() -> Element {
                 }
             }
             Div {
-                yield $(
-                    if page.get() == AppPage::Counter {
-                        layout! {Counter}
-                    } else {
-                        layout! {TodoList}
-                    }
-                )
+                if page.get() == AppPage::Counter {
+                    Counter
+                } else {
+                    TodoList
+                }
             }
         }
     }
@@ -92,17 +90,11 @@ fn Counter() -> Element {
                 Text("Click")
             }
 
-            yield $option(
-                if count.get() % 2 == 0 {
-                    Some(layout! {
-                        Div {
-                            Text("Is even!")
-                        }
-                    })
-                } else {
-                    None
+            if count.get() % 2 == 0 {
+                Div {
+                    Text("Is even!")
                 }
-            ),
+            }
         }
     }
 }
