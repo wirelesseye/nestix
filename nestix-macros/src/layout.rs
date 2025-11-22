@@ -64,17 +64,12 @@ impl Parse for LayoutInput {
     }
 }
 
-struct LayoutChildren {
-    items: Vec<LayoutChild>,
+struct LayoutChildrenAttribute {
     clone_vars_tokens: Option<TokenStream2>,
 }
 
-impl Parse for LayoutChildren {
-    fn parse(input: syn::parse::ParseStream) -> syn::Result<Self> {
-        let inner;
-        braced!(inner in input);
-        let input = inner;
-
+impl LayoutChildrenAttribute {
+    fn parse_attributes(input: syn::parse::ParseStream) -> syn::Result<Self> {
         let mut clone_vars_tokens = None;
 
         let attrs = Attribute::parse_inner(&input)?;
@@ -95,6 +90,23 @@ impl Parse for LayoutChildren {
             }
         }
 
+        Ok(Self { clone_vars_tokens })
+    }
+}
+
+struct LayoutChildren {
+    attr: LayoutChildrenAttribute,
+    items: Vec<LayoutChild>,
+}
+
+impl Parse for LayoutChildren {
+    fn parse(input: syn::parse::ParseStream) -> syn::Result<Self> {
+        let inner;
+        braced!(inner in input);
+        let input = inner;
+
+        let attr: LayoutChildrenAttribute = LayoutChildrenAttribute::parse_attributes(&input)?;
+
         let mut items = Vec::new();
         loop {
             if input.is_empty() {
@@ -108,10 +120,7 @@ impl Parse for LayoutChildren {
             }
         }
 
-        Ok(Self {
-            items,
-            clone_vars_tokens,
-        })
+        Ok(Self { attr, items })
     }
 }
 
@@ -421,7 +430,7 @@ fn generate_if_value(
 
     let mut children_push_element_outout = TokenStream2::new();
     for (i, item) in items.iter().enumerate() {
-        let child_ident = format_ident!("{}_if_{}", element_ident, i);
+        let child_ident = format_ident!("{}_then_{}", element_ident, i);
         generate_layout_child(
             item,
             computed,
@@ -487,7 +496,7 @@ fn generate_layout_children(input: &LayoutChildren) -> Result<TokenStream2, syn:
     let mut element_output = TokenStream2::new();
     let mut push_element_outout = TokenStream2::new();
 
-    let clone_vars_tokens = &input.clone_vars_tokens;
+    let clone_vars_tokens = &input.attr.clone_vars_tokens;
     let computed = clone_vars_tokens.is_some() || input.items.iter().any(|item| item.is_yield);
 
     for (i, child) in input.items.iter().enumerate() {

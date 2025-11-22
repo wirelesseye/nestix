@@ -133,8 +133,9 @@ fn TodoList() -> Element {
                     Text("Add")
                 }
             }
+
             Div {
-                For<(String, String), HashMap<String, String>, String>(
+                For<_, HashMap<String, String>, String>(
                     .data = items.clone(),
                     .key = callback!(|item: &(String, String)| item.0.clone()),
                     .constructor = callback!(items => |item: &(String, String)| {

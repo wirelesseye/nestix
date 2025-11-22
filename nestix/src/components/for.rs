@@ -15,11 +15,12 @@ pub struct ForProps<T, I, K> {
 }
 
 #[component(generics(T, I, K))]
-pub fn For<T: 'static, I: IntoIterator<Item = T> + Clone + 'static, K: Eq + Hash + 'static>(
+pub fn For<T: Eq + 'static, I: IntoIterator<Item = T> + Clone + 'static, K: Eq + Hash + 'static>(
     props: &ForProps<T, I, K>,
 ) {
     let model = current_model().unwrap();
     let element = model.current_element().unwrap();
+    let prev_data: Rc<RefCell<Vec<T>>> = Rc::new(RefCell::new(vec![]));
     let prev_keys: Rc<RefCell<Vec<K>>> = Rc::new(RefCell::new(vec![]));
     let children: Rc<RefCell<Vec<Element>>> = Rc::new(RefCell::new(vec![]));
     let handle = element.handle();
@@ -27,6 +28,7 @@ pub fn For<T: 'static, I: IntoIterator<Item = T> + Clone + 'static, K: Eq + Hash
 
     effect!(
         model, props.data, props.key, props.constructor, children => || {
+            let mut prev_data = prev_data.borrow_mut();
             let mut prev_keys = prev_keys.borrow_mut();
             let key_fn = key.get();
             let next_data = data.get().into_iter().collect::<Vec<_>>();
@@ -47,8 +49,14 @@ pub fn For<T: 'static, I: IntoIterator<Item = T> + Clone + 'static, K: Eq + Hash
 
             let mut next_children: Vec<Element> = Vec::new();
             for (i, orig_i) in mapping.iter().enumerate() {
+                let mut rerender = false;
                 let child = if let Some(orig_i) = orig_i {
-                    children[*orig_i].clone()
+                    if next_data[i] != prev_data[*orig_i] {
+                        rerender = true;
+                        (constructor.get())(&next_data[i])
+                    } else {
+                        children[*orig_i].clone()
+                    }
                 } else {
                     (constructor.get())(&next_data[i])
                 };
@@ -71,6 +79,8 @@ pub fn For<T: 'static, I: IntoIterator<Item = T> + Clone + 'static, K: Eq + Hash
                     if let Some(child_handle) = child.handle().get_untrack() {
                         handle.set(Some(child_handle));
                     }
+                } else if rerender {
+                    model.render(&child);
                 } else if moved.contains(&i) {
                     child.move_after(pred);
                 }
@@ -79,6 +89,7 @@ pub fn For<T: 'static, I: IntoIterator<Item = T> + Clone + 'static, K: Eq + Hash
             }
 
             *prev_keys = next_keys;
+            *prev_data = next_data;
             *children = next_children;
         }
     );
