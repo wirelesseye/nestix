@@ -2,7 +2,7 @@ use std::{
     any::{Any, TypeId},
     cell::RefCell,
     collections::{HashMap, HashSet},
-    hash::{DefaultHasher, Hash, Hasher},
+    hash::Hash,
     rc::Rc,
 };
 
@@ -46,12 +46,6 @@ impl Element {
         self.data.component_id
     }
 
-    pub fn element_id(&self) -> u64 {
-        let mut hasher = DefaultHasher::new();
-        self.hash(&mut hasher);
-        hasher.finish()
-    }
-
     #[inline]
     pub fn props(&self) -> &dyn Any {
         self.data.props.as_ref()
@@ -75,7 +69,7 @@ impl Element {
         self.data.handle.clone().into_readonly_signal()
     }
 
-    pub(crate) fn set_handle(&self, handle: Option<Shared<dyn Any>>) {
+    pub fn set_handle(&self, handle: Option<Shared<dyn Any>>) {
         self.data.handle.set(handle);
     }
 

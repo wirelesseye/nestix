@@ -66,7 +66,7 @@ impl Model {
         elements.pop();
     }
 
-    pub(crate) fn current_element(&self) -> Option<Element> {
+    pub fn current_element(&self) -> Option<Element> {
         let elements = self.elements.borrow();
         elements.last().cloned()
     }
