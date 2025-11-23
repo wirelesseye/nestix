@@ -108,12 +108,12 @@ pub fn create_element<C: Component>(props: C::Props) -> Element {
 }
 
 pub(crate) struct PredecessorContext {
-    pub handle: Shared<dyn Any>,
+    pub element: Element,
 }
 
-pub fn use_predecessor() -> Option<Shared<dyn Any>> {
+pub fn use_predecessor() -> Option<Element> {
     let ctx = use_context::<PredecessorContext>();
-    ctx.map(|ctx| ctx.handle.clone())
+    ctx.map(|ctx| ctx.element.clone())
 }
 
 pub fn on_destroy(f: impl Fn() + 'static) {

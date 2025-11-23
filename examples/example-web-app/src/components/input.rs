@@ -23,10 +23,12 @@ pub fn Input(_props: &InputProps) {
         .unwrap();
 
     if let Some(pred) = pred {
-        if let Some(pred_html_element) = pred.downcast_ref::<HtmlElement>() {
-            pred_html_element.after_with_node_1(&html_element).unwrap();
-        } else if let Some(text) = pred.downcast_ref::<Text>() {
-            text.after_with_node_1(&html_element).unwrap();
+        if let Some(handle) = pred.handle().get() {
+            if let Some(pred_html_element) = handle.downcast_ref::<HtmlElement>() {
+                pred_html_element.after_with_node_1(&html_element).unwrap();
+            } else if let Some(text) = handle.downcast_ref::<Text>() {
+                text.after_with_node_1(&html_element).unwrap();
+            }
         }
     } else {
         parent.html_element.append_child(&html_element).unwrap();

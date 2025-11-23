@@ -68,9 +68,7 @@ pub fn For<T: Eq + 'static, I: IntoIterator<Item = T> + Clone + 'static, K: Eq +
                 };
 
                 if let Some(pred) = pred {
-                    if let Some(handle) = pred.handle().get_untrack() {
-                        child.provide_context(PredecessorContext { handle });
-                    }
+                    child.provide_context(PredecessorContext { element: pred.clone() });
                 }
 
                 if added.contains(&i) {

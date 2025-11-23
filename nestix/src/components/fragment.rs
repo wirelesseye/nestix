@@ -48,9 +48,7 @@ pub fn Fragment(props: &FragmentProps) {
                         };
                         let child = &next[next_i];
                         if let Some(pred) = pred {
-                            if let Some(handle) = pred.handle().get_untrack() {
-                                child.provide_context(PredecessorContext { handle });
-                            }
+                            child.provide_context(PredecessorContext { element: pred.clone() });
                         }
                         child.extend_contexts(contexts.clone());
                         model.render(child);
@@ -67,9 +65,7 @@ pub fn Fragment(props: &FragmentProps) {
                         };
                         let child = &next[next_i];
                         if let Some(pred) = pred {
-                            if let Some(handle) = pred.handle().get_untrack() {
-                                child.provide_context(PredecessorContext { handle });
-                            }
+                            child.provide_context(PredecessorContext { element: pred.clone() });
                         }
                         child.move_after(pred);
                     }
