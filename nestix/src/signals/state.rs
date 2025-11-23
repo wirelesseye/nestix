@@ -4,7 +4,7 @@ use std::{
     rc::Rc,
 };
 
-use crate::{current_effect, shared::Shared, signals::Signal};
+use crate::{ReadonlySignal, current_effect, shared::Shared, signals::Signal};
 
 #[derive(Debug)]
 pub struct State<T> {
@@ -82,6 +82,12 @@ impl<T> Clone for State<T> {
             value: self.value.clone(),
             effects: self.effects.clone(),
         }
+    }
+}
+
+impl<T: Clone + 'static> State<T> {
+    pub fn into_readonly_signal(self) -> super::ReadonlySignal<T> {
+        ReadonlySignal::new(self)
     }
 }
 

@@ -2,7 +2,7 @@ use std::{cell::RefCell, collections::HashSet, rc::Rc};
 
 use nestix_macros::callback;
 
-use crate::{Signal, current_effect, pop_effect, push_effect, shared::Shared};
+use crate::{ReadonlySignal, Signal, current_effect, pop_effect, push_effect, shared::Shared};
 
 pub struct Computed<T> {
     compute: Rc<dyn Fn() -> T>,
@@ -44,13 +44,19 @@ impl<T> PartialEq for Computed<T> {
     }
 }
 
-impl<T: Clone> Signal<T> for Computed<T> {
+impl<T> Signal<T> for Computed<T> {
     fn get(&self) -> T {
         self.get()
     }
 
     fn get_untrack(&self) -> T {
         self.get_untrack()
+    }
+}
+
+impl<T: 'static> Computed<T> {
+    pub fn into_readonly_signal(self) -> super::ReadonlySignal<T> {
+        ReadonlySignal::new(self)
     }
 }
 

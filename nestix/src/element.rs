@@ -7,8 +7,8 @@ use std::{
 };
 
 use crate::{
-    Component, ComponentID, Shared, State, component_id, create_state, current_model, prop::Props,
-    use_context,
+    Component, ComponentID, ReadonlySignal, Shared, State, component_id, create_state,
+    current_model, prop::Props, use_context,
 };
 
 #[derive(Debug)]
@@ -71,8 +71,12 @@ impl Element {
         }
     }
 
-    pub fn handle(&self) -> State<Option<Shared<dyn Any>>> {
-        self.data.handle.clone()
+    pub fn handle(&self) -> ReadonlySignal<Option<Shared<dyn Any>>> {
+        self.data.handle.clone().into_readonly_signal()
+    }
+
+    pub(crate) fn set_handle(&self, handle: Option<Shared<dyn Any>>) {
+        self.data.handle.set(handle);
     }
 
     pub(crate) fn contexts(&self) -> HashMap<TypeId, Rc<dyn Any>> {

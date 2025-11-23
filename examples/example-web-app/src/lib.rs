@@ -1,6 +1,6 @@
 mod components;
 
-use std::{collections::HashMap, mem};
+use std::collections::HashMap;
 
 use components::*;
 use nanoid_wasm::nanoid;

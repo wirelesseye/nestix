@@ -23,7 +23,6 @@ pub fn For<T: Eq + 'static, I: IntoIterator<Item = T> + Clone + 'static, K: Eq +
     let prev_data: Rc<RefCell<Vec<T>>> = Rc::new(RefCell::new(vec![]));
     let prev_keys: Rc<RefCell<Vec<K>>> = Rc::new(RefCell::new(vec![]));
     let children: Rc<RefCell<Vec<Element>>> = Rc::new(RefCell::new(vec![]));
-    let handle = element.handle();
     let contexts = element.contexts();
 
     effect!(
@@ -75,7 +74,7 @@ pub fn For<T: Eq + 'static, I: IntoIterator<Item = T> + Clone + 'static, K: Eq +
                     child.extend_contexts(contexts.clone());
                     model.render(&child);
                     if let Some(child_handle) = child.handle().get_untrack() {
-                        handle.set(Some(child_handle));
+                        element.set_handle(Some(child_handle));
                     }
                 } else if rerender {
                     model.render(&child);

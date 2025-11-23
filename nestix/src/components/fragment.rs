@@ -18,7 +18,6 @@ pub fn Fragment(props: &FragmentProps) {
     let model = current_model().unwrap();
     let element = model.current_element().unwrap();
     let prev: Rc<RefCell<Option<Vec<Element>>>> = Rc::new(RefCell::new(None));
-    let handle = element.handle();
     let contexts = element.contexts();
 
     effect!(
@@ -53,7 +52,7 @@ pub fn Fragment(props: &FragmentProps) {
                         child.extend_contexts(contexts.clone());
                         model.render(child);
                         if let Some(child_handle) = child.handle().get_untrack() {
-                            handle.set(Some(child_handle));
+                            element.set_handle(Some(child_handle));
                         }
                     }
 
@@ -80,7 +79,7 @@ pub fn Fragment(props: &FragmentProps) {
                         child.extend_contexts(contexts.clone());
                         model.render(&child);
                         if let Some(child_handle) = child.handle().get_untrack() {
-                            handle.set(Some(child_handle));
+                            element.set_handle(Some(child_handle));
                         }
                     }
                 }
