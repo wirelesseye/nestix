@@ -43,6 +43,8 @@ impl Model {
         (element.component_id().render_fn)(&self, element);
         self.exit_scope();
 
+        element.post_update();
+
         if drop_model {
             CURRENT_MODEL.with(|cell| {
                 let mut model = cell.borrow_mut();

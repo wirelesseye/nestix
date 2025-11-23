@@ -18,8 +18,6 @@ fn init() {
     let model = create_model();
     let element = create_element::<App>(());
     model.render(&element);
-
-    mem::forget(model);
 }
 
 #[derive(Clone)]

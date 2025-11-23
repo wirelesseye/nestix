@@ -1,3 +1,7 @@
 [workspace]
 resolver = "3"
-members = [ "examples/example-web-app","nestix", "nestix-macros"]
+members = [
+    "examples/*",
+    "nestix",
+    "nestix-macros",
+]

@@ -15,10 +15,11 @@ use crate::{
 struct ElementData {
     component_id: ComponentID,
     props: Box<dyn Props>,
-    destroy_callbacks: RefCell<HashSet<Shared<dyn Fn()>>>,
-    moved_callbacks: RefCell<HashSet<Shared<dyn Fn(Option<&Element>)>>>,
     handle: State<Option<Shared<dyn Any>>>,
     contexts: RefCell<HashMap<TypeId, Rc<dyn Any>>>,
+    destroy_callbacks: RefCell<HashSet<Shared<dyn Fn()>>>,
+    moved_callbacks: RefCell<HashSet<Shared<dyn Fn(Option<&Element>)>>>,
+    postupdate_callbacks: RefCell<HashSet<Shared<dyn Fn()>>>,
 }
 
 #[derive(Clone, Debug)]
@@ -92,6 +93,13 @@ impl Element {
         let mut contexts = self.data.contexts.borrow_mut();
         contexts.insert(TypeId::of::<T>(), context.into());
     }
+
+    pub(crate) fn post_update(&self) {
+        let postupdate_callbacks = self.data.postupdate_callbacks.take();
+        for callback in postupdate_callbacks {
+            callback();
+        }
+    }
 }
 
 pub fn create_element<C: Component>(props: C::Props) -> Element {
@@ -99,10 +107,11 @@ pub fn create_element<C: Component>(props: C::Props) -> Element {
         data: Rc::new(ElementData {
             component_id: component_id::<C>(),
             props: Box::new(props),
-            destroy_callbacks: RefCell::new(HashSet::new()),
-            moved_callbacks: RefCell::new(HashSet::new()),
             handle: create_state(None),
             contexts: RefCell::new(HashMap::new()),
+            destroy_callbacks: RefCell::new(HashSet::new()),
+            moved_callbacks: RefCell::new(HashSet::new()),
+            postupdate_callbacks: RefCell::new(HashSet::new()),
         }),
     }
 }
@@ -130,6 +139,14 @@ pub fn on_moved(f: impl Fn(Option<&Element>) + 'static) {
     let callback = Shared::from(Rc::new(f) as Rc<dyn for<'a> Fn(Option<&'a Element>)>);
     let mut moved_callbacks = element.data.moved_callbacks.borrow_mut();
     moved_callbacks.insert(callback);
+}
+
+pub fn post_update(f: impl Fn() + 'static) {
+    let model = current_model().unwrap();
+    let element = model.current_element().unwrap();
+    let callback = Shared::from(Rc::new(f) as Rc<dyn Fn()>);
+    let mut postupdate_callbacks = element.data.postupdate_callbacks.borrow_mut();
+    postupdate_callbacks.insert(callback);
 }
 
 pub fn provide_handle<T: Any>(handle: T) {

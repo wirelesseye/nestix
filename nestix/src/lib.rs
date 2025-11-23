@@ -1,3 +1,4 @@
+mod component;
 pub mod components;
 pub mod context;
 pub mod element;
@@ -8,7 +9,7 @@ pub mod signals;
 
 mod utils;
 
-pub use components::component::*;
+pub use component::*;
 pub use context::*;
 pub use element::*;
 pub use model::*;
