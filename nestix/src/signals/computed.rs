@@ -1,50 +1,70 @@
-use std::{cell::RefCell, collections::HashSet, rc::Rc};
+use std::{
+    cell::{Cell, RefCell},
+    collections::HashSet,
+    rc::Rc,
+};
 
 use nestix_macros::callback;
 
-use crate::{ReadonlySignal, Signal, current_effect, pop_effect, push_effect, shared::Shared};
+use crate::{
+    Effect, ReadonlySignal, Signal, current_effect, run_effect, set_current_effect, shared::Shared,
+};
 
-pub struct Computed<T> {
+struct ComputedData<T> {
+    cached: RefCell<Option<T>>,
+    dirty: Rc<Cell<bool>>,
+    dependents: Shared<RefCell<HashSet<Shared<Effect>>>>,
+    runner: Shared<Effect>,
     compute: Rc<dyn Fn() -> T>,
-    updater: Shared<dyn Fn()>,
-    effects: Rc<RefCell<HashSet<Shared<dyn Fn()>>>>,
 }
 
-impl<T> Computed<T> {
+pub struct Computed<T> {
+    data: Rc<ComputedData<T>>,
+}
+
+impl<T: Clone> Computed<T> {
     pub fn get(&self) -> T {
         if let Some(effect) = current_effect() {
-            let mut effects = self.effects.borrow_mut();
-            effects.insert(effect);
+            effect.add_dependency_set(self.data.dependents.clone());
+            self.data.dependents.borrow_mut().insert(effect);
         }
         self.get_untrack()
     }
 
     pub fn get_untrack(&self) -> T {
-        push_effect(self.updater.clone());
-        let value = (self.compute)();
-        pop_effect();
+        if self.data.dirty.get() {
+            // cleanup old deps
+            for dependency_set in self.data.runner.take_dependency_sets() {
+                dependency_set.borrow_mut().remove(&self.data.runner);
+            }
 
-        value
+            let prev = current_effect();
+            set_current_effect(Some(self.data.runner.clone()));
+            self.data.cached.replace(Some((self.data.compute)()));
+            set_current_effect(prev);
+
+            self.data.dirty.set(false);
+        }
+
+        self.data.cached.borrow().clone().unwrap()
     }
 }
 
 impl<T> Clone for Computed<T> {
     fn clone(&self) -> Self {
         Self {
-            compute: self.compute.clone(),
-            updater: self.updater.clone(),
-            effects: self.effects.clone(),
+            data: self.data.clone(),
         }
     }
 }
 
 impl<T> PartialEq for Computed<T> {
     fn eq(&self, other: &Self) -> bool {
-        Rc::ptr_eq(&self.compute, &other.compute) && Rc::ptr_eq(&self.effects, &other.effects)
+        Rc::ptr_eq(&self.data, &other.data)
     }
 }
 
-impl<T> Signal<T> for Computed<T> {
+impl<T: Clone> Signal<T> for Computed<T> {
     fn get(&self) -> T {
         self.get()
     }
@@ -54,7 +74,7 @@ impl<T> Signal<T> for Computed<T> {
     }
 }
 
-impl<T: 'static> Computed<T> {
+impl<T: Clone + 'static> Computed<T> {
     pub fn into_readonly_signal(self) -> super::ReadonlySignal<T> {
         ReadonlySignal::new(self)
     }
@@ -62,19 +82,25 @@ impl<T: 'static> Computed<T> {
 
 pub fn computed<T: 'static>(compute: impl Fn() -> T + 'static) -> Computed<T> {
     let compute = Rc::new(compute);
-    let effects = Rc::new(RefCell::new(HashSet::<Shared<dyn Fn()>>::new()));
+    let dependents = Shared::new(RefCell::new(HashSet::new()));
+    let dirty = Rc::new(Cell::new(true));
 
-    let updater = callback!(effects => || {
-        let effects = effects.borrow().clone();
-        for effect in effects {
-            effect();
+    let runner = Effect::new(callback!(dirty, dependents => || {
+        dirty.set(true);
+        let dependents = dependents.borrow().clone();
+        for effect in dependents {
+            run_effect(&effect);
         }
-    });
+    }));
 
     Computed {
-        compute,
-        updater,
-        effects,
+        data: Rc::new(ComputedData {
+            cached: RefCell::new(None),
+            dirty,
+            dependents,
+            runner,
+            compute,
+        }),
     }
 }
 

@@ -4,54 +4,60 @@ use std::{
     rc::Rc,
 };
 
-use crate::{ReadonlySignal, current_effect, shared::Shared, signals::Signal};
+use crate::{Effect, ReadonlySignal, current_effect, run_effect, shared::Shared, signals::Signal};
+
+#[derive(Debug)]
+struct StateData<T> {
+    value: RefCell<T>,
+    dependents: Shared<RefCell<HashSet<Shared<Effect>>>>,
+}
 
 #[derive(Debug)]
 pub struct State<T> {
-    value: Rc<RefCell<T>>,
-    effects: Rc<RefCell<HashSet<Shared<dyn Fn()>>>>,
+    data: Rc<StateData<T>>,
 }
 
 impl<T> State<T> {
     pub fn borrow(&'_ self) -> Ref<'_, T> {
         if let Some(effect) = current_effect() {
-            let mut effects = self.effects.borrow_mut();
-            effects.insert(effect);
+            effect.add_dependency_set(self.data.dependents.clone());
+            self.data.dependents.borrow_mut().insert(effect);
         }
         self.borrow_untrack()
     }
 
     pub fn borrow_untrack(&'_ self) -> Ref<'_, T> {
-        self.value.borrow()
+        self.data.value.borrow()
     }
 
     pub fn set(&self, value: T) {
-        self.value.replace(value);
-        let effects = self.effects.borrow().clone();
-        for effect in effects {
-            effect();
+        self.data.value.replace(value);
+
+        let dependents = self.data.dependents.borrow().clone();
+        for effect in dependents {
+            run_effect(&effect);
         }
     }
 
     pub fn update(&self, updater: impl FnOnce(&T) -> T) {
-        let prev = self.value.borrow();
+        let prev = self.data.value.borrow();
         let next = updater(&prev);
-        self.value.replace(next);
+        self.data.value.replace(next);
 
-        let effects = self.effects.borrow().clone();
-        for effect in effects {
-            effect();
+        let dependents = self.data.dependents.borrow().clone();
+        for effect in dependents {
+            run_effect(&effect);
         }
     }
 
     pub fn mutate(&self, mutator: impl FnOnce(&mut T)) {
         {
-            let mut value = self.value.borrow_mut();
+            let mut value = self.data.value.borrow_mut();
             mutator(&mut value);
         }
-        let effects = self.effects.borrow().clone();
-        for effect in effects {
-            effect();
+        let dependents = self.data.dependents.borrow().clone();
+        for effect in dependents {
+            run_effect(&effect);
         }
     }
 }
@@ -79,9 +85,14 @@ impl<T: Clone> Signal<T> for State<T> {
 impl<T> Clone for State<T> {
     fn clone(&self) -> Self {
         Self {
-            value: self.value.clone(),
-            effects: self.effects.clone(),
+            data: self.data.clone(),
         }
+    }
+}
+
+impl<T> PartialEq for State<T> {
+    fn eq(&self, other: &Self) -> bool {
+        Rc::ptr_eq(&self.data, &other.data)
     }
 }
 
@@ -93,7 +104,9 @@ impl<T: Clone + 'static> State<T> {
 
 pub fn create_state<T>(value: T) -> State<T> {
     State {
-        value: Rc::new(RefCell::new(value)),
-        effects: Rc::new(RefCell::new(HashSet::new())),
+        data: Rc::new(StateData {
+            value: RefCell::new(value),
+            dependents: Shared::new(RefCell::new(HashSet::new())),
+        }),
     }
 }

@@ -1,31 +1,40 @@
 mod computed;
 mod effect;
-mod state;
 mod readonly;
+mod state;
 
-use std::{cell::RefCell, fmt::Debug};
+use std::{cell::RefCell, collections::HashSet, fmt::Debug};
 
 pub use computed::*;
 pub use effect::*;
-pub use state::*;
 pub use readonly::*;
+pub use state::*;
 
 use crate::Shared;
 
 thread_local! {
-    static EFFECT_STACK: RefCell<Vec<Shared<dyn Fn()>>> = RefCell::new(Vec::new());
+    static CURRENT_EFFECT: RefCell<Option<Shared<Effect>>> = RefCell::new(None);
+    static RUNNING_EFFECTS: RefCell<HashSet<Shared<Effect>>> = RefCell::new(HashSet::new());
 }
 
-pub(crate) fn current_effect() -> Option<Shared<dyn Fn()>> {
-    EFFECT_STACK.with_borrow(|stack| stack.last().cloned())
+pub(crate) fn current_effect() -> Option<Shared<Effect>> {
+    CURRENT_EFFECT.with_borrow(|effect| effect.clone())
 }
 
-pub(crate) fn push_effect(effect: Shared<dyn Fn()>) {
-    EFFECT_STACK.with_borrow_mut(|stack| stack.push(effect));
+pub(crate) fn set_current_effect(effect: Option<Shared<Effect>>) {
+    CURRENT_EFFECT.replace(effect);
 }
 
-pub(crate) fn pop_effect() {
-    EFFECT_STACK.with_borrow_mut(|stack| stack.pop());
+pub(crate) fn is_effect_running(effect: &Shared<Effect>) -> bool {
+    RUNNING_EFFECTS.with_borrow(|effects| effects.contains(effect))
+}
+
+pub(crate) fn start_effect(effect: Shared<Effect>) {
+    RUNNING_EFFECTS.with_borrow_mut(|effects| effects.insert(effect));
+}
+
+pub(crate) fn end_effect(effect: &Shared<Effect>) {
+    RUNNING_EFFECTS.with_borrow_mut(|effects| effects.remove(effect));
 }
 
 pub trait Signal<T> {
