@@ -107,13 +107,6 @@ impl Element {
         }
     }
 
-    pub fn move_after(&self, pred: Option<&Element>) {
-        let moved_callbacks = self.data.moved_callbacks.take();
-        for callback in moved_callbacks {
-            callback(pred);
-        }
-    }
-
     pub fn handle(&self) -> ReadonlySignal<Option<Shared<dyn Any>>> {
         self.data.handle.clone().into_readonly_signal()
     }
@@ -156,6 +149,13 @@ impl Element {
     pub fn predecessor(&self) -> Option<Element> {
         let ctx = self.context::<PredecessorContext>();
         ctx.map(|ctx| ctx.element.clone())
+    }
+    
+    pub(crate) fn move_after(&self, pred: Option<&Element>) {
+        let moved_callbacks = self.data.moved_callbacks.take();
+        for callback in moved_callbacks {
+            callback(pred);
+        }
     }
 
     pub(crate) fn provide_context<T: 'static>(&self, context: impl Into<Rc<T>>) {
