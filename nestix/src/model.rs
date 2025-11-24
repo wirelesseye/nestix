@@ -6,7 +6,7 @@ thread_local! {
     static CURRENT_MODEL: RefCell<Option<Rc<Model>>> = RefCell::new(None);
 }
 
-pub(crate) fn current_model() -> Option<Rc<Model>> {
+pub fn current_model() -> Option<Rc<Model>> {
     CURRENT_MODEL.with_borrow(|model| model.clone())
 }
 

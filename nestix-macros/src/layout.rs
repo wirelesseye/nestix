@@ -395,7 +395,7 @@ fn generate_layout_child(
                     .to_tokens(push_element_outout);
                 } else {
                     quote! {
-                        if let Some(e) = &#element_ident {
+                        if let Some(e) = #element_ident {
                             __children.push(e);
                         }
                     }
