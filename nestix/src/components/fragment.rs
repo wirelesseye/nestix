@@ -49,9 +49,7 @@ pub fn Fragment(props: &FragmentProps, element: &Element) {
                         }
                         child.extend_contexts(contexts.clone());
                         child.render(&element);
-                        if let Some(child_handle) = child.handle().get_untrack() {
-                            element.set_handle_shared(Some(child_handle));
-                        }
+                        element.forward_handle(child);
                     }
 
                     for next_i in moved {
@@ -76,9 +74,7 @@ pub fn Fragment(props: &FragmentProps, element: &Element) {
                     for child in next {
                         child.extend_contexts(contexts.clone());
                         child.render(&element);
-                        if let Some(child_handle) = child.handle().get_untrack() {
-                            element.set_handle_shared(Some(child_handle));
-                        }
+                        element.forward_handle(child);
                     }
                 }
                 _ => (),

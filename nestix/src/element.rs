@@ -7,7 +7,7 @@ use std::{
 };
 
 use crate::{
-    Component, ComponentID, ReadonlySignal, Shared, State, component_id, create_state, prop::Props,
+    Component, ComponentID, ReadonlySignal, Shared, State, component_id, create_state, effect, prop::Props
 };
 
 pub trait LayoutOutput {
@@ -118,13 +118,16 @@ impl Element {
         self.data.handle.clone().into_readonly_signal()
     }
 
-    pub fn set_handle_shared(&self, handle: Option<Shared<dyn Any>>) {
-        self.data.handle.set(handle);
+    pub fn forward_handle(&self, element: &Element) {
+        effect!(this: self, element => || {
+            let handle = element.data.handle.get();
+            this.data.handle.set(handle);
+        });
     }
 
     pub fn provide_handle<T: 'static>(&self, handle: T) {
         let handle = Shared::from(Rc::new(handle) as Rc<dyn Any>);
-        self.set_handle_shared(Some(handle));
+        self.data.handle.set(Some(handle));
     }
 
     pub fn on_destroy(&self, f: impl Fn() + 'static) {

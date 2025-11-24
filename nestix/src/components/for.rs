@@ -3,7 +3,7 @@ use std::{cell::RefCell, hash::Hash, marker::PhantomData, rc::Rc};
 use nestix_macros::{closure, component, derive_props};
 
 use crate::{
-    LayoutOutput, Element, PredecessorContext, Shared, effect,
+    Element, LayoutOutput, PredecessorContext, Shared, effect,
     utils::reconcile::{ReconcileResult, reconcile},
 };
 
@@ -72,9 +72,7 @@ pub fn For<T: Eq + 'static, I: IntoIterator<Item = T> + Clone + 'static, K: Eq +
                 if added.contains(&i) {
                     child.extend_contexts(contexts.clone());
                     child.render(&element);
-                    if let Some(child_handle) = child.handle().get_untrack() {
-                        element.set_handle_shared(Some(child_handle));
-                    }
+                    element.forward_handle(&child);
                 } else if rerender {
                     child.render(&element);
                 } else if moved.contains(&i) {
