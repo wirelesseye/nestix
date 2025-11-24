@@ -3,7 +3,7 @@ use std::{cell::RefCell, rc::Rc};
 use nestix_macros::{closure, component, derive_props};
 
 use crate::{
-    Element, PredecessorContext, current_model, effect, on_destroy,
+    LayoutOutput, Element, PredecessorContext, effect,
     utils::reconcile::{ReconcileResult, reconcile},
 };
 
@@ -14,14 +14,12 @@ pub struct FragmentProps {
 }
 
 #[component]
-pub fn Fragment(props: &FragmentProps) {
-    let model = current_model().unwrap();
-    let element = model.current_element().unwrap();
+pub fn Fragment(props: &FragmentProps, element: &Element) {
     let prev: Rc<RefCell<Option<Vec<Element>>>> = Rc::new(RefCell::new(None));
     let contexts = element.contexts();
 
     effect!(
-        model, prev, props.children => || {
+        element, prev, props.children => || {
             let mut prev = prev.borrow_mut();
             let next = children.get();
 
@@ -50,9 +48,9 @@ pub fn Fragment(props: &FragmentProps) {
                             child.provide_context(PredecessorContext { element: pred.clone() });
                         }
                         child.extend_contexts(contexts.clone());
-                        model.render(child);
+                        child.render(&element);
                         if let Some(child_handle) = child.handle().get_untrack() {
-                            element.set_handle(Some(child_handle));
+                            element.set_handle_shared(Some(child_handle));
                         }
                     }
 
@@ -77,9 +75,9 @@ pub fn Fragment(props: &FragmentProps) {
                 (None, Some(next)) => {
                     for child in next {
                         child.extend_contexts(contexts.clone());
-                        model.render(&child);
+                        child.render(&element);
                         if let Some(child_handle) = child.handle().get_untrack() {
-                            element.set_handle(Some(child_handle));
+                            element.set_handle_shared(Some(child_handle));
                         }
                     }
                 }
@@ -90,7 +88,7 @@ pub fn Fragment(props: &FragmentProps) {
         }
     );
 
-    on_destroy(closure!(
+    element.on_destroy(closure!(
         prev => || {
             let prev = prev.borrow();
             if let Some(prev) = &*prev {

@@ -1,6 +1,5 @@
 use nestix::{
-    Element, closure, component, components::ContextProvider, derive_props, layout, on_destroy,
-    provide_handle, use_context, use_predecessor,
+    Element, closure, component, components::ContextProvider, derive_props, layout,
 };
 use wasm_bindgen::{JsCast, UnwrapThrowExt};
 use web_sys::{HtmlElement, Text};
@@ -14,9 +13,9 @@ pub struct DivProps {
 }
 
 #[component]
-pub fn Div(props: &DivProps) -> Element {
-    let parent = use_context::<ParentContext>().unwrap_throw();
-    let pred = use_predecessor();
+pub fn Div(props: &DivProps, element: &Element) -> Element {
+    let parent = element.context::<ParentContext>().unwrap_throw();
+    let pred = element.predecessor();
 
     let document = web_sys::window().unwrap().document().unwrap();
     let html_element = document
@@ -37,13 +36,13 @@ pub fn Div(props: &DivProps) -> Element {
         parent.html_element.append_child(&html_element).unwrap();
     }
 
-    on_destroy(closure!(
+    element.on_destroy(closure!(
         html_element => || {
             html_element.remove();
         }
     ));
 
-    provide_handle(html_element.clone());
+    element.provide_handle(html_element.clone());
 
     layout! {
         ContextProvider<ParentContext>(

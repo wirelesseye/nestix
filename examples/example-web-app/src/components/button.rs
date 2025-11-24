@@ -3,7 +3,6 @@ use std::{cell::RefCell, collections::HashMap};
 use nanoid_wasm::nanoid;
 use nestix::{
     Element, Shared, closure, component, components::ContextProvider, derive_props, effect, layout,
-    on_destroy, provide_handle, use_context,
 };
 use wasm_bindgen::{JsCast, prelude::Closure};
 use web_sys::{Event, HtmlButtonElement, HtmlElement};
@@ -34,8 +33,8 @@ pub struct ButtonProps {
 }
 
 #[component]
-pub fn Button(props: &ButtonProps) -> Element {
-    let parent = use_context::<ParentContext>().unwrap();
+pub fn Button(props: &ButtonProps, element: &Element) -> Element {
+    let parent = element.context::<ParentContext>().unwrap();
 
     let document = web_sys::window().unwrap().document().unwrap();
     let html_element = document
@@ -85,14 +84,14 @@ pub fn Button(props: &ButtonProps) -> Element {
         }
     );
 
-    on_destroy(closure!(
+    element.on_destroy(closure!(
         html_element, button_id => || {
             html_element.remove();
             HANDLERS.with_borrow_mut(|handlers| handlers.remove(&button_id));
         }
     ));
 
-    provide_handle(html_element.clone());
+    element.provide_handle(html_element.clone());
 
     layout! {
         ContextProvider<ParentContext>(

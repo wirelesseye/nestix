@@ -1,5 +1,5 @@
 use nestix::{
-    Element, component, components::ContextProvider, derive_props, layout, provide_handle,
+    Element, component, components::ContextProvider, derive_props, layout,
 };
 use wasm_bindgen::JsCast;
 use web_sys::HtmlElement;
@@ -13,7 +13,7 @@ pub struct RootProps {
 }
 
 #[component]
-pub fn Root(props: &RootProps) -> Element {
+pub fn Root(props: &RootProps, element: &Element) -> Element {
     let document = web_sys::window().unwrap().document().unwrap();
     let body = document.body().expect("document should have a body");
     let html_element = body
@@ -23,7 +23,7 @@ pub fn Root(props: &RootProps) -> Element {
         .dyn_into::<HtmlElement>()
         .unwrap();
 
-    provide_handle(html_element.clone());
+    element.provide_handle(html_element.clone());
 
     layout! {
         ContextProvider<ParentContext>(

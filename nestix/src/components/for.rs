@@ -3,7 +3,7 @@ use std::{cell::RefCell, hash::Hash, marker::PhantomData, rc::Rc};
 use nestix_macros::{closure, component, derive_props};
 
 use crate::{
-    Element, PredecessorContext, Shared, current_model, effect, on_destroy,
+    LayoutOutput, Element, PredecessorContext, Shared, effect,
     utils::reconcile::{ReconcileResult, reconcile},
 };
 
@@ -17,16 +17,15 @@ pub struct ForProps<T, I, K> {
 #[component(generics(T, I, K))]
 pub fn For<T: Eq + 'static, I: IntoIterator<Item = T> + Clone + 'static, K: Eq + Hash + 'static>(
     props: &ForProps<T, I, K>,
+    element: &Element,
 ) {
-    let model = current_model().unwrap();
-    let element = model.current_element().unwrap();
     let prev_data: Rc<RefCell<Vec<T>>> = Rc::new(RefCell::new(vec![]));
     let prev_keys: Rc<RefCell<Vec<K>>> = Rc::new(RefCell::new(vec![]));
     let children: Rc<RefCell<Vec<Element>>> = Rc::new(RefCell::new(vec![]));
     let contexts = element.contexts();
 
     effect!(
-        model, props.data, props.key, props.constructor, children => || {
+        element, props.data, props.key, props.constructor, children => || {
             let mut prev_data = prev_data.borrow_mut();
             let mut prev_keys = prev_keys.borrow_mut();
             let key_fn = key.get();
@@ -72,12 +71,12 @@ pub fn For<T: Eq + 'static, I: IntoIterator<Item = T> + Clone + 'static, K: Eq +
 
                 if added.contains(&i) {
                     child.extend_contexts(contexts.clone());
-                    model.render(&child);
+                    child.render(&element);
                     if let Some(child_handle) = child.handle().get_untrack() {
-                        element.set_handle(Some(child_handle));
+                        element.set_handle_shared(Some(child_handle));
                     }
                 } else if rerender {
-                    model.render(&child);
+                    child.render(&element);
                 } else if moved.contains(&i) {
                     child.move_after(pred);
                 }
@@ -91,7 +90,7 @@ pub fn For<T: Eq + 'static, I: IntoIterator<Item = T> + Clone + 'static, K: Eq +
         }
     );
 
-    on_destroy(closure!(
+    element.on_destroy(closure!(
         children => || {
             let children = children.borrow();
             for child in &*children {

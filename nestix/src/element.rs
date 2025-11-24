@@ -7,9 +7,58 @@ use std::{
 };
 
 use crate::{
-    Component, ComponentID, ReadonlySignal, Shared, State, component_id, create_state,
-    current_model, prop::Props, use_context,
+    Component, ComponentID, ReadonlySignal, Shared, State, component_id, create_state, prop::Props,
 };
+
+pub trait LayoutOutput {
+    fn render(&self, parent: &Element);
+
+    fn handle_destroy(&self, parent: &Element);
+}
+
+impl LayoutOutput for () {
+    #[inline]
+    fn render(&self, _parent: &Element) {}
+
+    #[inline]
+    fn handle_destroy(&self, _parent: &Element) {}
+}
+
+impl LayoutOutput for Option<Element> {
+    #[inline]
+    fn render(&self, parent: &Element) {
+        if let Some(element) = self {
+            element.extend_contexts(parent.contexts());
+            render(element);
+        }
+    }
+
+    #[inline]
+    fn handle_destroy(&self, parent: &Element) {
+        if let Some(element) = self {
+            let element = element.clone();
+            parent.on_destroy(move || {
+                element.destroy();
+            });
+        }
+    }
+}
+
+impl LayoutOutput for Element {
+    #[inline]
+    fn render(&self, parent: &Element) {
+        self.extend_contexts(parent.contexts());
+        render(self);
+    }
+
+    #[inline]
+    fn handle_destroy(&self, parent: &Element) {
+        let element = self.clone();
+        parent.on_destroy(move || {
+            element.destroy();
+        });
+    }
+}
 
 #[derive(Debug)]
 struct ElementData {
@@ -69,8 +118,46 @@ impl Element {
         self.data.handle.clone().into_readonly_signal()
     }
 
-    pub fn set_handle(&self, handle: Option<Shared<dyn Any>>) {
+    pub fn set_handle_shared(&self, handle: Option<Shared<dyn Any>>) {
         self.data.handle.set(handle);
+    }
+
+    pub fn provide_handle<T: 'static>(&self, handle: T) {
+        let handle = Shared::from(Rc::new(handle) as Rc<dyn Any>);
+        self.set_handle_shared(Some(handle));
+    }
+
+    pub fn on_destroy(&self, f: impl Fn() + 'static) {
+        let callback = Shared::from(Rc::new(f) as Rc<dyn Fn()>);
+        let mut destroy_callbacks = self.data.destroy_callbacks.borrow_mut();
+        destroy_callbacks.insert(callback);
+    }
+
+    pub fn on_moved(&self, f: impl Fn(Option<&Element>) + 'static) {
+        let callback = Shared::from(Rc::new(f) as Rc<dyn for<'a> Fn(Option<&'a Element>)>);
+        let mut moved_callbacks = self.data.moved_callbacks.borrow_mut();
+        moved_callbacks.insert(callback);
+    }
+
+    pub fn post_update(&self, f: impl Fn() + 'static) {
+        let callback = Shared::from(Rc::new(f) as Rc<dyn Fn()>);
+        let mut postupdate_callbacks = self.data.postupdate_callbacks.borrow_mut();
+        postupdate_callbacks.insert(callback);
+    }
+
+    pub fn context<T: 'static>(&self) -> Option<Rc<T>> {
+        self.context_any::<T>()
+            .map(|ctx| Rc::downcast::<T>(ctx).unwrap())
+    }
+
+    pub fn predecessor(&self) -> Option<Element> {
+        let ctx = self.context::<PredecessorContext>();
+        ctx.map(|ctx| ctx.element.clone())
+    }
+
+    pub(crate) fn provide_context<T: 'static>(&self, context: impl Into<Rc<T>>) {
+        let mut contexts = self.data.contexts.borrow_mut();
+        contexts.insert(TypeId::of::<T>(), context.into());
     }
 
     pub(crate) fn contexts(&self) -> HashMap<TypeId, Rc<dyn Any>> {
@@ -82,22 +169,22 @@ impl Element {
         borrowed_contexts.extend(contexts);
     }
 
-    pub(crate) fn get_context<T: 'static>(&self) -> Option<Rc<dyn Any>> {
+    fn context_any<T: 'static>(&self) -> Option<Rc<dyn Any>> {
         let contexts = self.data.contexts.borrow();
         contexts.get(&TypeId::of::<T>()).cloned()
     }
 
-    pub(crate) fn provide_context<T: 'static>(&self, context: impl Into<Rc<T>>) {
-        let mut contexts = self.data.contexts.borrow_mut();
-        contexts.insert(TypeId::of::<T>(), context.into());
-    }
-
-    pub(crate) fn post_update(&self) {
+    fn execute_post_update_tasks(&self) {
         let postupdate_callbacks = self.data.postupdate_callbacks.take();
         for callback in postupdate_callbacks {
             callback();
         }
     }
+}
+
+pub fn render(element: &Element) {
+    (element.component_id().render_fn)(element);
+    element.execute_post_update_tasks();
 }
 
 pub fn create_element<C: Component>(props: C::Props) -> Element {
@@ -116,40 +203,4 @@ pub fn create_element<C: Component>(props: C::Props) -> Element {
 
 pub(crate) struct PredecessorContext {
     pub element: Element,
-}
-
-pub fn use_predecessor() -> Option<Element> {
-    let ctx = use_context::<PredecessorContext>();
-    ctx.map(|ctx| ctx.element.clone())
-}
-
-pub fn on_destroy(f: impl Fn() + 'static) {
-    let model = current_model().unwrap();
-    let element = model.current_element().unwrap();
-    let callback = Shared::from(Rc::new(f) as Rc<dyn Fn()>);
-    let mut destroy_callbacks = element.data.destroy_callbacks.borrow_mut();
-    destroy_callbacks.insert(callback);
-}
-
-pub fn on_moved(f: impl Fn(Option<&Element>) + 'static) {
-    let model = current_model().unwrap();
-    let element = model.current_element().unwrap();
-    let callback = Shared::from(Rc::new(f) as Rc<dyn for<'a> Fn(Option<&'a Element>)>);
-    let mut moved_callbacks = element.data.moved_callbacks.borrow_mut();
-    moved_callbacks.insert(callback);
-}
-
-pub fn post_update(f: impl Fn() + 'static) {
-    let model = current_model().unwrap();
-    let element = model.current_element().unwrap();
-    let callback = Shared::from(Rc::new(f) as Rc<dyn Fn()>);
-    let mut postupdate_callbacks = element.data.postupdate_callbacks.borrow_mut();
-    postupdate_callbacks.insert(callback);
-}
-
-pub fn provide_handle<T: Any>(handle: T) {
-    let model = current_model().unwrap();
-    let element = model.current_element().unwrap();
-    let handle = Shared::from(Rc::new(handle) as Rc<dyn Any>);
-    element.data.handle.set(Some(handle.clone()));
 }

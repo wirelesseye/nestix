@@ -1,6 +1,4 @@
-use nestix::{
-    closure, component, derive_props, on_destroy, provide_handle, use_context, use_predecessor,
-};
+use nestix::{Element, closure, component, derive_props};
 use wasm_bindgen::{JsCast, UnwrapThrowExt};
 use web_sys::{HtmlElement, Text};
 
@@ -11,9 +9,9 @@ use crate::ParentContext;
 pub struct InputProps {}
 
 #[component]
-pub fn Input(_props: &InputProps) {
-    let parent = use_context::<ParentContext>().unwrap_throw();
-    let pred = use_predecessor();
+pub fn Input(_props: &InputProps, element: &Element) {
+    let parent = element.context::<ParentContext>().unwrap_throw();
+    let pred = element.predecessor();
 
     let document = web_sys::window().unwrap().document().unwrap();
     let html_element = document
@@ -34,11 +32,11 @@ pub fn Input(_props: &InputProps) {
         parent.html_element.append_child(&html_element).unwrap();
     }
 
-    on_destroy(closure!(
+    element.on_destroy(closure!(
         html_element => || {
             html_element.remove();
         }
     ));
 
-    provide_handle(html_element.clone());
+    element.provide_handle(html_element.clone());
 }

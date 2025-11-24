@@ -87,11 +87,13 @@ fn generate_component(
         quote! {}
     } else if sig.inputs.len() == 1 {
         quote! {props}
+    } else if sig.inputs.len() == 2 {
+        quote! {props, element}
     } else {
         return Err(syn::Error::new(
             sig.span(),
             format!(
-                "expect 0-1 parameters, but actually get {}",
+                "expect 0-2 parameters, but actually get {}",
                 sig.inputs.len()
             ),
         ));
@@ -120,14 +122,14 @@ fn generate_component(
         impl #impl_generics #crate_path::Component for #ident<#generic_args> {
             type Props = #props_type;
 
-            fn render(model: &std::rc::Rc<#crate_path::Model>, element: &#crate_path::Element) {
+            fn render(element: &#crate_path::Element) {
                 #[allow(non_snake_case)]
                 #raw
 
                 let props = element.props().downcast_ref::<#props_type>().unwrap();
                 let output = #ident(#render_args);
-                #crate_path::__component_internal::ComponentOutput::handle_destroy(&output);
-                #crate_path::__component_internal::ComponentOutput::render(&output, model);
+                #crate_path::LayoutOutput::handle_destroy(&output, element);
+                #crate_path::LayoutOutput::render(&output, element);
             }
         }
     })
