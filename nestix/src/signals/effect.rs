@@ -29,9 +29,9 @@ impl Effect {
 }
 
 #[track_caller]
-pub fn effect(setup: impl Fn() + 'static) {
+pub fn effect(f: impl Fn() + 'static) {
     let location = Location::caller();
-    let callback = Shared::from(Rc::new(setup) as Rc<dyn Fn()>);
+    let callback = Shared::from(Rc::new(f) as Rc<dyn Fn()>);
     let effect = Effect::new(location, callback);
     run_effect(&effect, location);
 }

@@ -2,6 +2,7 @@ mod computed;
 mod effect;
 mod readonly;
 mod state;
+mod untrack;
 
 use std::{cell::RefCell, collections::HashSet, fmt::Debug};
 
@@ -9,6 +10,7 @@ pub use computed::*;
 pub use effect::*;
 pub use readonly::*;
 pub use state::*;
+pub use untrack::*;
 
 use crate::Shared;
 
@@ -39,8 +41,6 @@ pub(crate) fn end_effect(effect: &Shared<Effect>) {
 
 pub trait Signal<T> {
     fn get(&self) -> T;
-
-    fn get_untrack(&self) -> T;
 }
 
 impl<T: Debug> Debug for dyn Signal<T> {

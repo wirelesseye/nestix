@@ -22,18 +22,10 @@ impl<T> ReadonlySignal<T> {
     pub fn get(&self) -> T {
         self.signal.get()
     }
-
-    pub fn get_untrack(&self) -> T {
-        self.signal.get_untrack()
-    }
 }
 
 impl<T> Signal<T> for ReadonlySignal<T> {
     fn get(&self) -> T {
         self.get()
-    }
-
-    fn get_untrack(&self) -> T {
-        self.get_untrack()
     }
 }

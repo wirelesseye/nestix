@@ -29,10 +29,10 @@ impl<T: Clone> Computed<T> {
             effect.add_dependency_set(self.data.dependents.clone());
             self.data.dependents.borrow_mut().insert(effect);
         }
-        self.get_untrack()
+        self.evaluate()
     }
 
-    pub fn get_untrack(&self) -> T {
+    fn evaluate(&self) -> T {
         if self.data.dirty.get() {
             // cleanup old deps
             for dependency_set in self.data.runner.take_dependency_sets() {
@@ -68,10 +68,6 @@ impl<T> PartialEq for Computed<T> {
 impl<T: Clone> Signal<T> for Computed<T> {
     fn get(&self) -> T {
         self.get()
-    }
-
-    fn get_untrack(&self) -> T {
-        self.get_untrack()
     }
 }
 

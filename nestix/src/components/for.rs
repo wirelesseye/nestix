@@ -3,8 +3,7 @@ use std::{cell::RefCell, hash::Hash, marker::PhantomData, rc::Rc};
 use nestix_macros::{closure, component, derive_props};
 
 use crate::{
-    Element, LayoutOutput, PredecessorContext, Shared, effect,
-    utils::reconcile::{ReconcileResult, reconcile},
+    Element, LayoutOutput, PredecessorContext, Shared, effect, untrack, utils::reconcile::{ReconcileResult, reconcile}
 };
 
 #[derive_props(generics(T: 'static, I: 'static, K: 'static))]
@@ -60,23 +59,29 @@ pub fn For<T: Eq + 'static, I: IntoIterator<Item = T> + Clone + 'static, K: Eq +
                 };
 
                 let pred = if i > 0 {
-                    Some(&next_children[i - 1])
+                    Some(next_children[i - 1].clone())
                 } else {
                     None
                 };
 
-                if let Some(pred) = pred {
+                if let Some(pred) = &pred {
                     child.provide_context(PredecessorContext { element: pred.clone() });
                 }
 
                 if added.contains(&i) {
                     child.extend_contexts(contexts.clone());
-                    child.render(&element);
-                    element.forward_handle(&child);
+                    untrack!(child, element => || {
+                        child.render(&element);
+                        element.forward_handle(&child);
+                    });
                 } else if rerender {
-                    child.render(&element);
+                    untrack!(child, element => || {
+                        child.render(&element);
+                    });
                 } else if moved.contains(&i) {
-                    child.move_after(pred);
+                    untrack!(child, pred => || {
+                        child.move_after(pred.as_ref());
+                    });
                 }
 
                 next_children.push(child);

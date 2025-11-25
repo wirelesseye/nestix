@@ -3,8 +3,7 @@ use std::{cell::RefCell, rc::Rc};
 use nestix_macros::{closure, component, derive_props};
 
 use crate::{
-    LayoutOutput, Element, PredecessorContext, effect,
-    utils::reconcile::{ReconcileResult, reconcile},
+    Element, LayoutOutput, PredecessorContext, effect, untrack, utils::reconcile::{ReconcileResult, reconcile}
 };
 
 #[derive_props(debug)]
@@ -48,21 +47,25 @@ pub fn Fragment(props: &FragmentProps, element: &Element) {
                             child.provide_context(PredecessorContext { element: pred.clone() });
                         }
                         child.extend_contexts(contexts.clone());
-                        child.render(&element);
-                        element.forward_handle(child);
+                        untrack!(child, element => || {
+                            child.render(&element);
+                            element.forward_handle(&child);
+                        });
                     }
 
                     for next_i in moved {
                         let pred = if next_i == 0 {
                             None
                         } else {
-                            Some(&next[next_i - 1])
+                            Some(next[next_i - 1].clone())
                         };
                         let child = &next[next_i];
-                        if let Some(pred) = pred {
+                        if let Some(pred) = &pred {
                             child.provide_context(PredecessorContext { element: pred.clone() });
                         }
-                        child.move_after(pred);
+                        untrack!(child, pred => || {
+                            child.move_after(pred.as_ref());
+                        });
                     }
                 }
                 (Some(prev), None) => {
@@ -73,8 +76,10 @@ pub fn Fragment(props: &FragmentProps, element: &Element) {
                 (None, Some(next)) => {
                     for child in next {
                         child.extend_contexts(contexts.clone());
-                        child.render(&element);
-                        element.forward_handle(child);
+                        untrack!(child, element => || {
+                            child.render(&element);
+                            element.forward_handle(&child);
+                        });
                     }
                 }
                 _ => (),

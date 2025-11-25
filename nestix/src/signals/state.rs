@@ -73,19 +73,11 @@ impl<T: Clone> State<T> {
     pub fn get(&self) -> T {
         (*self.borrow()).clone()
     }
-
-    pub fn get_untrack(&self) -> T {
-        (*self.borrow_untrack()).clone()
-    }
 }
 
 impl<T: Clone> Signal<T> for State<T> {
     fn get(&self) -> T {
         self.get()
-    }
-
-    fn get_untrack(&self) -> T {
-        self.get_untrack()
     }
 }
 
