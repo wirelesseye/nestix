@@ -398,8 +398,8 @@ fn generate_props(attr: PropsAttr, mut item: ItemStruct) -> Result<TokenStream2,
                 let field_ident_pascal = field_ident.to_string().to_case(Case::Pascal);
 
                 if i == j {
-                    quote! {_S: #can_set_ident,}.to_tokens(&mut method_type_params);
-                    quote! {_S,}.to_tokens(&mut method_type_args);
+                    quote! {#type_param_ident: #can_set_ident,}.to_tokens(&mut method_type_params);
+                    quote! {#type_param_ident,}.to_tokens(&mut method_type_args);
                     quote! {Set,}.to_tokens(&mut method_result_type_args);
                     if default {
                         quote! {
