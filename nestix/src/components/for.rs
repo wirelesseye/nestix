@@ -71,12 +71,12 @@ pub fn For<T: Eq + 'static, I: IntoIterator<Item = T> + Clone + 'static, K: Eq +
                 if added.contains(&i) {
                     child.extend_contexts(contexts.clone());
                     untrack!(child, element => || {
-                        child.render(&element);
+                        child.render(Some(&element));
                         element.forward_handle(&child);
                     });
                 } else if rerender {
                     untrack!(child, element => || {
-                        child.render(&element);
+                        child.render(Some(&element));
                     });
                 } else if moved.contains(&i) {
                     untrack!(child, pred => || {

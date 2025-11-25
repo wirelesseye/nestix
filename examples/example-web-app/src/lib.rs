@@ -5,7 +5,7 @@ use std::collections::HashMap;
 use components::*;
 use nanoid_wasm::nanoid;
 use nestix::{
-    Element, callback, component, components::For, computed, create_state, layout, render,
+    Element, callback, component, components::For, computed, create_state, layout, render_root,
 };
 use wasm_bindgen::{JsCast, prelude::wasm_bindgen};
 use web_sys::{HtmlElement, HtmlInputElement};
@@ -13,7 +13,7 @@ use web_sys::{HtmlElement, HtmlInputElement};
 #[wasm_bindgen(start)]
 fn init() {
     wasm_logger::init(wasm_logger::Config::default());
-    render(&layout! {App});
+    render_root(&layout! {App});
 }
 
 #[derive(Clone)]

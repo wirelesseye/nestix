@@ -129,7 +129,7 @@ fn generate_component(
                 let props = element.props().downcast_ref::<#props_type>().unwrap();
                 let output = #ident(#render_args);
                 #crate_path::LayoutOutput::handle_destroy(&output, element);
-                #crate_path::LayoutOutput::render(&output, element);
+                #crate_path::LayoutOutput::render(&output, Some(element));
             }
         }
     })

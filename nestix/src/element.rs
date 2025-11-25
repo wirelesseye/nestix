@@ -11,14 +11,14 @@ use crate::{
 };
 
 pub trait LayoutOutput {
-    fn render(&self, parent: &Element);
+    fn render(&self, parent: Option<&Element>);
 
     fn handle_destroy(&self, parent: &Element);
 }
 
 impl LayoutOutput for () {
     #[inline]
-    fn render(&self, _parent: &Element) {}
+    fn render(&self, _parent: Option<&Element>) {}
 
     #[inline]
     fn handle_destroy(&self, _parent: &Element) {}
@@ -26,10 +26,9 @@ impl LayoutOutput for () {
 
 impl LayoutOutput for Option<Element> {
     #[inline]
-    fn render(&self, parent: &Element) {
+    fn render(&self, parent: Option<&Element>) {
         if let Some(element) = self {
-            element.extend_contexts(parent.contexts());
-            render(element);
+            element.render(parent);
         }
     }
 
@@ -46,9 +45,12 @@ impl LayoutOutput for Option<Element> {
 
 impl LayoutOutput for Element {
     #[inline]
-    fn render(&self, parent: &Element) {
-        self.extend_contexts(parent.contexts());
-        render(self);
+    fn render(&self, parent: Option<&Element>) {
+        if let Some(parent) = parent {
+            self.extend_contexts(parent.contexts());
+        }
+        (self.component_id().render_fn)(self);
+        self.execute_post_update_tasks();
     }
 
     #[inline]
@@ -145,7 +147,7 @@ impl Element {
         self.context_any::<T>()
             .map(|ctx| Rc::downcast::<T>(ctx).unwrap())
     }
-
+    
     pub fn predecessor(&self) -> Option<Element> {
         let ctx = self.context::<PredecessorContext>();
         ctx.map(|ctx| ctx.element.clone())
@@ -185,9 +187,8 @@ impl Element {
     }
 }
 
-pub fn render(element: &Element) {
-    (element.component_id().render_fn)(element);
-    element.execute_post_update_tasks();
+pub fn render_root(element: &Element) {
+    element.render(None);
 }
 
 pub fn create_element<C: Component>(props: C::Props) -> Element {

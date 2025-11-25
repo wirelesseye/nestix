@@ -3,7 +3,8 @@ use std::{cell::RefCell, rc::Rc};
 use nestix_macros::{closure, component, derive_props};
 
 use crate::{
-    Element, LayoutOutput, PredecessorContext, effect, untrack, utils::reconcile::{ReconcileResult, reconcile}
+    Element, LayoutOutput, PredecessorContext, effect, untrack,
+    utils::reconcile::{ReconcileResult, reconcile},
 };
 
 #[derive_props(debug)]
@@ -48,7 +49,7 @@ pub fn Fragment(props: &FragmentProps, element: &Element) {
                         }
                         child.extend_contexts(contexts.clone());
                         untrack!(child, element => || {
-                            child.render(&element);
+                            child.render(Some(&element));
                             element.forward_handle(&child);
                         });
                     }
@@ -77,7 +78,7 @@ pub fn Fragment(props: &FragmentProps, element: &Element) {
                     for child in next {
                         child.extend_contexts(contexts.clone());
                         untrack!(child, element => || {
-                            child.render(&element);
+                            child.render(Some(&element));
                             element.forward_handle(&child);
                         });
                     }
