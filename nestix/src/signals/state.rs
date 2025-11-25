@@ -32,7 +32,7 @@ impl<T> State<T> {
     }
 
     #[track_caller]
-    pub fn set(&self, value: T) {
+    pub fn set_unchecked(&self, value: T) {
         let location = Location::caller();
         self.data.value.replace(value);
 
@@ -66,6 +66,19 @@ impl<T> State<T> {
         for effect in dependents {
             run_effect(&effect, location);
         }
+    }
+}
+
+impl<T: Eq> State<T> {
+    #[track_caller]
+    pub fn set(&self, value: T) {
+        {
+            let prev = self.data.value.borrow();
+            if *prev == value {
+                return;
+            }
+        }
+        self.set_unchecked(value);
     }
 }
 
