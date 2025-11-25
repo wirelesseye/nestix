@@ -1,17 +1,19 @@
-use std::{cell::RefCell, collections::HashSet, rc::Rc};
+use std::{cell::RefCell, collections::HashSet, panic::Location, rc::Rc};
 
 use crate::{
     current_effect, end_effect, is_effect_running, set_current_effect, shared::Shared, start_effect,
 };
 
 pub(crate) struct Effect {
+    location: &'static Location<'static>,
     callback: Shared<dyn Fn()>,
     dependency_sets: RefCell<HashSet<Shared<RefCell<HashSet<Shared<Effect>>>>>>,
 }
 
 impl Effect {
-    pub fn new(callback: Shared<dyn Fn()>) -> Shared<Self> {
+    pub fn new(location: &'static Location, callback: Shared<dyn Fn()>) -> Shared<Self> {
         Shared::new(Effect {
+            location,
             callback,
             dependency_sets: RefCell::new(HashSet::new()),
         })
@@ -26,15 +28,23 @@ impl Effect {
     }
 }
 
+#[track_caller]
 pub fn effect(setup: impl Fn() + 'static) {
+    let location = Location::caller();
     let callback = Shared::from(Rc::new(setup) as Rc<dyn Fn()>);
-    let effect = Effect::new(callback);
-    run_effect(&effect);
+    let effect = Effect::new(location, callback);
+    run_effect(&effect, location);
 }
 
-pub(crate) fn run_effect(effect: &Shared<Effect>) {
+pub(crate) fn run_effect(effect: &Shared<Effect>, location: &'static Location<'static>) {
     if is_effect_running(effect) {
-        log::error!("cyclic update detected, aborting effect");
+        log::error!(
+            "cyclic update detected, aborting effect\n\tat {}:{}\nwhen trying to modify value\n\tat {}:{}",
+            effect.location.file(),
+            effect.location.line(),
+            location.file(),
+            location.line(),
+        );
         return;
     }
 

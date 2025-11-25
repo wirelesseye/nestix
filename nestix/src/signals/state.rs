@@ -1,6 +1,7 @@
 use std::{
     cell::{Ref, RefCell},
     collections::HashSet,
+    panic::Location,
     rc::Rc,
 };
 
@@ -30,34 +31,40 @@ impl<T> State<T> {
         self.data.value.borrow()
     }
 
+    #[track_caller]
     pub fn set(&self, value: T) {
+        let location = Location::caller();
         self.data.value.replace(value);
 
         let dependents = self.data.dependents.borrow().clone();
         for effect in dependents {
-            run_effect(&effect);
+            run_effect(&effect, location);
         }
     }
 
+    #[track_caller]
     pub fn update(&self, updater: impl FnOnce(&T) -> T) {
+        let location = Location::caller();
         let prev = self.data.value.borrow();
         let next = updater(&prev);
         self.data.value.replace(next);
 
         let dependents = self.data.dependents.borrow().clone();
         for effect in dependents {
-            run_effect(&effect);
+            run_effect(&effect, location);
         }
     }
 
+    #[track_caller]
     pub fn mutate(&self, mutator: impl FnOnce(&mut T)) {
+        let location = Location::caller();
         {
             let mut value = self.data.value.borrow_mut();
             mutator(&mut value);
         }
         let dependents = self.data.dependents.borrow().clone();
         for effect in dependents {
-            run_effect(&effect);
+            run_effect(&effect, location);
         }
     }
 }

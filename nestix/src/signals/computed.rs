@@ -1,6 +1,7 @@
 use std::{
     cell::{Cell, RefCell},
     collections::HashSet,
+    panic::Location,
     rc::Rc,
 };
 
@@ -80,18 +81,23 @@ impl<T: Clone + 'static> Computed<T> {
     }
 }
 
+#[track_caller]
 pub fn computed<T: 'static>(compute: impl Fn() -> T + 'static) -> Computed<T> {
+    let location = Location::caller();
     let compute = Rc::new(compute);
     let dependents = Shared::new(RefCell::new(HashSet::new()));
     let dirty = Rc::new(Cell::new(true));
 
-    let runner = Effect::new(callback!(dirty, dependents => || {
-        dirty.set(true);
-        let dependents = dependents.borrow().clone();
-        for effect in dependents {
-            run_effect(&effect);
-        }
-    }));
+    let runner = Effect::new(
+        location,
+        callback!(dirty, dependents => || {
+            dirty.set(true);
+            let dependents = dependents.borrow().clone();
+            for effect in dependents {
+                run_effect(&effect, location);
+            }
+        }),
+    );
 
     Computed {
         data: Rc::new(ComputedData {

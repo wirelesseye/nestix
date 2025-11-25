@@ -5,7 +5,7 @@ use std::collections::HashMap;
 use components::*;
 use nanoid_wasm::nanoid;
 use nestix::{
-    Element, callback, component, components::For, computed, create_state, effect, layout, render,
+    Element, callback, component, components::For, computed, create_state, layout, render,
 };
 use wasm_bindgen::{JsCast, prelude::wasm_bindgen};
 use web_sys::{HtmlElement, HtmlInputElement};
@@ -98,10 +98,6 @@ fn TodoList() -> Element {
     let items = create_state::<HashMap<String, String>>(HashMap::new());
     let input = create_state::<Option<Element>>(None);
 
-    effect!(input => || {
-        log::debug!("{:?}", input.get());
-    });
-
     let add = callback!(
         input, items => || {
             if let Some(element) = input.get() {
@@ -138,7 +134,6 @@ fn TodoList() -> Element {
                                 Button(
                                     .on_click = callback!(items, item => || {
                                         items.mutate(|items| {
-                                            log::debug!("remove key {}", item.0);
                                             items.remove(&item.0);
                                         });
                                     })
