@@ -109,6 +109,6 @@ pub fn computed<T: 'static>(compute: impl Fn() -> T + 'static) -> Computed<T> {
 #[macro_export]
 macro_rules! computed {
     ($($tt:tt)*) => {
-        $crate::signals::computed($crate::closure!($($tt)*))
+        $crate::computed($crate::closure!($($tt)*))
     };
 }

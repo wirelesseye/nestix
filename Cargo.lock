@@ -95,6 +95,7 @@ version = "0.1.0"
 dependencies = [
  "log",
  "nestix-macros",
+ "nestix-signal",
 ]
 
 [[package]]
@@ -106,6 +107,14 @@ dependencies = [
  "proc-macro2",
  "quote",
  "syn",
+]
+
+[[package]]
+name = "nestix-signal"
+version = "0.1.0"
+dependencies = [
+ "log",
+ "nestix-macros",
 ]
 
 [[package]]

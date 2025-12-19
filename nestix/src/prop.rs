@@ -1,6 +1,6 @@
 use std::{any::Any, fmt::Debug, marker::PhantomData, rc::Rc};
 
-use crate::signals::Signal;
+use nestix_signal::Signal;
 
 #[doc(hidden)]
 pub mod __internal {

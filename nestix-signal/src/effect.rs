@@ -65,6 +65,6 @@ pub(crate) fn run_effect(effect: &Shared<Effect>, location: &'static Location<'s
 #[macro_export]
 macro_rules! effect {
     ($($tt:tt)*) => {
-        $crate::signals::effect($crate::closure!($($tt)*))
+        $crate::effect($crate::closure!($($tt)*))
     };
 }

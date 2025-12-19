@@ -4,4 +4,5 @@ members = [
     "examples/*",
     "nestix",
     "nestix-macros",
+    "nestix-signal",
 ]

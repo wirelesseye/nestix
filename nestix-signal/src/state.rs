@@ -5,7 +5,7 @@ use std::{
     rc::Rc,
 };
 
-use crate::{Effect, ReadonlySignal, current_effect, run_effect, shared::Shared, signals::Signal};
+use crate::{Effect, ReadonlySignal, Signal, current_effect, run_effect, shared::Shared};
 
 #[derive(Debug)]
 struct StateData<T> {

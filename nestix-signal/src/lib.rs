@@ -1,6 +1,7 @@
 mod computed;
 mod effect;
 mod readonly;
+mod shared;
 mod state;
 mod untrack;
 
@@ -9,10 +10,11 @@ use std::{cell::RefCell, collections::HashSet, fmt::Debug};
 pub use computed::*;
 pub use effect::*;
 pub use readonly::*;
+pub use shared::*;
 pub use state::*;
 pub use untrack::*;
 
-use crate::Shared;
+pub use nestix_macros::closure;
 
 thread_local! {
     static CURRENT_EFFECT: RefCell<Option<Shared<Effect>>> = RefCell::new(None);

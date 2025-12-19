@@ -11,6 +11,6 @@ pub fn untrack<T>(f: impl FnOnce() -> T + 'static) -> T {
 #[macro_export]
 macro_rules! untrack {
     ($($tt:tt)*) => {
-        $crate::signals::untrack($crate::closure!($($tt)*))
+        $crate::untrack($crate::closure!($($tt)*))
     };
 }

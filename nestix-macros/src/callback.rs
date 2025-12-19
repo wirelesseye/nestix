@@ -5,7 +5,7 @@ use syn::{Pat, Token, parse_macro_input, punctuated::Punctuated, spanned::Spanne
 
 use crate::{
     closure::{ClosureInput, generate_closure},
-    util::{FoundCrateExt, crate_name},
+    util::FoundCrateExt,
 };
 
 pub fn callback(input: TokenStream) -> TokenStream {
@@ -16,7 +16,9 @@ pub fn callback(input: TokenStream) -> TokenStream {
 }
 
 fn generate_callback(input: ClosureInput) -> Result<TokenStream2, syn::Error> {
-    let crate_path = crate_name().to_path();
+    let crate_path = proc_macro_crate::crate_name("nestix-signal")
+        .unwrap_or_else(|_| proc_macro_crate::crate_name("nestix").unwrap())
+        .to_path();
     let param_types = if let Some(expr_closure) = &input.expr_closure {
         let types = expr_closure
             .inputs
