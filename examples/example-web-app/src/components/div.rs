@@ -1,6 +1,4 @@
-use nestix::{
-    Element, closure, component, components::ContextProvider, props, layout,
-};
+use nestix::{Element, closure, component, components::ContextProvider, layout, props};
 use wasm_bindgen::{JsCast, UnwrapThrowExt};
 use web_sys::{HtmlElement, Text};
 

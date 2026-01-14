@@ -24,6 +24,7 @@ pub fn props(attr: TokenStream, input: TokenStream) -> TokenStream {
 struct PropsAttr {
     debug: bool,
     impl_generic_params: Punctuated<GenericParam, Token![,]>,
+    extensible: bool,
 }
 
 impl Parse for PropsAttr {
@@ -44,6 +45,7 @@ impl Parse for PropsAttr {
                     attr.impl_generic_params =
                         Punctuated::<GenericParam, Token![,]>::parse_terminated(&inner)?;
                 }
+                "extensible" => attr.extensible = true,
                 _ => {
                     return Err(syn::Error::new(
                         ident.span(),
@@ -141,6 +143,7 @@ fn generate_props(attr: PropsAttr, mut item: ItemStruct) -> Result<TokenStream2,
     let PropsAttr {
         debug,
         impl_generic_params,
+        extensible,
     } = attr;
 
     let option_map = item
@@ -254,8 +257,11 @@ fn generate_props(attr: PropsAttr, mut item: ItemStruct) -> Result<TokenStream2,
         field.vis = Visibility::Inherited;
     }
 
+    let ident_snake = Ident::new(&ident.to_string().to_case(Case::Snake), ident.span());
+    let extends_trait_ident = format_ident!("Extends{}", ident);
+
     let mut type_params = TokenStream2::new();
-    let mut error_traits = TokenStream2::new();
+    let mut marker_traits = TokenStream2::new();
     let mut default_type_params = if generic_params.is_empty() {
         TokenStream2::new()
     } else {
@@ -269,6 +275,7 @@ fn generate_props(attr: PropsAttr, mut item: ItemStruct) -> Result<TokenStream2,
     let mut builder_build_fields = TokenStream2::new();
     let mut builder_build_type_bounds = TokenStream2::new();
     let mut builder_field_methods = TokenStream2::new();
+    let mut extends_trait_methods = TokenStream2::new();
 
     for (i, field) in fields.iter().enumerate() {
         let ident = field.ident.as_ref().unwrap();
@@ -298,7 +305,7 @@ fn generate_props(attr: PropsAttr, mut item: ItemStruct) -> Result<TokenStream2,
 
             impl #can_set_ident for Defaulted {}
         }
-        .to_tokens(&mut error_traits);
+        .to_tokens(&mut marker_traits);
 
         let type_param_ident = Ident::new(&format!("{}State", ident_pascal), ident.span());
         quote! {#type_param_ident,}.to_tokens(&mut type_params);
@@ -438,6 +445,12 @@ fn generate_props(attr: PropsAttr, mut item: ItemStruct) -> Result<TokenStream2,
             }
             .to_tokens(&mut builder_field_methods);
         }
+
+        quote! {
+            fn #ident(&self) -> &#ty {
+                &self.#ident_snake().#ident
+            }
+        }.to_tokens(&mut extends_trait_methods);
     }
 
     match &mut builder_fields {
@@ -468,6 +481,24 @@ fn generate_props(attr: PropsAttr, mut item: ItemStruct) -> Result<TokenStream2,
         }
     };
 
+    let extends_trait_output = if extensible {
+        quote! {
+            #vis trait #extends_trait_ident <#impl_generic_params> {
+                fn #ident_snake(&self) -> &#ident <#generic_params>;
+
+                #extends_trait_methods
+            }
+
+            impl<#impl_generic_params> #extends_trait_ident <#generic_params> for #ident <#generic_params> {
+                fn #ident_snake(&self) -> &#ident <#generic_params> {
+                    self
+                }
+            }
+        }
+    } else {
+        quote! {}
+    };
+
     Ok(quote! {
         #item
 
@@ -475,7 +506,7 @@ fn generate_props(attr: PropsAttr, mut item: ItemStruct) -> Result<TokenStream2,
             use super::*;
             use #crate_path::prop::__internal::*;
 
-            #error_traits
+            #marker_traits
 
             pub struct #builder_ident<#default_type_params> #builder_fields
 
@@ -513,6 +544,8 @@ fn generate_props(attr: PropsAttr, mut item: ItemStruct) -> Result<TokenStream2,
         impl<#impl_generic_params> #crate_path::prop::Props for #ident <#generic_params> {
             #impl_debug_output
         }
+
+        #extends_trait_output
     })
 }
 
