@@ -1,10 +1,10 @@
 use std::marker::PhantomData;
 
-use nestix_macros::{component, derive_props, layout};
+use nestix_macros::{component, props, layout};
 
 use crate::{Element, components::Fragment, effect};
 
-#[derive_props(generics(T: 'static))]
+#[props(generics(T: 'static))]
 pub struct ContextProviderProps<T> {
     value: T,
     children: Option<Vec<Element>>,

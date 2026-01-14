@@ -295,7 +295,7 @@ fn generate_layout(input: &LayoutInput) -> Result<TokenStream2, syn::Error> {
         }
 
         quote! {
-            #crate_path::props!(<#ty as #crate_path::Component>::Props(
+            #crate_path::build_props!(<#ty as #crate_path::Component>::Props(
                 #tokens
             ))
         }

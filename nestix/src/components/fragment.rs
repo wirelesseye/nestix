@@ -1,13 +1,13 @@
 use std::{cell::RefCell, rc::Rc};
 
-use nestix_macros::{closure, component, derive_props};
+use nestix_macros::{closure, component, props};
 
 use crate::{
     Element, LayoutOutput, PredecessorContext, effect, untrack,
     utils::reconcile::{ReconcileResult, reconcile},
 };
 
-#[derive_props(debug)]
+#[props(debug)]
 #[derive(Debug)]
 pub struct FragmentProps {
     pub children: Option<Vec<Element>>,

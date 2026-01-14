@@ -1,12 +1,12 @@
 use std::{cell::RefCell, hash::Hash, marker::PhantomData, rc::Rc};
 
-use nestix_macros::{closure, component, derive_props};
+use nestix_macros::{closure, component, props};
 
 use crate::{
     Element, LayoutOutput, PredecessorContext, Shared, effect, untrack, utils::reconcile::{ReconcileResult, reconcile}
 };
 
-#[derive_props(generics(T: 'static, I: 'static, K: 'static))]
+#[props(generics(T: 'static, I: 'static, K: 'static))]
 pub struct ForProps<T, I, K> {
     data: I,
     key: Shared<dyn Fn(&T) -> K>,

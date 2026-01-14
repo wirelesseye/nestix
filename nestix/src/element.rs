@@ -70,7 +70,7 @@ struct ElementData {
     contexts: RefCell<HashMap<TypeId, Rc<dyn Any>>>,
     destroy_callbacks: RefCell<HashSet<Shared<dyn Fn()>>>,
     moved_callbacks: RefCell<HashSet<Shared<dyn Fn(Option<&Element>)>>>,
-    postupdate_callbacks: RefCell<HashSet<Shared<dyn Fn()>>>,
+    after_render_callbacks: RefCell<HashSet<Shared<dyn Fn()>>>,
 }
 
 #[derive(Clone, Debug)]
@@ -137,10 +137,10 @@ impl Element {
         moved_callbacks.insert(callback);
     }
 
-    pub fn post_update(&self, f: impl Fn() + 'static) {
+    pub fn after_render(&self, f: impl Fn() + 'static) {
         let callback = Shared::from(Rc::new(f) as Rc<dyn Fn()>);
-        let mut postupdate_callbacks = self.data.postupdate_callbacks.borrow_mut();
-        postupdate_callbacks.insert(callback);
+        let mut after_render_callbacks = self.data.after_render_callbacks.borrow_mut();
+        after_render_callbacks.insert(callback);
     }
 
     pub fn context<T: 'static>(&self) -> Option<Rc<T>> {
@@ -180,8 +180,8 @@ impl Element {
     }
 
     fn execute_post_update_tasks(&self) {
-        let postupdate_callbacks = self.data.postupdate_callbacks.take();
-        for callback in postupdate_callbacks {
+        let after_render_callbacks = self.data.after_render_callbacks.take();
+        for callback in after_render_callbacks {
             callback();
         }
     }
@@ -200,7 +200,7 @@ pub fn create_element<C: Component>(props: C::Props) -> Element {
             contexts: RefCell::new(HashMap::new()),
             destroy_callbacks: RefCell::new(HashSet::new()),
             moved_callbacks: RefCell::new(HashSet::new()),
-            postupdate_callbacks: RefCell::new(HashSet::new()),
+            after_render_callbacks: RefCell::new(HashSet::new()),
         }),
     }
 }

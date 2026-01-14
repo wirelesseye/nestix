@@ -3,10 +3,10 @@ use proc_macro::TokenStream;
 mod callback;
 mod closure;
 mod component;
-mod derive_props;
+mod props;
 mod layout;
 mod prop_value;
-mod props;
+mod build_props;
 mod util;
 
 #[proc_macro]
@@ -20,8 +20,8 @@ pub fn callback(input: TokenStream) -> TokenStream {
 }
 
 #[proc_macro_attribute]
-pub fn derive_props(attr: TokenStream, input: TokenStream) -> TokenStream {
-    derive_props::derive_props(attr, input)
+pub fn props(attr: TokenStream, input: TokenStream) -> TokenStream {
+    props::props(attr, input)
 }
 
 #[proc_macro]
@@ -30,8 +30,8 @@ pub fn prop_value(input: TokenStream) -> TokenStream {
 }
 
 #[proc_macro]
-pub fn props(input: TokenStream) -> TokenStream {
-    props::props(input)
+pub fn build_props(input: TokenStream) -> TokenStream {
+    build_props::build_props(input)
 }
 
 /// layout! {}

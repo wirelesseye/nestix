@@ -1,12 +1,12 @@
 use nestix::{
-    Element, component, components::ContextProvider, derive_props, layout,
+    Element, component, components::ContextProvider, props, layout,
 };
 use wasm_bindgen::JsCast;
 use web_sys::HtmlElement;
 
 use crate::ParentContext;
 
-#[derive_props(debug)]
+#[props(debug)]
 #[derive(Debug)]
 pub struct RootProps {
     children: Option<Vec<Element>>,

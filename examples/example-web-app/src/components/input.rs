@@ -1,10 +1,10 @@
-use nestix::{Element, closure, component, derive_props};
+use nestix::{Element, closure, component, props};
 use wasm_bindgen::{JsCast, UnwrapThrowExt};
 use web_sys::{HtmlElement, Text};
 
 use crate::ParentContext;
 
-#[derive_props(debug)]
+#[props(debug)]
 #[derive(Debug)]
 pub struct InputProps {}
 
