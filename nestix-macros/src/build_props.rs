@@ -122,7 +122,17 @@ impl Parse for PropsInput {
         parenthesized!(inner in input);
 
         let start = if !inner.peek(Token![.]) {
-            Punctuated::parse_terminated_with(&inner, parse_start_arg)?
+            let mut items = Punctuated::<TokenStream2, Token![,]>::new();
+            while !inner.is_empty() && !inner.peek(Token![.]) {
+                items.push_value(parse_start_arg(&inner)?);
+                if inner.peek(Token![,]) {
+                    items.push_punct(inner.parse()?);
+                } else {
+                    break;
+                }
+            }
+
+            items
         } else {
             Punctuated::new()
         };
@@ -141,7 +151,7 @@ fn generate_build_props(input: &PropsInput) -> Result<TokenStream2, syn::Error> 
     let mut start_output = TokenStream2::new();
     for field in start {
         quote! {
-            #crate_path::prop_value!(#field)
+            #crate_path::prop_value!(#field),
         }
         .to_tokens(&mut start_output);
     }

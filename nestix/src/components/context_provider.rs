@@ -4,7 +4,7 @@ use nestix_macros::{component, props, layout};
 
 use crate::{Element, components::Fragment, effect};
 
-#[props(generics(T: 'static))]
+#[props(bounds(T: 'static))]
 pub struct ContextProviderProps<T> {
     value: T,
     children: Option<Vec<Element>>,

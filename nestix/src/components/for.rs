@@ -3,10 +3,11 @@ use std::{cell::RefCell, hash::Hash, marker::PhantomData, rc::Rc};
 use nestix_macros::{closure, component, props};
 
 use crate::{
-    Element, LayoutOutput, PredecessorContext, Shared, effect, untrack, utils::reconcile::{ReconcileResult, reconcile}
+    Element, LayoutOutput, PredecessorContext, Shared, effect, untrack,
+    utils::reconcile::{ReconcileResult, reconcile},
 };
 
-#[props(generics(T: 'static, I: 'static, K: 'static))]
+#[props(bounds(T: 'static, I: 'static, K: 'static))]
 pub struct ForProps<T, I, K> {
     data: I,
     key: Shared<dyn Fn(&T) -> K>,

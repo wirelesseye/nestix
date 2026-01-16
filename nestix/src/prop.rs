@@ -7,6 +7,31 @@ pub mod __internal {
     pub struct Set;
     pub struct Unset;
     pub struct Defaulted;
+
+    pub trait BuilderWrapper {
+        type Inner;
+        type With<NewInner>; // The type of Self after swapping the inner builder
+        type Remainder; // Holds the Child's fields (required_field, optional_field)
+
+        // Deconstructs the wrapper into the specific inner builder and the wrapper's own fields
+        fn into_parts(self) -> (Self::Inner, Self::Remainder);
+
+        // Reconstructs the wrapper with a NEW inner builder (possibly different type)
+        fn from_parts<NewInner>(
+            inner: NewInner,
+            remainder: Self::Remainder,
+        ) -> Self::With<NewInner>;
+    }
+
+    pub trait Buildable {
+        type Output;
+
+        fn build(self) -> Self::Output;
+    }
+}
+
+pub trait HasBuilder {
+    type Builder;
 }
 
 #[allow(private_bounds)]
