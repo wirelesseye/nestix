@@ -110,6 +110,8 @@ pub fn generate_closure(input: ClosureInput) -> Result<TokenStream2, syn::Error>
 
 fn get_ident_from_expr(expr: &Expr) -> Option<Ident> {
     match expr {
+        Expr::Call(expr_call) => get_ident_from_expr(&expr_call.func),
+        Expr::MethodCall(expr_method_call) => Some(expr_method_call.method.clone()),
         Expr::Cast(expr_cast) => get_ident_from_expr(&expr_cast.expr),
         Expr::Field(expr_field) => match &expr_field.member {
             syn::Member::Named(ident) => Some(ident.clone()),
