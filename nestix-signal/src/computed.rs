@@ -65,9 +65,13 @@ impl<T> PartialEq for Computed<T> {
     }
 }
 
-impl<T: Clone> Signal<T> for Computed<T> {
+impl<T: 'static + Clone> Signal<T> for Computed<T> {
     fn get(&self) -> T {
         self.get()
+    }
+    
+    fn box_clone(&self) -> Box<dyn Signal<T>> {
+        Box::new(self.clone())
     }
 }
 

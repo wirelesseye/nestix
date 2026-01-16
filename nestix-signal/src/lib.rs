@@ -43,6 +43,14 @@ pub(crate) fn end_effect(effect: &Shared<Effect>) {
 
 pub trait Signal<T> {
     fn get(&self) -> T;
+
+    fn box_clone(&self) -> Box<dyn Signal<T>>;
+}
+
+impl<T> Clone for Box<dyn Signal<T>> {
+    fn clone(&self) -> Box<dyn Signal<T>> {
+        self.box_clone()
+    }
 }
 
 impl<T: Debug> Debug for dyn Signal<T> {

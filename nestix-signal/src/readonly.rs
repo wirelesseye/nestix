@@ -1,5 +1,6 @@
 use crate::Signal;
 
+#[derive(Clone)]
 pub struct ReadonlySignal<T> {
     signal: Box<dyn Signal<T>>,
 }
@@ -24,8 +25,12 @@ impl<T> ReadonlySignal<T> {
     }
 }
 
-impl<T> Signal<T> for ReadonlySignal<T> {
+impl<T: 'static + Clone> Signal<T> for ReadonlySignal<T> {
     fn get(&self) -> T {
         self.get()
+    }
+    
+    fn box_clone(&self) -> Box<dyn Signal<T>> {
+        Box::new(self.clone())
     }
 }
