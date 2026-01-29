@@ -16,7 +16,7 @@ pub fn Text(props: &TextProps, element: &Element) {
     let text_node = document.create_text_node(&props.text.get());
 
     effect!(
-        props.text, text_node => || text_node.set_data(&text.get())
+        [props.text, text_node] || text_node.set_data(&text.get())
     );
 
     element.provide_handle(text_node.clone());

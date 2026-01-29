@@ -25,12 +25,15 @@ pub fn For<T: Eq + 'static, I: IntoIterator<Item = T> + Clone + 'static, K: Eq +
     let contexts = element.contexts();
 
     effect!(
-        element, props.data, props.key, props.constructor, children => || {
+        [element, props.data, props.key, props.constructor, children] || {
             let mut prev_data = prev_data.borrow_mut();
             let mut prev_keys = prev_keys.borrow_mut();
             let key_fn = key.get();
             let next_data = data.get().into_iter().collect::<Vec<_>>();
-            let next_keys = next_data.iter().map(|item| key_fn(item)).collect::<Vec<_>>();
+            let next_keys = next_data
+                .iter()
+                .map(|item| key_fn(item))
+                .collect::<Vec<_>>();
             let mut children = children.borrow_mut();
 
             let result = reconcile(&*prev_keys, &next_keys);
@@ -66,23 +69,31 @@ pub fn For<T: Eq + 'static, I: IntoIterator<Item = T> + Clone + 'static, K: Eq +
                 };
 
                 if let Some(pred) = &pred {
-                    child.provide_context(PredecessorContext { element: pred.clone() });
+                    child.provide_context(PredecessorContext {
+                        element: pred.clone(),
+                    });
                 }
 
                 if added.contains(&i) {
                     child.extend_contexts(contexts.clone());
-                    untrack!(child, element => || {
-                        child.render(Some(&element));
-                        element.forward_handle(&child);
-                    });
+                    untrack!(
+                        [child, element] || {
+                            child.render(Some(&element));
+                            element.forward_handle(&child);
+                        }
+                    );
                 } else if rerender {
-                    untrack!(child, element => || {
-                        child.render(Some(&element));
-                    });
+                    untrack!(
+                        [child, element] || {
+                            child.render(Some(&element));
+                        }
+                    );
                 } else if moved.contains(&i) {
-                    untrack!(child, pred => || {
-                        child.move_after(pred.as_ref());
-                    });
+                    untrack!(
+                        [child, pred] || {
+                            child.move_after(pred.as_ref());
+                        }
+                    );
                 }
 
                 next_children.push(child);
@@ -95,7 +106,7 @@ pub fn For<T: Eq + 'static, I: IntoIterator<Item = T> + Clone + 'static, K: Eq +
     );
 
     element.on_destroy(closure!(
-        children => || {
+        [children] || {
             let children = children.borrow();
             for child in &*children {
                 child.destroy();

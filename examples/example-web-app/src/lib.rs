@@ -35,18 +35,18 @@ fn App() -> Element {
         Root {
             Div {
                 Button(
-                    .on_click = callback!(page => || {
+                    .on_click = callback!([page] || {
                         page.set(AppPage::Counter);
                     }),
-                    .disabled = computed!(page => || page.get() == AppPage::Counter),
+                    .disabled = computed!([page] || page.get() == AppPage::Counter),
                 ) {
                     Text("Counter")
                 }
                 Button(
-                    .on_click = callback!(page => || {
+                    .on_click = callback!([page] || {
                         page.set(AppPage::TodoList);
                     }),
-                    .disabled = computed!(page => || page.get() == AppPage::TodoList),
+                    .disabled = computed!([page] || page.get() == AppPage::TodoList),
                 ) {
                     Text("Todo List")
                 }
@@ -70,13 +70,13 @@ fn Counter() -> Element {
         Div {
             Div {
                 Text(computed!(
-                    count => || format!("Count: {}", count.get())
+                    [count] || format!("Count: {}", count.get())
                 ))
             }
 
             Button(
                 .on_click = callback!(
-                    count => || {
+                    [count] || {
                         count.mutate(|value| *value += 1);
                     }
                 ),
@@ -99,7 +99,7 @@ fn TodoList() -> Element {
     let input = create_state::<Option<Element>>(None);
 
     let add = callback!(
-        input, items => || {
+        [input, items] || {
             if let Some(element) = input.get() {
                 let handle = element.handle().get();
                 if let Some(handle) = handle {
@@ -128,11 +128,11 @@ fn TodoList() -> Element {
                 For<_, HashMap<String, String>, String>(
                     .data = items.clone(),
                     .key = callback!(|item: &(String, String)| item.0.clone()),
-                    .constructor = callback!(items => |item: &(String, String)| {
+                    .constructor = callback!([items] |item: &(String, String)| {
                         layout! {
                             Div {
                                 Button(
-                                    .on_click = callback!(items, item => || {
+                                    .on_click = callback!([items, item] || {
                                         items.mutate(|items| {
                                             items.remove(&item.0);
                                         });

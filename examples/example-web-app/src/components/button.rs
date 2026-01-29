@@ -2,7 +2,7 @@ use std::{cell::RefCell, collections::HashMap};
 
 use nanoid_wasm::nanoid;
 use nestix::{
-    Element, Shared, closure, component, components::ContextProvider, props, effect, layout,
+    Element, Shared, closure, component, components::ContextProvider, effect, layout, props,
 };
 use wasm_bindgen::{JsCast, prelude::Closure};
 use web_sys::{Event, HtmlButtonElement, HtmlElement};
@@ -50,9 +50,9 @@ pub fn Button(props: &ButtonProps, element: &Element) -> Element {
     });
 
     effect!(
-        html_element, button_id, props.on_click => || {
+        [html_element, button_id, props.on_click] || {
             let cb = if let Some(on_click) = on_click.get() {
-                Some(Closure::wrap(Box::new(closure!(on_click => |_: Event| {
+                Some(Closure::wrap(Box::new(closure!([on_click] |_: Event| {
                     on_click();
                 })) as Box<dyn Fn(_)>))
             } else {
@@ -78,14 +78,14 @@ pub fn Button(props: &ButtonProps, element: &Element) -> Element {
     );
 
     effect!(
-        html_element, props.disabled => || {
+        [html_element, props.disabled] || {
             let button = html_element.dyn_ref::<HtmlButtonElement>().unwrap();
             button.set_disabled(disabled.get());
         }
     );
 
     element.on_destroy(closure!(
-        html_element, button_id => || {
+        [html_element, button_id] || {
             html_element.remove();
             HANDLERS.with_borrow_mut(|handlers| handlers.remove(&button_id));
         }

@@ -19,7 +19,7 @@ pub fn Fragment(props: &FragmentProps, element: &Element) {
     let contexts = element.contexts();
 
     effect!(
-        element, prev, props.children => || {
+        [element, prev, props.children] || {
             let mut prev = prev.borrow_mut();
             let next = children.get();
 
@@ -45,13 +45,17 @@ pub fn Fragment(props: &FragmentProps, element: &Element) {
                         };
                         let child = &next[next_i];
                         if let Some(pred) = pred {
-                            child.provide_context(PredecessorContext { element: pred.clone() });
+                            child.provide_context(PredecessorContext {
+                                element: pred.clone(),
+                            });
                         }
                         child.extend_contexts(contexts.clone());
-                        untrack!(child, element => || {
-                            child.render(Some(&element));
-                            element.forward_handle(&child);
-                        });
+                        untrack!(
+                            [child, element] || {
+                                child.render(Some(&element));
+                                element.forward_handle(&child);
+                            }
+                        );
                     }
 
                     for next_i in moved {
@@ -62,11 +66,15 @@ pub fn Fragment(props: &FragmentProps, element: &Element) {
                         };
                         let child = &next[next_i];
                         if let Some(pred) = &pred {
-                            child.provide_context(PredecessorContext { element: pred.clone() });
+                            child.provide_context(PredecessorContext {
+                                element: pred.clone(),
+                            });
                         }
-                        untrack!(child, pred => || {
-                            child.move_after(pred.as_ref());
-                        });
+                        untrack!(
+                            [child, pred] || {
+                                child.move_after(pred.as_ref());
+                            }
+                        );
                     }
                 }
                 (Some(prev), None) => {
@@ -77,10 +85,12 @@ pub fn Fragment(props: &FragmentProps, element: &Element) {
                 (None, Some(next)) => {
                     for child in next {
                         child.extend_contexts(contexts.clone());
-                        untrack!(child, element => || {
-                            child.render(Some(&element));
-                            element.forward_handle(&child);
-                        });
+                        untrack!(
+                            [child, element] || {
+                                child.render(Some(&element));
+                                element.forward_handle(&child);
+                            }
+                        );
                     }
                 }
                 _ => (),
@@ -91,7 +101,7 @@ pub fn Fragment(props: &FragmentProps, element: &Element) {
     );
 
     element.on_destroy(closure!(
-        prev => || {
+        [prev] || {
             let prev = prev.borrow();
             if let Some(prev) = &*prev {
                 for child in prev {

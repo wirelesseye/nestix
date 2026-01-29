@@ -90,7 +90,7 @@ pub fn computed<T: 'static>(compute: impl Fn() -> T + 'static) -> Computed<T> {
 
     let runner = Effect::new(
         location,
-        callback!(dirty, dependents => || {
+        callback!([dirty, dependents] || {
             dirty.set(true);
             let dependents = dependents.borrow().clone();
             for effect in dependents {

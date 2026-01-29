@@ -33,7 +33,7 @@ pub fn Input(_props: &InputProps, element: &Element) {
     }
 
     element.on_destroy(closure!(
-        html_element => || {
+        [html_element] || {
             html_element.remove();
         }
     ));

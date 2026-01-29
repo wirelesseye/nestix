@@ -15,7 +15,7 @@ pub fn ContextProvider<T: Clone + 'static>(
     props: &ContextProviderProps<T>,
     element: &Element,
 ) -> Element {
-    effect!(element, props.value => || {
+    effect!([element, props.value] || {
         element.provide_context(value.get());
     });
 

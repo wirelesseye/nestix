@@ -7,7 +7,8 @@ use std::{
 };
 
 use crate::{
-    Component, ComponentID, ReadonlySignal, Shared, State, component_id, create_state, effect, prop::Props
+    Component, ComponentID, ReadonlySignal, Shared, State, component_id, create_state, effect,
+    prop::Props,
 };
 
 pub trait LayoutOutput {
@@ -114,7 +115,7 @@ impl Element {
     }
 
     pub fn forward_handle(&self, element: &Element) {
-        effect!(this: self, element => || {
+        effect!([this: self, element] || {
             let handle = element.data.handle.get();
             this.data.handle.set(handle);
         });
@@ -147,12 +148,12 @@ impl Element {
         self.context_any::<T>()
             .map(|ctx| Rc::downcast::<T>(ctx).unwrap())
     }
-    
+
     pub fn predecessor(&self) -> Option<Element> {
         let ctx = self.context::<PredecessorContext>();
         ctx.map(|ctx| ctx.element.clone())
     }
-    
+
     pub(crate) fn move_after(&self, pred: Option<&Element>) {
         let moved_callbacks = self.data.moved_callbacks.take();
         for callback in moved_callbacks {

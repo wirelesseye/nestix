@@ -515,7 +515,7 @@ fn generate_layout_children(input: &LayoutChildren) -> Result<TokenStream2, syn:
             .children = {
                 #element_output
                 #crate_path::computed(#crate_path::closure!(
-                    #clone_vars_tokens => move || {
+                    [#clone_vars_tokens] move || {
                         let mut __children = Vec::new();
                         #push_element_outout
                         Some(__children)
