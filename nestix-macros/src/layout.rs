@@ -4,11 +4,10 @@ use proc_macro::TokenStream;
 use proc_macro2::{TokenStream as TokenStream2, TokenTree};
 use quote::{ToTokens, format_ident, quote};
 use syn::{
-    Attribute, Expr, Ident, Meta, Token, Type, braced, parenthesized,
+    Expr, Ident, Token, Type, braced, bracketed, parenthesized,
     parse::Parse,
     parse_macro_input,
-    spanned::Spanned,
-    token::{Brace, Paren},
+    token::{Brace, Bracket, Paren},
 };
 
 use crate::util::{FoundCrateExt, crate_name};
@@ -48,7 +47,7 @@ impl Parse for LayoutInput {
             None
         };
 
-        let children = if input.peek(Brace) {
+        let children = if input.peek(Bracket) || input.peek(Brace) {
             let children: LayoutChildren = input.parse()?;
             Some(children)
         } else {
@@ -64,48 +63,24 @@ impl Parse for LayoutInput {
     }
 }
 
-struct LayoutChildrenAttribute {
-    clone_vars_tokens: Option<TokenStream2>,
-}
-
-impl LayoutChildrenAttribute {
-    fn parse_attributes(input: syn::parse::ParseStream) -> syn::Result<Self> {
-        let mut clone_vars_tokens = None;
-
-        let attrs = Attribute::parse_inner(&input)?;
-        for attr in attrs {
-            match attr.meta {
-                Meta::List(meta_list) => {
-                    if let Some(ident) = meta_list.path.get_ident() {
-                        if ident == "clone" {
-                            clone_vars_tokens = Some(meta_list.tokens);
-                        } else {
-                            return Err(syn::Error::new(ident.span(), "unknown attribute"));
-                        }
-                    } else {
-                        return Err(syn::Error::new(meta_list.span(), "unknown attribute"));
-                    }
-                }
-                other => return Err(syn::Error::new(other.span(), "unknown attribute")),
-            }
-        }
-
-        Ok(Self { clone_vars_tokens })
-    }
-}
-
 struct LayoutChildren {
-    attr: LayoutChildrenAttribute,
+    clone_vars: Option<TokenStream2>,
     items: Vec<LayoutChild>,
 }
 
 impl Parse for LayoutChildren {
     fn parse(input: syn::parse::ParseStream) -> syn::Result<Self> {
+        let clone_vars = if input.peek(Bracket) {
+            let inner;
+            bracketed!(inner in input);
+            Some(inner.parse()?)
+        } else {
+            None
+        };
+
         let inner;
         braced!(inner in input);
         let input = inner;
-
-        let attr: LayoutChildrenAttribute = LayoutChildrenAttribute::parse_attributes(&input)?;
 
         let mut items = Vec::new();
         loop {
@@ -120,7 +95,7 @@ impl Parse for LayoutChildren {
             }
         }
 
-        Ok(Self { attr, items })
+        Ok(Self { clone_vars, items })
     }
 }
 
@@ -496,8 +471,8 @@ fn generate_layout_children(input: &LayoutChildren) -> Result<TokenStream2, syn:
     let mut element_output = TokenStream2::new();
     let mut push_element_outout = TokenStream2::new();
 
-    let clone_vars_tokens = &input.attr.clone_vars_tokens;
-    let computed = clone_vars_tokens.is_some() || input.items.iter().any(|item| item.is_yield);
+    let clone_vars = &input.clone_vars;
+    let computed = clone_vars.is_some() || input.items.iter().any(|item| item.is_yield);
 
     for (i, child) in input.items.iter().enumerate() {
         let element_ident = format_ident!("__element_{}", i);
@@ -515,7 +490,7 @@ fn generate_layout_children(input: &LayoutChildren) -> Result<TokenStream2, syn:
             .children = {
                 #element_output
                 #crate_path::computed(#crate_path::closure!(
-                    [#clone_vars_tokens] move || {
+                    [#clone_vars] move || {
                         let mut __children = Vec::new();
                         #push_element_outout
                         Some(__children)
