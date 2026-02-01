@@ -10,7 +10,7 @@ pub fn prop_value(input: TokenStream) -> TokenStream {
     quote! {
         {
             #[allow(unused_imports)]
-            use #crate_path::prop::{PlainKind, SignalKind};
+            use #crate_path::{PlainKind, SignalKind};
             match {#input} {
                 value => (&value).prop_value_tag().new(value),
             }

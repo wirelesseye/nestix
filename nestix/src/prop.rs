@@ -3,7 +3,7 @@ use std::{any::Any, fmt::Debug, marker::PhantomData, rc::Rc};
 use nestix_signal::Signal;
 
 #[doc(hidden)]
-pub mod __internal {
+pub mod __builder_internal {
     pub struct Set;
     pub struct Unset;
     pub struct Defaulted;

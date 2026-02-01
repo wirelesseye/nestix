@@ -11,13 +11,13 @@ use crate::{
     prop::Props,
 };
 
-pub trait LayoutOutput {
+pub trait ComponentOutput {
     fn render(&self, parent: Option<&Element>);
 
     fn handle_destroy(&self, parent: &Element);
 }
 
-impl LayoutOutput for () {
+impl ComponentOutput for () {
     #[inline]
     fn render(&self, _parent: Option<&Element>) {}
 
@@ -25,7 +25,7 @@ impl LayoutOutput for () {
     fn handle_destroy(&self, _parent: &Element) {}
 }
 
-impl LayoutOutput for Option<Element> {
+impl ComponentOutput for Option<Element> {
     #[inline]
     fn render(&self, parent: Option<&Element>) {
         if let Some(element) = self {
@@ -44,7 +44,7 @@ impl LayoutOutput for Option<Element> {
     }
 }
 
-impl LayoutOutput for Element {
+impl ComponentOutput for Element {
     #[inline]
     fn render(&self, parent: Option<&Element>) {
         if let Some(parent) = parent {

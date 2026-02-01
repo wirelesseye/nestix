@@ -3,14 +3,14 @@ use std::{cell::RefCell, rc::Rc};
 use nestix_macros::{closure, component, props};
 
 use crate::{
-    Element, LayoutOutput, PredecessorContext, effect, untrack,
+    Children, ComponentOutput, Element, PredecessorContext, effect, untrack,
     utils::reconcile::{ReconcileResult, reconcile},
 };
 
 #[props(debug)]
 #[derive(Debug)]
 pub struct FragmentProps {
-    pub children: Option<Vec<Element>>,
+    pub children: Children,
 }
 
 #[component]
@@ -21,7 +21,7 @@ pub fn Fragment(props: &FragmentProps, element: &Element) {
     effect!(
         [element, prev, props.children] || {
             let mut prev = prev.borrow_mut();
-            let next = children.get();
+            let next = children.get().into_elements();
 
             match (&*prev, &next) {
                 (Some(prev), Some(next)) => {

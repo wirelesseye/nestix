@@ -261,7 +261,7 @@ fn generate_props(attr: PropsAttr, mut item: ItemStruct) -> Result<TokenStream2,
 
         if !extends {
             let ty = &field.ty;
-            let path = parse_quote!(#crate_path::prop::PropValue<#ty>);
+            let path = parse_quote!(#crate_path::PropValue<#ty>);
             field.ty = Type::Path(TypePath {
                 qself: None,
                 path: path,
@@ -350,6 +350,10 @@ fn generate_props(attr: PropsAttr, mut item: ItemStruct) -> Result<TokenStream2,
     };
     let mut start_params = TokenStream2::new();
     let mut start_args = TokenStream2::new();
+    let builder_vis = match vis {
+        Visibility::Inherited => parse_quote!(pub(super)),
+        other => other.clone()
+    };
     let mut builder_default_fields = TokenStream2::new();
     let mut builder_build_fields = TokenStream2::new();
     let mut builder_build_type_bounds = TokenStream2::new();
@@ -410,7 +414,7 @@ fn generate_props(attr: PropsAttr, mut item: ItemStruct) -> Result<TokenStream2,
 
         if extends.is_some() {
             quote! {
-                #type_param_ident=<#field_ty as nestix::prop::HasBuilder>::Builder,
+                #type_param_ident=<#field_ty as nestix::HasBuilder>::Builder,
             }
             .to_tokens(&mut default_type_params);
             quote! {
@@ -478,7 +482,7 @@ fn generate_props(attr: PropsAttr, mut item: ItemStruct) -> Result<TokenStream2,
             };
 
             quote! {
-                #field_ident: #crate_path::prop::PropValue::from_plain(#default_value),
+                #field_ident: #crate_path::PropValue::from_plain(#default_value),
             }
             .to_tokens(&mut builder_default_fields);
 
@@ -488,7 +492,7 @@ fn generate_props(attr: PropsAttr, mut item: ItemStruct) -> Result<TokenStream2,
             .to_tokens(&mut builder_build_fields);
         } else if extends.is_some() {
             quote! {
-                #field_ident: <#field_ty as nestix::prop::HasBuilder>::Builder::new(#start_args),
+                #field_ident: <#field_ty as nestix::HasBuilder>::Builder::new(#start_args),
             }
             .to_tokens(&mut builder_default_fields);
 
@@ -732,11 +736,11 @@ fn generate_props(attr: PropsAttr, mut item: ItemStruct) -> Result<TokenStream2,
 
         #vis mod #builder_mod_name {
             use super::*;
-            use #crate_path::prop::__internal::*;
+            use #crate_path::__builder_internal::*;
 
             #marker_traits
 
-            pub struct #builder_ident<#default_type_params> #builder_fields
+            #builder_vis struct #builder_ident<#default_type_params> #builder_fields
 
             impl<#bounds> #builder_ident <#generic_params> {
                 pub fn new(#start_params) -> Self {
@@ -786,11 +790,11 @@ fn generate_props(attr: PropsAttr, mut item: ItemStruct) -> Result<TokenStream2,
             }
         }
 
-        impl<#bounds> #crate_path::prop::Props for #ident <#generic_params> {
+        impl<#bounds> #crate_path::Props for #ident <#generic_params> {
             #impl_debug_output
         }
 
-        impl<#bounds> #crate_path::prop::HasBuilder for #ident <#generic_params> {
+        impl<#bounds> #crate_path::HasBuilder for #ident <#generic_params> {
             type Builder = #builder_ident <#generic_params>;
         }
 

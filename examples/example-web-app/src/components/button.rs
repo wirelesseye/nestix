@@ -2,7 +2,8 @@ use std::{cell::RefCell, collections::HashMap};
 
 use nanoid_wasm::nanoid;
 use nestix::{
-    Element, Shared, closure, component, components::ContextProvider, effect, layout, props,
+    Children, Element, Shared, closure, component, components::ContextProvider, effect, layout,
+    props,
 };
 use wasm_bindgen::{JsCast, prelude::Closure};
 use web_sys::{Event, HtmlButtonElement, HtmlElement};
@@ -26,7 +27,7 @@ impl ButtonEventHandlers {
 #[props(debug)]
 #[derive(Debug)]
 pub struct ButtonProps {
-    children: Option<Vec<Element>>,
+    children: Children,
     on_click: Option<Shared<dyn Fn()>>,
     #[props(default)]
     disabled: bool,

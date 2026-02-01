@@ -493,7 +493,7 @@ fn generate_layout_children(input: &LayoutChildren) -> Result<TokenStream2, syn:
                     [#clone_vars] move || {
                         let mut __children = Vec::new();
                         #push_element_outout
-                        Some(__children)
+                        #crate_path::Children::from(__children)
                     }
                 ))
             }

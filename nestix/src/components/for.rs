@@ -3,7 +3,7 @@ use std::{cell::RefCell, hash::Hash, marker::PhantomData, rc::Rc};
 use nestix_macros::{closure, component, props};
 
 use crate::{
-    Element, LayoutOutput, PredecessorContext, Shared, effect, untrack,
+    Element, ComponentOutput, PredecessorContext, Shared, effect, untrack,
     utils::reconcile::{ReconcileResult, reconcile},
 };
 

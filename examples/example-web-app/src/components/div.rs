@@ -1,4 +1,4 @@
-use nestix::{Element, closure, component, components::ContextProvider, layout, props};
+use nestix::{Children, Element, closure, component, components::ContextProvider, layout, props};
 use wasm_bindgen::{JsCast, UnwrapThrowExt};
 use web_sys::{HtmlElement, Text};
 
@@ -7,7 +7,7 @@ use crate::ParentContext;
 #[props(debug)]
 #[derive(Debug)]
 pub struct DivProps {
-    children: Option<Vec<Element>>,
+    children: Children,
 }
 
 #[component]
