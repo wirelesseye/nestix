@@ -104,12 +104,12 @@ mod tests {
         layout! {
             Container(
                 .children = callback!(
-                    move |value: String| computed!([count_str] || layout! {
+                    move |value: String| computed!([count_str] || Layout::from(layout! {
                         Fragment {
                             Text(.value = count_str.clone())
                             Text(.value = value.clone())
                         }
-                    }.into())
+                    }))
                 ),
             )
         }

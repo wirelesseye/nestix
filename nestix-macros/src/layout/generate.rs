@@ -303,7 +303,7 @@ pub fn generate_layout(input: &LayoutInput) -> Result<TokenStream, syn::Error> {
                             let mut __items = Vec::new();
                             #computed_element_defs
                             #push_output
-                            #crate_path::Layout::from(__items)
+                            __items
                         }
                     ))
                 }})

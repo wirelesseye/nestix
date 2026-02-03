@@ -1,6 +1,7 @@
 use std::{any::Any, fmt::Debug, marker::PhantomData, rc::Rc};
 
-use nestix_signal::Signal;
+use nestix_macros::callback;
+use nestix_signal::{Shared, Signal};
 
 #[doc(hidden)]
 pub mod __builder_internal {
@@ -56,14 +57,14 @@ impl Props for () {
 #[derive(Debug)]
 enum PropValueInner<T> {
     Plain(Rc<T>),
-    Signal(Rc<dyn Signal<T>>),
+    Signal(Shared<dyn Fn() -> T>),
 }
 
 impl<T> PartialEq for PropValueInner<T> {
     fn eq(&self, other: &Self) -> bool {
         match (self, other) {
             (Self::Plain(l0), Self::Plain(r0)) => Rc::ptr_eq(l0, r0),
-            (Self::Signal(l0), Self::Signal(r0)) => Rc::ptr_eq(l0, r0),
+            (Self::Signal(l0), Self::Signal(r0)) => l0 == r0,
             _ => false,
         }
     }
@@ -83,9 +84,9 @@ impl<T> PropValue<T> {
         }
     }
 
-    pub fn from_signal(signal: impl Signal<T> + 'static) -> Self {
+    pub fn from_signal<U: Into<T>, S: Signal<Output = U> + 'static>(signal: S) -> Self {
         Self {
-            inner: PropValueInner::Signal(Rc::new(signal)),
+            inner: PropValueInner::Signal(callback!(move || { signal.get().into() })),
         }
     }
 }
@@ -94,7 +95,7 @@ impl<T: Clone> PropValue<T> {
     pub fn get(&self) -> T {
         match &self.inner {
             PropValueInner::Plain(value) => (**value).clone(),
-            PropValueInner::Signal(signal) => signal.get(),
+            PropValueInner::Signal(signal) => signal(),
         }
     }
 }
@@ -145,7 +146,7 @@ pub struct SignalTag<T>(PhantomData<T>);
 
 impl<T> SignalTag<T> {
     #[inline]
-    pub fn new<S: Signal<T> + 'static>(self, value: S) -> PropValue<T> {
+    pub fn new<U: Into<T>, S: Signal<Output = U> + 'static>(self, value: S) -> PropValue<T> {
         PropValue::from_signal(value)
     }
 }
@@ -158,7 +159,12 @@ pub trait SignalKind<T> {
     }
 }
 
-impl<T, S: Signal<T>> SignalKind<T> for S {}
+impl<T, S> SignalKind<T> for S
+where
+    S: Signal,
+    S::Output: Into<T>,
+{
+}
 
 #[doc(hidden)]
 pub struct PropValueTag<T>(PhantomData<T>);

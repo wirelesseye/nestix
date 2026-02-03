@@ -88,12 +88,14 @@ impl<T: Clone> State<T> {
     }
 }
 
-impl<T: 'static + Clone> Signal<T> for State<T> {
+impl<T: 'static + Clone> Signal for State<T> {
+    type Output = T;
+
     fn get(&self) -> T {
         self.get()
     }
 
-    fn box_clone(&self) -> Box<dyn Signal<T>> {
+    fn box_clone(&self) -> Box<dyn Signal<Output = T>> {
         Box::new(self.clone())
     }
 }
