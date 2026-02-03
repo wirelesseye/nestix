@@ -2,12 +2,12 @@ pub mod components;
 pub mod element;
 
 mod prop;
-mod children;
+mod layout;
 mod utils;
 
 pub use components::*;
 pub use element::*;
-pub use children::*;
+pub use layout::*;
 pub use prop::*;
 
 pub use nestix_macros::*;

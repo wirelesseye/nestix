@@ -1,5 +1,5 @@
 use nestix::{
-    Children, Element, component, components::ContextProvider, layout, props
+    Layout, Element, component, components::ContextProvider, layout, props
 };
 use wasm_bindgen::JsCast;
 use web_sys::HtmlElement;
@@ -9,7 +9,7 @@ use crate::ParentContext;
 #[props(debug)]
 #[derive(Debug)]
 pub struct RootProps {
-    children: Children,
+    children: Layout,
 }
 
 #[component]

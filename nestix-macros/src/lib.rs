@@ -1,12 +1,13 @@
 use proc_macro::TokenStream;
 
+mod build_props;
 mod callback;
+mod clone_var;
 mod closure;
 mod component;
-mod props;
 mod layout;
 mod prop_value;
-mod build_props;
+mod props;
 mod util;
 
 #[proc_macro]

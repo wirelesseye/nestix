@@ -2,9 +2,11 @@ use proc_macro::TokenStream;
 use proc_macro2::TokenStream as TokenStream2;
 use quote::{ToTokens, quote};
 use syn::{
-    Expr, ExprClosure, Ident, Token, bracketed, parse::Parse, parse_macro_input,
-    punctuated::Punctuated, spanned::Spanned, token::Bracket,
+    ExprClosure, Token, bracketed, parse::Parse, parse_macro_input, punctuated::Punctuated,
+    token::Bracket,
 };
+
+use crate::clone_var::{CloneVar, generate_clone_var};
 
 pub fn closure(input: TokenStream) -> TokenStream {
     let closure_input = parse_macro_input!(input as ClosureInput);
@@ -13,27 +15,8 @@ pub fn closure(input: TokenStream) -> TokenStream {
         .into()
 }
 
-pub struct CloneVar {
-    expr: Expr,
-    ident: Option<Ident>,
-}
-
-impl Parse for CloneVar {
-    fn parse(input: syn::parse::ParseStream) -> syn::Result<Self> {
-        let ident = if input.peek2(Token![:]) {
-            let ident: Ident = input.parse()?;
-            input.parse::<Token![:]>()?;
-            Some(ident)
-        } else {
-            None
-        };
-        let expr: Expr = input.parse()?;
-        Ok(Self { ident, expr })
-    }
-}
-
 pub struct ClosureInput {
-    pub clone_vars: Punctuated<CloneVar, Token![,]>,
+    pub clone_vars: Option<Punctuated<CloneVar, Token![,]>>,
     pub expr_closure: Option<ExprClosure>,
     pub closure_tokens: TokenStream2,
 }
@@ -43,9 +26,9 @@ impl Parse for ClosureInput {
         let clone_vars = if input.peek(Bracket) {
             let inner;
             bracketed!(inner in input);
-            Punctuated::parse_terminated(&inner)?
+            Some(Punctuated::parse_terminated(&inner)?)
         } else {
-            Punctuated::new()
+            None
         };
 
         let closure_tokens: TokenStream2 = input.parse()?;
@@ -60,26 +43,12 @@ impl Parse for ClosureInput {
 }
 
 pub fn generate_closure(input: ClosureInput) -> Result<TokenStream2, syn::Error> {
-    let has_clone_vars = !input.clone_vars.is_empty();
+    let has_clone_vars = input.clone_vars.is_some();
     let clone_vars_output = {
         let mut tokens = TokenStream2::new();
-        for clone_var in input.clone_vars {
-            let CloneVar { expr, ident } = clone_var;
-            if let Some(ident) = ident {
-                quote! {
-                    let #ident = #expr.clone();
-                }
-                .to_tokens(&mut tokens);
-            } else {
-                let ident = if let Some(ident) = get_ident_from_expr(&expr) {
-                    ident
-                } else {
-                    return Err(syn::Error::new(expr.span(), "explicit identifier needed"));
-                };
-                quote! {
-                    let #ident = #expr.clone();
-                }
-                .to_tokens(&mut tokens);
+        if let Some(clone_vars) = input.clone_vars {
+            for clone_var in clone_vars {
+                generate_clone_var(&clone_var)?.to_tokens(&mut tokens);
             }
         }
         tokens
@@ -98,23 +67,4 @@ pub fn generate_closure(input: ClosureInput) -> Result<TokenStream2, syn::Error>
         #clone_vars_output
         #closure_tokens
     }})
-}
-
-fn get_ident_from_expr(expr: &Expr) -> Option<Ident> {
-    match expr {
-        Expr::Call(expr_call) => get_ident_from_expr(&expr_call.func),
-        Expr::MethodCall(expr_method_call) => Some(expr_method_call.method.clone()),
-        Expr::Cast(expr_cast) => get_ident_from_expr(&expr_cast.expr),
-        Expr::Field(expr_field) => match &expr_field.member {
-            syn::Member::Named(ident) => Some(ident.clone()),
-            syn::Member::Unnamed(_) => None,
-        },
-        Expr::Path(expr_path) => {
-            let last_seg = expr_path.path.segments.last();
-            last_seg.map(|seg| seg.ident.clone())
-        }
-        Expr::Reference(expr_reference) => get_ident_from_expr(&expr_reference.expr),
-        Expr::Unary(expr_unary) => get_ident_from_expr(&expr_unary.expr),
-        _ => None,
-    }
 }

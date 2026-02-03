@@ -2,7 +2,7 @@ use std::{cell::RefCell, collections::HashMap};
 
 use nanoid_wasm::nanoid;
 use nestix::{
-    Children, Element, Shared, closure, component, components::ContextProvider, effect, layout,
+    Layout, Element, Shared, closure, component, components::ContextProvider, effect, layout,
     props,
 };
 use wasm_bindgen::{JsCast, prelude::Closure};
@@ -27,7 +27,7 @@ impl ButtonEventHandlers {
 #[props(debug)]
 #[derive(Debug)]
 pub struct ButtonProps {
-    children: Children,
+    children: Layout,
     on_click: Option<Shared<dyn Fn()>>,
     #[props(default)]
     disabled: bool,

@@ -3,14 +3,14 @@ use std::{cell::RefCell, rc::Rc};
 use nestix_macros::{closure, component, props};
 
 use crate::{
-    Children, ComponentOutput, Element, PredecessorContext, effect, untrack,
+    Layout, ComponentOutput, Element, PredecessorContext, effect, untrack,
     utils::reconcile::{ReconcileResult, reconcile},
 };
 
 #[props(debug)]
 #[derive(Debug)]
 pub struct FragmentProps {
-    pub children: Children,
+    pub children: Layout,
 }
 
 #[component]

@@ -115,6 +115,8 @@ fn TodoList() -> Element {
         }
     );
 
+    let cond = create_state(true);
+
     layout! {
         Div {
             Div {
@@ -124,6 +126,18 @@ fn TodoList() -> Element {
                 }
             }
 
+            Div[cond] {
+                if cond.get() {
+                    Text("Test1")
+                }
+            }
+
+            Div {
+                if cond.get() {
+                    Text("Test2")
+                }
+            }
+            
             Div {
                 For<_, HashMap<String, String>, String>(
                     .data = items.clone(),

@@ -3,9 +3,9 @@ use std::ops::Index;
 use crate::Element;
 
 #[derive(Debug, Clone, Default)]
-pub struct Children(Option<Vec<Element>>);
+pub struct Layout(Option<Vec<Element>>);
 
-impl Children {
+impl Layout {
     pub fn iter(&self) -> impl Iterator<Item = &Element> {
         self.into_iter()
     }
@@ -15,25 +15,40 @@ impl Children {
     }
 }
 
-impl From<Element> for Children {
+impl From<()> for Layout {
+    fn from(_: ()) -> Self {
+        Self(None)
+    }
+}
+
+impl From<Element> for Layout {
     fn from(value: Element) -> Self {
         Self(Some(vec![value]))
     }
 }
 
-impl From<Option<Vec<Element>>> for Children {
+impl From<Option<Element>> for Layout {
+    fn from(value: Option<Element>) -> Self {
+        match value {
+            Some(element) => Self(Some(vec![element])),
+            None => Self(None),
+        }
+    }
+}
+
+impl From<Option<Vec<Element>>> for Layout {
     fn from(value: Option<Vec<Element>>) -> Self {
         Self(value)
     }
 }
 
-impl From<Vec<Element>> for Children {
+impl From<Vec<Element>> for Layout {
     fn from(value: Vec<Element>) -> Self {
         Self(Some(value))
     }
 }
 
-impl<'a> IntoIterator for &'a Children {
+impl<'a> IntoIterator for &'a Layout {
     type Item = &'a Element;
     type IntoIter = std::slice::Iter<'a, Element>;
 
@@ -42,7 +57,7 @@ impl<'a> IntoIterator for &'a Children {
     }
 }
 
-impl IntoIterator for Children {
+impl IntoIterator for Layout {
     type Item = Element;
     type IntoIter = std::vec::IntoIter<Element>;
 
@@ -51,7 +66,7 @@ impl IntoIterator for Children {
     }
 }
 
-impl Index<usize> for Children {
+impl Index<usize> for Layout {
     type Output = Element;
 
     fn index(&self, index: usize) -> &Self::Output {
@@ -60,14 +75,14 @@ impl Index<usize> for Children {
 }
 
 mod tests {
-    use nestix_macros::{callback, component, layout, props};
-    use nestix_signal::{Computed, Shared, computed, create_state};
-
-    use crate::{Children, Element, Fragment};
+    use crate::{
+        Computed, Element, Fragment, Layout, Shared, callback, component, computed, create_state,
+        layout, props,
+    };
 
     #[props]
     struct ContainerProps {
-        children: Shared<dyn Fn(String) -> Computed<Children>>,
+        children: Shared<dyn Fn(String) -> Computed<Layout>>,
     }
 
     #[component]
