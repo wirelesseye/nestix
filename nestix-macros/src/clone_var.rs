@@ -1,28 +1,41 @@
 use proc_macro2::TokenStream;
-use quote::quote;
+use quote::{ToTokens, quote};
 use syn::{Expr, Ident, Token, parse::Parse, spanned::Spanned};
 
 pub struct CloneVar {
-    pub expr: Expr,
     pub ident: Option<Ident>,
+    pub colon_token: Option<Token![:]>,
+    pub expr: Expr,
 }
 
 impl Parse for CloneVar {
     fn parse(input: syn::parse::ParseStream) -> syn::Result<Self> {
-        let ident = if input.peek2(Token![:]) {
+        let (ident, colon_token) = if input.peek2(Token![:]) {
             let ident: Ident = input.parse()?;
-            input.parse::<Token![:]>()?;
-            Some(ident)
+            let colon_token = input.parse::<Token![:]>()?;
+            (Some(ident), Some(colon_token))
         } else {
-            None
+            (None, None)
         };
         let expr: Expr = input.parse()?;
-        Ok(Self { ident, expr })
+        Ok(Self {
+            ident,
+            colon_token,
+            expr,
+        })
+    }
+}
+
+impl ToTokens for CloneVar {
+    fn to_tokens(&self, tokens: &mut TokenStream) {
+        self.ident.to_tokens(tokens);
+        self.colon_token.to_tokens(tokens);
+        self.expr.to_tokens(tokens);
     }
 }
 
 pub fn generate_clone_var(input: &CloneVar) -> Result<TokenStream, syn::Error> {
-    let CloneVar { expr, ident } = input;
+    let CloneVar { expr, colon_token: _, ident } = input;
     if let Some(ident) = ident {
         Ok(quote! {
             let #ident = #expr.clone();

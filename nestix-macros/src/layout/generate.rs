@@ -56,6 +56,7 @@ fn generate_layout_item_element(
         ty,
         props_tokens,
         clone_vars,
+        args,
         children,
     } = input;
 
@@ -85,20 +86,32 @@ fn generate_layout_item_element(
             tokens
         };
 
-        if let Some(children) = children {
-            let children_output = generate_layout(children)?;
-
+        if let Some((or_1, args, or_2)) = args {
+            let children = children.as_ref().unwrap();
+            quote! {
+                .children = #crate_path::callback!(
+                    [#clone_vars] #or_1 #args #or_2 #crate_path::prop_value!(#crate_path::layout! {
+                        #children
+                    })
+                ),
+            }
+            .to_tokens(&mut tokens);
+        } else if let Some(children) = children {
             if has_clone_vars {
                 quote! {
                     .children = {
                         #clone_vars_output
-                        #children_output
-                    }
+                        #crate_path::layout! {
+                            #children
+                        }
+                    },
                 }
                 .to_tokens(&mut tokens);
             } else {
                 quote! {
-                    .children = #children_output
+                    .children = #crate_path::layout! {
+                        #children
+                    },
                 }
                 .to_tokens(&mut tokens);
             }

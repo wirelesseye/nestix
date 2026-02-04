@@ -76,13 +76,12 @@ impl Index<usize> for Layout {
 
 mod tests {
     use crate::{
-        Computed, Element, Fragment, Layout, Shared, callback, component, computed, create_state,
-        layout, props,
+        Element, Fragment, Layout, PropValue, Shared, component, computed, create_state, layout, props
     };
 
     #[props]
     struct ContainerProps {
-        children: Shared<dyn Fn(String) -> Computed<Layout>>,
+        children: Shared<dyn Fn(String) -> PropValue<Layout>>,
     }
 
     #[component]
@@ -102,16 +101,17 @@ mod tests {
         let count_str = computed!([count] || count.get().to_string());
 
         layout! {
-            Container(
-                .children = callback!(
-                    move |value: String| computed!([count_str] || Layout::from(layout! {
+            Fragment {
+                Container [count_str] |value: String| {
+                    if true {
                         Fragment {
                             Text(.value = count_str.clone())
                             Text(.value = value.clone())
                         }
-                    }))
-                ),
-            )
+                    }
+                }
+                Text(.value = count_str)
+            }
         }
     }
 }

@@ -1,6 +1,6 @@
 use proc_macro2::TokenStream;
 use syn::{
-    Expr, Ident, Token, Type, braced, bracketed, parenthesized, parse::Parse,
+    Expr, FnArg, Ident, Token, Type, braced, bracketed, parenthesized, parse::Parse,
     punctuated::Punctuated, token,
 };
 
@@ -12,7 +12,8 @@ pub struct LayoutItemElement {
     pub ty: Type,
     pub props_tokens: Option<TokenStream>,
     pub clone_vars: Option<Punctuated<CloneVar, Token![,]>>,
-    pub children: Option<LayoutInput>,
+    pub args: Option<(Token![|], Punctuated<FnArg, Token![,]>, Token![|])>,
+    pub children: Option<TokenStream>,
 }
 
 impl Parse for LayoutItemElement {
@@ -50,11 +51,27 @@ impl Parse for LayoutItemElement {
             None
         };
 
+        let args = if input.peek(Token![|]) {
+            let or1_token = input.parse::<Token![|]>()?;
+            let mut args = Punctuated::new();
+            while !input.peek(Token![|]) {
+                let arg = FnArg::parse(input)?;
+                args.push_value(arg);
+                if input.peek(Token![,]) {
+                    let comma = input.parse::<Token![,]>()?;
+                    args.push_punct(comma);
+                }
+            }
+            let or2_token = input.parse::<Token![|]>()?;
+            Some((or1_token, args, or2_token))
+        } else {
+            None
+        };
+
         let children = if input.peek(token::Brace) {
             let inner;
             braced!(inner in input);
-            let children: LayoutInput = inner.parse()?;
-            Some(children)
+            Some(inner.parse()?)
         } else {
             None
         };
@@ -65,6 +82,7 @@ impl Parse for LayoutItemElement {
             ty,
             props_tokens,
             clone_vars,
+            args,
             children,
         })
     }
