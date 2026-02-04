@@ -137,28 +137,25 @@ fn TodoList() -> Element {
                     Text("Test2")
                 }
             }
-            
+
             Div {
                 For<_, HashMap<String, String>, String>(
                     .data = items.clone(),
-                    .key = callback!(|item: &(String, String)| item.0.clone()),
-                    .constructor = callback!([items] |item: &(String, String)| {
-                        layout! {
-                            Div {
-                                Button(
-                                    .on_click = callback!([items, item] || {
-                                        items.mutate(|items| {
-                                            items.remove(&item.0);
-                                        });
-                                    })
-                                ) {
-                                    Text("X")
-                                }
-                                Text(format!("{}", item.1)),
-                            }
+                    .key = callback!(|item: &(String, String)| item.0.clone())
+                ) [items] |item: &(String, String)| {
+                    Div {
+                        Button(
+                            .on_click = callback!([items, item] || {
+                                items.mutate(|items| {
+                                    items.remove(&item.0);
+                                });
+                            })
+                        ) {
+                            Text("X")
                         }
-                    })
-                )
+                        Text(format!("{}", item.1)),
+                    }
+                }
             }
         }
     }

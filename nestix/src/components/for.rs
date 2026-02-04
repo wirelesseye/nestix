@@ -3,15 +3,14 @@ use std::{cell::RefCell, hash::Hash, marker::PhantomData, rc::Rc};
 use nestix_macros::{closure, component, props};
 
 use crate::{
-    Element, ComponentOutput, PredecessorContext, Shared, effect, untrack,
-    utils::reconcile::{ReconcileResult, reconcile},
+    ComponentOutput, Element, PredecessorContext, PropValue, Shared, effect, untrack, utils::reconcile::{ReconcileResult, reconcile}
 };
 
 #[props(bounds(T: 'static, I: 'static, K: 'static))]
 pub struct ForProps<T, I, K> {
     data: I,
     key: Shared<dyn Fn(&T) -> K>,
-    constructor: Shared<dyn Fn(&T) -> Element>,
+    children: Shared<dyn Fn(&T) -> PropValue<Element>>,
 }
 
 #[component(generics(T, I, K))]
@@ -21,11 +20,11 @@ pub fn For<T: Eq + 'static, I: IntoIterator<Item = T> + Clone + 'static, K: Eq +
 ) {
     let prev_data: Rc<RefCell<Vec<T>>> = Rc::new(RefCell::new(vec![]));
     let prev_keys: Rc<RefCell<Vec<K>>> = Rc::new(RefCell::new(vec![]));
-    let children: Rc<RefCell<Vec<Element>>> = Rc::new(RefCell::new(vec![]));
+    let prev_children: Rc<RefCell<Vec<Element>>> = Rc::new(RefCell::new(vec![]));
     let contexts = element.contexts();
 
     effect!(
-        [element, props.data, props.key, props.constructor, children] || {
+        [element, props.data, props.key, props.children, prev_children] || {
             let mut prev_data = prev_data.borrow_mut();
             let mut prev_keys = prev_keys.borrow_mut();
             let key_fn = key.get();
@@ -34,7 +33,7 @@ pub fn For<T: Eq + 'static, I: IntoIterator<Item = T> + Clone + 'static, K: Eq +
                 .iter()
                 .map(|item| key_fn(item))
                 .collect::<Vec<_>>();
-            let mut children = children.borrow_mut();
+            let mut prev_children = prev_children.borrow_mut();
 
             let result = reconcile(&*prev_keys, &next_keys);
             let ReconcileResult {
@@ -45,7 +44,7 @@ pub fn For<T: Eq + 'static, I: IntoIterator<Item = T> + Clone + 'static, K: Eq +
             } = result;
 
             for prev_i in removed {
-                children[prev_i].destroy();
+                prev_children[prev_i].destroy();
             }
 
             let mut next_children: Vec<Element> = Vec::new();
@@ -54,12 +53,12 @@ pub fn For<T: Eq + 'static, I: IntoIterator<Item = T> + Clone + 'static, K: Eq +
                 let child = if let Some(orig_i) = orig_i {
                     if next_data[i] != prev_data[*orig_i] {
                         rerender = true;
-                        (constructor.get())(&next_data[i])
+                        (children.get())(&next_data[i]).get()
                     } else {
-                        children[*orig_i].clone()
+                        prev_children[*orig_i].clone()
                     }
                 } else {
-                    (constructor.get())(&next_data[i])
+                    (children.get())(&next_data[i]).get()
                 };
 
                 let pred = if i > 0 {
@@ -101,13 +100,13 @@ pub fn For<T: Eq + 'static, I: IntoIterator<Item = T> + Clone + 'static, K: Eq +
 
             *prev_keys = next_keys;
             *prev_data = next_data;
-            *children = next_children;
+            *prev_children = next_children;
         }
     );
 
     element.on_destroy(closure!(
-        [children] || {
-            let children = children.borrow();
+        [prev_children] || {
+            let children = prev_children.borrow();
             for child in &*children {
                 child.destroy();
             }
