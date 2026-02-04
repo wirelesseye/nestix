@@ -3,19 +3,20 @@ use std::{cell::RefCell, hash::Hash, marker::PhantomData, rc::Rc};
 use nestix_macros::{closure, component, props};
 
 use crate::{
-    ComponentOutput, Element, PredecessorContext, PropValue, Shared, effect, untrack, utils::reconcile::{ReconcileResult, reconcile}
+    ComponentOutput, Element, PredecessorContext, PropValue, Shared, effect, untrack,
+    utils::reconcile::{ReconcileResult, reconcile},
 };
 
-#[props(bounds(T: 'static, I: 'static, K: 'static))]
-pub struct ForProps<T, I, K> {
+#[props(bounds(I: IntoIterator<Item = T> + Clone + 'static, T: Eq + 'static, K: Eq + Hash + 'static))]
+pub struct ForProps<I, T, K> {
     data: I,
     key: Shared<dyn Fn(&T) -> K>,
     children: Shared<dyn Fn(&T) -> PropValue<Element>>,
 }
 
-#[component(generics(T, I, K))]
-pub fn For<T: Eq + 'static, I: IntoIterator<Item = T> + Clone + 'static, K: Eq + Hash + 'static>(
-    props: &ForProps<T, I, K>,
+#[component(generics(I, T, K))]
+pub fn For<I: IntoIterator<Item = T> + Clone + 'static, T: Eq + 'static, K: Eq + Hash + 'static>(
+    props: &ForProps<I, T, K>,
     element: &Element,
 ) {
     let prev_data: Rc<RefCell<Vec<T>>> = Rc::new(RefCell::new(vec![]));
@@ -24,7 +25,13 @@ pub fn For<T: Eq + 'static, I: IntoIterator<Item = T> + Clone + 'static, K: Eq +
     let contexts = element.contexts();
 
     effect!(
-        [element, props.data, props.key, props.children, prev_children] || {
+        [
+            element,
+            props.data,
+            props.key,
+            props.children,
+            prev_children
+        ] || {
             let mut prev_data = prev_data.borrow_mut();
             let mut prev_keys = prev_keys.borrow_mut();
             let key_fn = key.get();
