@@ -1,205 +1,48 @@
 use std::mem;
 
 use convert_case::{Case, Casing};
-use proc_macro::TokenStream;
-use proc_macro2::{Span, TokenStream as TokenStream2};
+use proc_macro2::{Span, TokenStream};
 use quote::{ToTokens, format_ident, quote};
 use syn::{
-    Expr, FnArg, GenericParam, Ident, Index, ItemStruct, Meta, Path, Token, Type, TypePath,
-    Visibility, parenthesized, parse::Parse, parse_macro_input, parse_quote,
-    punctuated::Punctuated, spanned::Spanned, token::Paren,
+    Expr, FnArg, GenericParam, Ident, Index, ItemStruct, Meta, Token, Type, TypePath, Visibility,
+    parse_quote, punctuated::Punctuated, spanned::Spanned,
 };
 
-use crate::util::{FoundCrateExt, crate_name};
+use crate::{
+    props::parse::{Extends, PropsAttr, PropsFieldAttr},
+    util::{FoundCrateExt, crate_name},
+};
 
-pub fn props(attr: TokenStream, input: TokenStream) -> TokenStream {
-    let attr = parse_macro_input!(attr as PropsAttr);
-    let item = parse_macro_input!(input as ItemStruct);
-
-    generate_props(attr, item)
-        .unwrap_or_else(|err| TokenStream2::from(err.to_compile_error()))
-        .into()
-}
-
-#[derive(Default)]
-struct PropsAttr {
-    debug: bool,
-    bounds: Punctuated<GenericParam, Token![,]>,
-    extensible: Option<Ident>,
-}
-
-impl Parse for PropsAttr {
-    fn parse(input: syn::parse::ParseStream) -> syn::Result<Self> {
-        let mut attr = PropsAttr::default();
-
-        loop {
-            if input.is_empty() {
-                break;
-            }
-
-            let ident: Ident = input.parse()?;
-            match ident.to_string().as_str() {
-                "debug" => attr.debug = true,
-                "bounds" => {
-                    let inner;
-                    parenthesized!(inner in input);
-                    attr.bounds = Punctuated::<GenericParam, Token![,]>::parse_terminated(&inner)?;
-                }
-                "extensible" => {
-                    let inner;
-                    parenthesized!(inner in input);
-                    let ident: Ident = inner.parse()?;
-                    attr.extensible = Some(ident);
-                }
-                _ => {
-                    return Err(syn::Error::new(
-                        ident.span(),
-                        format!("unknown attribute: {}", ident),
-                    ));
-                }
-            }
-
-            if input.peek(Token![,]) {
-                input.parse::<Token![,]>()?;
-            }
-        }
-
-        Ok(attr)
-    }
-}
-
-struct Extends {
-    trait_path: Path,
-    inputs: Option<Punctuated<FnArg, Token![,]>>,
-}
-
-impl Parse for Extends {
-    fn parse(input: syn::parse::ParseStream) -> syn::Result<Self> {
-        let trait_path: Path = input.parse()?;
-
-        let inputs = if input.peek(Paren) {
-            let inner;
-            parenthesized!(inner in input);
-            let inputs = Punctuated::<FnArg, Token![,]>::parse_terminated(&inner)?;
-            Some(inputs)
-        } else {
-            None
-        };
-
-        Ok(Self { trait_path, inputs })
-    }
-}
-
-struct FieldAttr {
-    default: Option<Ident>,
+struct FieldInfo {
+    default: bool,
     default_value: Option<Expr>,
-    start: Option<Ident>,
+    start: bool,
     extends: Option<Extends>,
 }
 
-impl Default for FieldAttr {
-    fn default() -> Self {
-        Self {
-            default: None,
-            default_value: None,
-            start: None,
-            extends: None,
+fn is_option_ty(ty: &Type) -> bool {
+    match ty {
+        Type::Path(type_path) => {
+            let segments = &type_path.path.segments;
+            if segments.len() == 1 && segments.first().unwrap().ident == "Option" {
+                true
+            } else {
+                false
+            }
         }
+        _ => false,
     }
 }
 
-impl FieldAttr {
-    fn merge(mut self, other: FieldAttr) -> Self {
-        self.default = match (self.default, other.default) {
-            (None, None) => None,
-            (None, Some(default)) => Some(default),
-            (Some(default), None) => Some(default),
-            (Some(_), Some(default)) => Some(default),
-        };
-        self.default_value = other.default_value;
-        self.start = match (self.start, other.start) {
-            (None, None) => None,
-            (None, Some(start)) => Some(start),
-            (Some(start), None) => Some(start),
-            (Some(_), Some(start)) => Some(start),
-        };
-        self.extends = other.extends;
-        self
-    }
-}
-
-impl Parse for FieldAttr {
-    fn parse(input: syn::parse::ParseStream) -> syn::Result<Self> {
-        let mut attr = FieldAttr::default();
-
-        loop {
-            if input.is_empty() {
-                break;
-            }
-
-            let ident: Ident = input.parse()?;
-            match ident.to_string().as_str() {
-                "default" => {
-                    attr.default = Some(ident);
-
-                    if input.peek(Token![=]) {
-                        input.parse::<Token![=]>()?;
-                        let expr = Expr::parse_without_eager_brace(&input)?;
-                        attr.default_value = Some(expr);
-                    }
-                }
-                "start" => {
-                    attr.start = Some(ident);
-                }
-                "extends" => {
-                    let inner;
-                    parenthesized!(inner in input);
-                    let extends: Extends = inner.parse()?;
-                    attr.extends = Some(extends);
-                }
-                _ => {
-                    return Err(syn::Error::new(
-                        ident.span(),
-                        format!("unknown attribute: {}", ident),
-                    ));
-                }
-            }
-
-            if input.peek(Token![,]) {
-                input.parse::<Token![,]>()?;
-            }
-        }
-
-        Ok(attr)
-    }
-}
-
-fn generate_props(attr: PropsAttr, mut item: ItemStruct) -> Result<TokenStream2, syn::Error> {
-    match &item.fields {
-        syn::Fields::Named(_) => (),
-        other => {
-            return Err(syn::Error::new(
-                other.span(),
-                "only named fields are supported",
-            ));
-        }
-    }
-
+fn modify_item_struct(input: &ItemStruct) -> Result<(ItemStruct, Vec<FieldInfo>), syn::Error> {
     let crate_path = crate_name().to_path();
-    let PropsAttr {
-        debug,
-        bounds,
-        extensible,
-    } = attr;
 
-    let option_map = item
-        .fields
-        .iter()
-        .map(|field| is_option_ty(&field.ty))
-        .collect::<Vec<_>>();
+    let mut result = input.clone();
+    let mut field_info_list = Vec::new();
 
-    let mut field_attr_map = Vec::new();
-    for field in &mut item.fields {
+    for field in &mut result.fields {
+        let option = is_option_ty(&field.ty);
+
         let attrs = mem::take(&mut field.attrs);
         let mut retained_attrs = Vec::new();
         let mut field_attrs = Vec::new();
@@ -223,7 +66,7 @@ fn generate_props(attr: PropsAttr, mut item: ItemStruct) -> Result<TokenStream2,
                 Meta::List(meta_list) => {
                     if let Some(ident) = meta_list.path.get_ident() {
                         if ident == "props" {
-                            let field_attr: FieldAttr = syn::parse2(meta_list.tokens.clone())?;
+                            let field_attr: PropsFieldAttr = syn::parse2(meta_list.tokens.clone())?;
                             field_attrs.push(field_attr);
                         } else {
                             retained_attrs.push(attr);
@@ -237,10 +80,15 @@ fn generate_props(attr: PropsAttr, mut item: ItemStruct) -> Result<TokenStream2,
         }
         field.attrs = retained_attrs;
 
-        let field_attr = field_attrs.into_iter().reduce(FieldAttr::merge);
-        let extends = if let Some(field_attr) = &field_attr {
-            let extends = field_attr.extends.is_some();
-            if extends {
+        let field_attr = field_attrs.into_iter().reduce(PropsFieldAttr::merge);
+
+        let field_info = if let Some(field_attr) = &field_attr {
+            let extends = field_attr.extends.clone();
+            let start = field_attr.start.is_some();
+            let default = field_attr.default.is_some();
+            let default_value = field_attr.default_value.clone();
+
+            if extends.is_some() {
                 if let Some(start) = &field_attr.start {
                     return Err(syn::Error::new(
                         start.span(),
@@ -254,12 +102,23 @@ fn generate_props(attr: PropsAttr, mut item: ItemStruct) -> Result<TokenStream2,
                     ));
                 }
             }
-            extends
+
+            FieldInfo {
+                start,
+                extends,
+                default,
+                default_value,
+            }
         } else {
-            false
+            FieldInfo {
+                start: false,
+                extends: None,
+                default: option,
+                default_value: None,
+            }
         };
 
-        if !extends {
+        if field_info.extends.is_none() {
             let ty = &field.ty;
             let path = parse_quote!(#crate_path::PropValue<#ty>);
             field.ty = Type::Path(TypePath {
@@ -268,21 +127,31 @@ fn generate_props(attr: PropsAttr, mut item: ItemStruct) -> Result<TokenStream2,
             });
         }
 
-        field_attr_map.push(field_attr);
+        field_info_list.push(field_info);
     }
 
-    let default_map = option_map
-        .iter()
-        .enumerate()
-        .map(|(i, option)| {
-            if let Some(attr) = &field_attr_map[i] {
-                if attr.default.is_some() {
-                    return true;
-                }
-            }
-            *option
-        })
-        .collect::<Vec<_>>();
+    Ok((result, field_info_list))
+}
+
+pub fn generate_props(input: &ItemStruct, attr: PropsAttr) -> Result<TokenStream, syn::Error> {
+    let PropsAttr {
+        debug,
+        bounds,
+        extensible,
+    } = attr;
+    let crate_path = crate_name().to_path();
+
+    match &input.fields {
+        syn::Fields::Named(_) => (),
+        other => {
+            return Err(syn::Error::new(
+                other.span(),
+                "only named fields are supported",
+            ));
+        }
+    }
+
+    let (modified_item, field_info_list) = modify_item_struct(input)?;
 
     let ItemStruct {
         vis,
@@ -290,7 +159,7 @@ fn generate_props(attr: PropsAttr, mut item: ItemStruct) -> Result<TokenStream2,
         generics,
         fields,
         ..
-    } = &item;
+    } = &modified_item;
     let mut generic_params = generics.params.clone();
     for param in &mut generic_params {
         match param {
@@ -311,23 +180,16 @@ fn generate_props(attr: PropsAttr, mut item: ItemStruct) -> Result<TokenStream2,
     for (i, field) in builder_fields.iter_mut().enumerate() {
         let field_ident = field.ident.as_ref().unwrap();
         let field_ty = &field.ty;
-        let default = default_map[i];
+        let field_info = &field_info_list[i];
 
-        let field_attr = &field_attr_map[i];
-        let (start, extends) = if let Some(field_attr) = field_attr {
-            (field_attr.start.as_ref(), field_attr.extends.as_ref())
-        } else {
-            (None, None)
-        };
-
-        if extends.is_some() {
+        if field_info.extends.is_some() {
             let ident_pascal = field_ident.to_string().to_case(Case::Pascal);
             let path = syn::parse_str(&format!("{}State", ident_pascal))?;
             field.ty = Type::Path(TypePath {
                 qself: None,
                 path: path,
             });
-        } else if start.is_none() && !default {
+        } else if !field_info.start && !field_info.default {
             let path = parse_quote!(Option<#field_ty>);
             field.ty = Type::Path(TypePath {
                 qself: None,
@@ -339,72 +201,35 @@ fn generate_props(attr: PropsAttr, mut item: ItemStruct) -> Result<TokenStream2,
 
     let ident_snake = Ident::new(&ident.to_string().to_case(Case::Snake), ident.span());
 
-    let mut type_params = TokenStream2::new();
-    let mut marker_traits = TokenStream2::new();
+    let mut type_params = TokenStream::new();
+    let mut marker_traits = TokenStream::new();
     let mut default_type_params = if generic_params.is_empty() {
-        TokenStream2::new()
+        TokenStream::new()
     } else {
         quote! {
             #generic_params,
         }
     };
-    let mut start_params = TokenStream2::new();
-    let mut start_args = TokenStream2::new();
+    let mut start_params = TokenStream::new();
+    let mut start_args = TokenStream::new();
     let builder_vis = match vis {
         Visibility::Inherited => parse_quote!(pub(super)),
-        other => other.clone()
+        other => other.clone(),
     };
-    let mut builder_default_fields = TokenStream2::new();
-    let mut builder_build_fields = TokenStream2::new();
-    let mut builder_build_type_bounds = TokenStream2::new();
-    let mut builder_field_methods = TokenStream2::new();
-    let mut builder_ext_traits = TokenStream2::new();
-    let mut builder_ext_impls = TokenStream2::new();
-    let mut builder_impl_wrappers = TokenStream2::new();
-    let mut extends_trait_methods = TokenStream2::new();
-    let mut impl_extends_traits = TokenStream2::new();
-
-    for field_attr in &field_attr_map {
-        if let Some(field_attr) = field_attr {
-            if let Some(extends) = &field_attr.extends {
-                if let Some(inputs) = &extends.inputs {
-                    quote! {
-                        #inputs,
-                    }
-                    .to_tokens(&mut start_params);
-
-                    let args = inputs
-                        .iter()
-                        .map(|fn_arg| match fn_arg {
-                            FnArg::Receiver(_) => {
-                                return Err(syn::Error::new(
-                                    fn_arg.span(),
-                                    "unexpected self argument",
-                                ));
-                            }
-                            FnArg::Typed(pat_type) => Ok(&pat_type.pat),
-                        })
-                        .collect::<Result<Punctuated<_, Token![,]>, _>>()?;
-                    quote! {
-                        #args,
-                    }
-                    .to_tokens(&mut start_args);
-                }
-            }
-        }
-    }
+    let mut builder_default_fields = TokenStream::new();
+    let mut builder_build_fields = TokenStream::new();
+    let mut builder_build_type_bounds = TokenStream::new();
+    let mut builder_field_methods = TokenStream::new();
+    let mut builder_ext_traits = TokenStream::new();
+    let mut builder_ext_impls = TokenStream::new();
+    let mut builder_impl_wrappers = TokenStream::new();
+    let mut extends_trait_methods = TokenStream::new();
+    let mut impl_extends_traits = TokenStream::new();
 
     for (i, field) in fields.iter().enumerate() {
         let field_ident = field.ident.as_ref().unwrap();
         let field_ty = &field.ty;
-        let default = default_map[i];
-
-        let field_attr = &field_attr_map[i];
-        let (start, extends) = if let Some(field_attr) = field_attr {
-            (field_attr.start.as_ref(), field_attr.extends.as_ref())
-        } else {
-            (None, None)
-        };
+        let field_info = &field_info_list[i];
 
         let ident_pascal = field_ident.to_string().to_case(Case::Pascal);
 
@@ -412,7 +237,7 @@ fn generate_props(attr: PropsAttr, mut item: ItemStruct) -> Result<TokenStream2,
         let is_set_ident = Ident::new(&format!("{}IsSet", ident_pascal), Span::call_site());
         let can_set_ident = Ident::new(&format!("{}CanSet", ident_pascal), Span::call_site());
 
-        if extends.is_some() {
+        if let Some(extends) = &field_info.extends {
             quote! {
                 #type_param_ident=<#field_ty as nestix::HasBuilder>::Builder,
             }
@@ -421,6 +246,27 @@ fn generate_props(attr: PropsAttr, mut item: ItemStruct) -> Result<TokenStream2,
                 #type_param_ident: Buildable<Output = #field_ty>,
             }
             .to_tokens(&mut builder_build_type_bounds);
+
+            if let Some(inputs) = &extends.inputs {
+                quote! {
+                    #inputs,
+                }
+                .to_tokens(&mut start_params);
+
+                let args = inputs
+                    .iter()
+                    .map(|fn_arg| match fn_arg {
+                        FnArg::Receiver(_) => {
+                            return Err(syn::Error::new(fn_arg.span(), "unexpected self argument"));
+                        }
+                        FnArg::Typed(pat_type) => Ok(&pat_type.pat),
+                    })
+                    .collect::<Result<Punctuated<_, Token![,]>, _>>()?;
+                quote! {
+                    #args,
+                }
+                .to_tokens(&mut start_args);
+            }
         } else {
             quote! {
                 pub trait #is_set_ident {}
@@ -437,9 +283,9 @@ fn generate_props(attr: PropsAttr, mut item: ItemStruct) -> Result<TokenStream2,
             }
             .to_tokens(&mut marker_traits);
 
-            if start.is_some() {
+            if field_info.start {
                 quote! {#type_param_ident=Set,}.to_tokens(&mut default_type_params);
-            } else if default {
+            } else if field_info.default {
                 quote! {#type_param_ident=Defaulted,}.to_tokens(&mut default_type_params);
             } else {
                 quote! {#type_param_ident=Unset,}.to_tokens(&mut default_type_params);
@@ -449,7 +295,7 @@ fn generate_props(attr: PropsAttr, mut item: ItemStruct) -> Result<TokenStream2,
 
         quote! {#type_param_ident,}.to_tokens(&mut type_params);
 
-        if start.is_some() {
+        if field_info.start {
             quote! {
                 #field_ident,
             }
@@ -469,14 +315,9 @@ fn generate_props(attr: PropsAttr, mut item: ItemStruct) -> Result<TokenStream2,
                 #field_ident,
             }
             .to_tokens(&mut start_args);
-        } else if default {
-            let field_attr = &field_attr_map[i];
-            let default_value = if let Some(field_attr) = field_attr {
-                if let Some(default_value) = &field_attr.default_value {
-                    quote! {#default_value}
-                } else {
-                    quote! {std::default::Default::default()}
-                }
+        } else if field_info.default {
+            let default_value = if let Some(default_value) = &field_info.default_value {
+                quote! {#default_value}
             } else {
                 quote! {std::default::Default::default()}
             };
@@ -490,7 +331,7 @@ fn generate_props(attr: PropsAttr, mut item: ItemStruct) -> Result<TokenStream2,
                 #field_ident: self.#field_ident,
             }
             .to_tokens(&mut builder_build_fields);
-        } else if extends.is_some() {
+        } else if field_info.extends.is_some() {
             quote! {
                 #field_ident: <#field_ty as nestix::HasBuilder>::Builder::new(#start_args),
             }
@@ -512,35 +353,35 @@ fn generate_props(attr: PropsAttr, mut item: ItemStruct) -> Result<TokenStream2,
             .to_tokens(&mut builder_build_fields);
         }
 
-        if start.is_none() {
+        if !field_info.start {
             let mut method_type_bounds = if bounds.is_empty() {
-                TokenStream2::new()
+                TokenStream::new()
             } else {
                 quote! {
                     #bounds,
                 }
             };
             let mut method_generics_params = if generic_params.is_empty() {
-                TokenStream2::new()
+                TokenStream::new()
             } else {
                 quote! {
                     #generic_params,
                 }
             };
             let mut method_result_type_args = if generic_params.is_empty() {
-                TokenStream2::new()
+                TokenStream::new()
             } else {
                 quote! {
                     #generic_params,
                 }
             };
-            let mut state_params_without_self = TokenStream2::new();
+            let mut state_params_without_self = TokenStream::new();
 
-            let mut with_new_inner_params = TokenStream2::new();
-            let mut remainder_types = TokenStream2::new();
+            let mut with_new_inner_params = TokenStream::new();
+            let mut remainder_types = TokenStream::new();
             let mut remainder_idents = Vec::<&Ident>::new();
 
-            let mut method_fields = TokenStream2::new();
+            let mut method_fields = TokenStream::new();
             for (j, builder_field) in builder_fields.iter().enumerate() {
                 let builder_field_ident = builder_field.ident.as_ref().unwrap();
                 let builder_field_ty = &builder_field.ty;
@@ -552,7 +393,7 @@ fn generate_props(attr: PropsAttr, mut item: ItemStruct) -> Result<TokenStream2,
                     quote! {#type_param_ident,}.to_tokens(&mut method_generics_params);
                     quote! {Set,}.to_tokens(&mut method_result_type_args);
                     quote! {NewInner,}.to_tokens(&mut with_new_inner_params);
-                    if default {
+                    if field_info.default {
                         quote! {
                             #builder_field_ident: value,
                         }
@@ -582,7 +423,7 @@ fn generate_props(attr: PropsAttr, mut item: ItemStruct) -> Result<TokenStream2,
                 }
             }
 
-            if extends.is_none() {
+            if field_info.extends.is_none() {
                 quote! {
                     impl<#method_type_bounds> #builder_ident<#method_generics_params> {
                         pub fn #field_ident(self, value: #field_ty) -> #builder_ident<#method_result_type_args> {
@@ -626,9 +467,9 @@ fn generate_props(attr: PropsAttr, mut item: ItemStruct) -> Result<TokenStream2,
                 }.to_tokens(&mut builder_ext_impls);
             }
 
-            if let Some(extends) = extends {
-                let mut remainder_fields = TokenStream2::new();
-                let mut remainder_values = TokenStream2::new();
+            if let Some(extends) = &field_info.extends {
+                let mut remainder_fields = TokenStream::new();
+                let mut remainder_values = TokenStream::new();
 
                 for (i, ident) in remainder_idents.iter().enumerate() {
                     let index = Index::from(i);
@@ -732,7 +573,7 @@ fn generate_props(attr: PropsAttr, mut item: ItemStruct) -> Result<TokenStream2,
     };
 
     Ok(quote! {
-        #item
+        #modified_item
 
         #vis mod #builder_mod_name {
             use super::*;
@@ -802,18 +643,4 @@ fn generate_props(attr: PropsAttr, mut item: ItemStruct) -> Result<TokenStream2,
 
         #extends_trait_output
     })
-}
-
-fn is_option_ty(ty: &Type) -> bool {
-    match ty {
-        Type::Path(type_path) => {
-            let segments = &type_path.path.segments;
-            if segments.len() == 1 && segments.first().unwrap().ident == "Option" {
-                true
-            } else {
-                false
-            }
-        }
-        _ => false,
-    }
 }

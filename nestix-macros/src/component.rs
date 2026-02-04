@@ -8,11 +8,11 @@ use syn::{
 
 use crate::util::{FoundCrateExt, crate_name};
 
-pub fn component(attrs: TokenStream, input: TokenStream) -> TokenStream {
+pub fn component(attr: TokenStream, input: TokenStream) -> TokenStream {
     let raw = TokenStream2::from(input.clone());
-    let attrs = parse_macro_input!(attrs as PropsAttrs);
+    let attr = parse_macro_input!(attr as PropsAttr);
     match syn::parse::<ItemFn>(input) {
-        Ok(item) => generate_component(&raw, &attrs, &item)
+        Ok(item) => generate_component(&raw, &attr, &item)
             .unwrap_or_else(|err| TokenStream2::from(err.to_compile_error()))
             .into(),
         Err(_) => raw.into(),
@@ -20,13 +20,13 @@ pub fn component(attrs: TokenStream, input: TokenStream) -> TokenStream {
 }
 
 #[derive(Default)]
-struct PropsAttrs {
+struct PropsAttr {
     generic_params: Punctuated<GenericParam, Token![,]>,
 }
 
-impl Parse for PropsAttrs {
+impl Parse for PropsAttr {
     fn parse(input: syn::parse::ParseStream) -> syn::Result<Self> {
-        let mut attrs = PropsAttrs::default();
+        let mut attrs = PropsAttr::default();
 
         loop {
             if input.is_empty() {
@@ -60,11 +60,11 @@ impl Parse for PropsAttrs {
 
 fn generate_component(
     raw: &TokenStream2,
-    attrs: &PropsAttrs,
+    attr: &PropsAttr,
     item: &ItemFn,
 ) -> Result<TokenStream2, syn::Error> {
     let crate_path = crate_name().to_path();
-    let PropsAttrs { generic_params } = attrs;
+    let PropsAttr { generic_params } = attr;
     let ItemFn { vis, sig, .. } = item;
     let impl_generics = &sig.generics;
 
