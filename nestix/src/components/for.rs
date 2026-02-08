@@ -7,19 +7,21 @@ use crate::{
     utils::reconcile::{ReconcileResult, reconcile},
 };
 
-#[props(bounds(I: IntoIterator<Item = T> + Clone + 'static, T: Eq + 'static, K: Eq + Hash + 'static))]
-pub struct ForProps<I, T, K> {
+#[props(bounds(I: IntoIterator + 'static, K: 'static))]
+pub struct ForProps<I: IntoIterator, K> {
     data: I,
-    key: Shared<dyn Fn(&T) -> K>,
-    children: Shared<dyn Fn(&T) -> PropValue<Element>>,
+    key: Shared<dyn Fn(&<I as IntoIterator>::Item) -> K>,
+    children: Shared<dyn Fn(&<I as IntoIterator>::Item) -> PropValue<Element>>,
 }
 
-#[component(generics(I, T, K))]
-pub fn For<I: IntoIterator<Item = T> + Clone + 'static, T: Eq + 'static, K: Eq + Hash + 'static>(
-    props: &ForProps<I, T, K>,
+#[component(generics(I, K))]
+pub fn For<I: IntoIterator + Clone + 'static, K: Eq + Hash + 'static>(
+    props: &ForProps<I, K>,
     element: &Element,
-) {
-    let prev_data: Rc<RefCell<Vec<T>>> = Rc::new(RefCell::new(vec![]));
+) where
+    I::Item: Eq + Clone,
+{
+    let prev_data: Rc<RefCell<Vec<<I as IntoIterator>::Item>>> = Rc::new(RefCell::new(vec![]));
     let prev_keys: Rc<RefCell<Vec<K>>> = Rc::new(RefCell::new(vec![]));
     let prev_children: Rc<RefCell<Vec<Element>>> = Rc::new(RefCell::new(vec![]));
     let contexts = element.contexts();

@@ -115,11 +115,12 @@ fn generate_component(
     };
 
     let ident = &sig.ident;
+    let where_clause = &impl_generics.where_clause;
 
     Ok(quote! {
         #vis struct #ident<#generic_params> #struct_fields;
 
-        impl #impl_generics #crate_path::Component for #ident<#generic_args> {
+        impl #impl_generics #crate_path::Component for #ident<#generic_args> #where_clause {
             type Props = #props_type;
 
             fn render(element: &#crate_path::Element) {

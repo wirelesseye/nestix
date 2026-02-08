@@ -10,10 +10,19 @@ use syn::{
 
 use crate::{
     props::parse::{Extends, PropsAttr, PropsFieldAttr},
-    util::{FoundCrateExt, crate_name},
+    util::{FoundCrateExt, IdentExt, crate_name},
 };
 
-struct FieldInfo {
+struct Context {
+    item_struct: ItemStruct,
+    field_features: Vec<FieldFeature>,
+    generic_bounds: Punctuated<GenericParam, Token![,]>,
+    user_generic_args: Punctuated<GenericParam, Token![,]>,
+    extensible: Option<Ident>,
+    debug: bool,
+}
+
+struct FieldFeature {
     default: bool,
     default_value: Option<Expr>,
     start: bool,
@@ -34,13 +43,22 @@ fn is_option_ty(ty: &Type) -> bool {
     }
 }
 
-fn modify_item_struct(input: &ItemStruct) -> Result<(ItemStruct, Vec<FieldInfo>), syn::Error> {
+fn preprocess(input: ItemStruct, attr: PropsAttr) -> Result<Context, syn::Error> {
+    match input.fields {
+        syn::Fields::Named(_) => (),
+        other => {
+            return Err(syn::Error::new(
+                other.span(),
+                "only named fields are supported",
+            ));
+        }
+    }
+
     let crate_path = crate_name().to_path();
+    let mut item_struct = input;
+    let mut field_features = Vec::new();
 
-    let mut result = input.clone();
-    let mut field_info_list = Vec::new();
-
-    for field in &mut result.fields {
+    for field in &mut item_struct.fields {
         let option = is_option_ty(&field.ty);
 
         let attrs = mem::take(&mut field.attrs);
@@ -82,7 +100,7 @@ fn modify_item_struct(input: &ItemStruct) -> Result<(ItemStruct, Vec<FieldInfo>)
 
         let field_attr = field_attrs.into_iter().reduce(PropsFieldAttr::merge);
 
-        let field_info = if let Some(field_attr) = &field_attr {
+        let field_feature = if let Some(field_attr) = &field_attr {
             let extends = field_attr.extends.clone();
             let start = field_attr.start.is_some();
             let default = field_attr.default.is_some();
@@ -103,14 +121,14 @@ fn modify_item_struct(input: &ItemStruct) -> Result<(ItemStruct, Vec<FieldInfo>)
                 }
             }
 
-            FieldInfo {
+            FieldFeature {
                 start,
                 extends,
                 default,
                 default_value,
             }
         } else {
-            FieldInfo {
+            FieldFeature {
                 start: false,
                 extends: None,
                 default: option,
@@ -118,7 +136,7 @@ fn modify_item_struct(input: &ItemStruct) -> Result<(ItemStruct, Vec<FieldInfo>)
             }
         };
 
-        if field_info.extends.is_none() {
+        if field_feature.extends.is_none() {
             let ty = &field.ty;
             let path = parse_quote!(#crate_path::PropValue<#ty>);
             field.ty = Type::Path(TypePath {
@@ -127,69 +145,72 @@ fn modify_item_struct(input: &ItemStruct) -> Result<(ItemStruct, Vec<FieldInfo>)
             });
         }
 
-        field_info_list.push(field_info);
+        field_features.push(field_feature);
     }
 
-    Ok((result, field_info_list))
-}
-
-pub fn generate_props(input: &ItemStruct, attr: PropsAttr) -> Result<TokenStream, syn::Error> {
-    let PropsAttr {
-        debug,
-        bounds,
-        extensible,
-    } = attr;
-    let crate_path = crate_name().to_path();
-
-    match &input.fields {
-        syn::Fields::Named(_) => (),
-        other => {
-            return Err(syn::Error::new(
-                other.span(),
-                "only named fields are supported",
-            ));
-        }
-    }
-
-    let (modified_item, field_info_list) = modify_item_struct(input)?;
-
-    let ItemStruct {
-        vis,
-        ident,
-        generics,
-        fields,
-        ..
-    } = &modified_item;
-    let mut generic_params = generics.params.clone();
-    for param in &mut generic_params {
+    let mut user_generic_args = item_struct.generics.params.clone();
+    for param in &mut user_generic_args {
         match param {
-            GenericParam::Type(type_param) => type_param.default = None,
-            GenericParam::Const(const_param) => const_param.default = None,
+            GenericParam::Type(type_param) => {
+                type_param.colon_token = None;
+                type_param.bounds = Default::default();
+                type_param.eq_token = None;
+                type_param.default = None;
+            }
+            GenericParam::Const(const_param) => {
+                const_param.eq_token = None;
+                const_param.default = None;
+            }
             _ => (),
         }
     }
 
+    Ok(Context {
+        item_struct,
+        field_features,
+        generic_bounds: attr.generic_bounds,
+        user_generic_args,
+        extensible: attr.extensible,
+        debug: attr.debug,
+    })
+}
+
+fn generate_builder(ctx: &Context) -> Result<TokenStream, syn::Error> {
+    let crate_path = crate_name().to_path();
+    let Context {
+        item_struct,
+        field_features,
+        generic_bounds,
+        user_generic_args,
+        extensible,
+        ..
+    } = ctx;
+    let ItemStruct {
+        vis,
+        ident,
+        fields,
+        generics,
+        ..
+    } = &item_struct;
+
     let builder_ident = format_ident!("{}Builder", ident);
-    let builder_mod_name = Ident::new(
-        &builder_ident.to_string().to_case(Case::Snake),
-        builder_ident.span(),
-    );
+    let builder_mod_ident = builder_ident.to_case(Case::Snake);
     let builder_ext_ident = format_ident!("{}BuilderExt", ident);
 
     let mut builder_fields = fields.clone();
     for (i, field) in builder_fields.iter_mut().enumerate() {
         let field_ident = field.ident.as_ref().unwrap();
         let field_ty = &field.ty;
-        let field_info = &field_info_list[i];
+        let field_feature = &field_features[i];
 
-        if field_info.extends.is_some() {
-            let ident_pascal = field_ident.to_string().to_case(Case::Pascal);
-            let path = syn::parse_str(&format!("{}State", ident_pascal))?;
+        if field_feature.extends.is_some() {
+            let ident_pascal_string = field_ident.to_string().to_case(Case::Pascal);
+            let path = syn::parse_str(&format!("{}State", ident_pascal_string))?;
             field.ty = Type::Path(TypePath {
                 qself: None,
                 path: path,
             });
-        } else if !field_info.start && !field_info.default {
+        } else if !field_feature.start && !field_feature.default {
             let path = parse_quote!(Option<#field_ty>);
             field.ty = Type::Path(TypePath {
                 qself: None,
@@ -199,17 +220,21 @@ pub fn generate_props(input: &ItemStruct, attr: PropsAttr) -> Result<TokenStream
         field.vis = Visibility::Inherited;
     }
 
-    let ident_snake = Ident::new(&ident.to_string().to_case(Case::Snake), ident.span());
-
-    let mut type_params = TokenStream::new();
     let mut marker_traits = TokenStream::new();
-    let mut default_type_params = if generic_params.is_empty() {
-        TokenStream::new()
-    } else {
-        quote! {
-            #generic_params,
-        }
+    let mut generated_generic_args = TokenStream::new();
+    let mut builder_generic_params = match &generics.params {
+        params if params.is_empty() => TokenStream::new(),
+        params => quote! {
+            #params,
+        },
     };
+    let mut buildable_generic_params = match &generics.params {
+        params if params.is_empty() => TokenStream::new(),
+        params => quote! {
+            #params,
+        },
+    };
+
     let mut start_params = TokenStream::new();
     let mut start_args = TokenStream::new();
     let builder_vis = match vis {
@@ -218,34 +243,32 @@ pub fn generate_props(input: &ItemStruct, attr: PropsAttr) -> Result<TokenStream
     };
     let mut builder_default_fields = TokenStream::new();
     let mut builder_build_fields = TokenStream::new();
-    let mut builder_build_type_bounds = TokenStream::new();
     let mut builder_field_methods = TokenStream::new();
     let mut builder_ext_traits = TokenStream::new();
     let mut builder_ext_impls = TokenStream::new();
     let mut builder_impl_wrappers = TokenStream::new();
-    let mut extends_trait_methods = TokenStream::new();
-    let mut impl_extends_traits = TokenStream::new();
 
     for (i, field) in fields.iter().enumerate() {
         let field_ident = field.ident.as_ref().unwrap();
         let field_ty = &field.ty;
-        let field_info = &field_info_list[i];
+        let field_feature = &field_features[i];
 
-        let ident_pascal = field_ident.to_string().to_case(Case::Pascal);
+        let ident_pascal_string = field_ident.to_string().to_case(Case::Pascal);
 
-        let type_param_ident = Ident::new(&format!("{}State", ident_pascal), field_ident.span());
-        let is_set_ident = Ident::new(&format!("{}IsSet", ident_pascal), Span::call_site());
-        let can_set_ident = Ident::new(&format!("{}CanSet", ident_pascal), Span::call_site());
+        let state_ident = Ident::new(&format!("{}State", ident_pascal_string), field_ident.span());
+        let is_set_ident = Ident::new(&format!("{}IsSet", ident_pascal_string), Span::call_site());
+        let can_set_ident =
+            Ident::new(&format!("{}CanSet", ident_pascal_string), Span::call_site());
 
-        if let Some(extends) = &field_info.extends {
+        if let Some(extends) = &field_feature.extends {
             quote! {
-                #type_param_ident=<#field_ty as nestix::HasBuilder>::Builder,
+                #state_ident=<#field_ty as nestix::HasBuilder>::Builder,
             }
-            .to_tokens(&mut default_type_params);
+            .to_tokens(&mut builder_generic_params);
             quote! {
-                #type_param_ident: Buildable<Output = #field_ty>,
+                #state_ident: Buildable<Output = #field_ty>,
             }
-            .to_tokens(&mut builder_build_type_bounds);
+            .to_tokens(&mut buildable_generic_params);
 
             if let Some(inputs) = &extends.inputs {
                 quote! {
@@ -253,7 +276,7 @@ pub fn generate_props(input: &ItemStruct, attr: PropsAttr) -> Result<TokenStream
                 }
                 .to_tokens(&mut start_params);
 
-                let args = inputs
+                let super_start_args = inputs
                     .iter()
                     .map(|fn_arg| match fn_arg {
                         FnArg::Receiver(_) => {
@@ -263,7 +286,7 @@ pub fn generate_props(input: &ItemStruct, attr: PropsAttr) -> Result<TokenStream
                     })
                     .collect::<Result<Punctuated<_, Token![,]>, _>>()?;
                 quote! {
-                    #args,
+                    #super_start_args,
                 }
                 .to_tokens(&mut start_args);
             }
@@ -283,19 +306,19 @@ pub fn generate_props(input: &ItemStruct, attr: PropsAttr) -> Result<TokenStream
             }
             .to_tokens(&mut marker_traits);
 
-            if field_info.start {
-                quote! {#type_param_ident=Set,}.to_tokens(&mut default_type_params);
-            } else if field_info.default {
-                quote! {#type_param_ident=Defaulted,}.to_tokens(&mut default_type_params);
+            if field_feature.start {
+                quote! {#state_ident=Set,}.to_tokens(&mut builder_generic_params);
+            } else if field_feature.default {
+                quote! {#state_ident=Defaulted,}.to_tokens(&mut builder_generic_params);
             } else {
-                quote! {#type_param_ident=Unset,}.to_tokens(&mut default_type_params);
+                quote! {#state_ident=Unset,}.to_tokens(&mut builder_generic_params);
             }
-            quote! {#type_param_ident: #is_set_ident,}.to_tokens(&mut builder_build_type_bounds);
+            quote! {#state_ident: #is_set_ident,}.to_tokens(&mut buildable_generic_params);
         }
 
-        quote! {#type_param_ident,}.to_tokens(&mut type_params);
+        quote! {#state_ident,}.to_tokens(&mut generated_generic_args);
 
-        if field_info.start {
+        if field_feature.start {
             quote! {
                 #field_ident,
             }
@@ -315,8 +338,8 @@ pub fn generate_props(input: &ItemStruct, attr: PropsAttr) -> Result<TokenStream
                 #field_ident,
             }
             .to_tokens(&mut start_args);
-        } else if field_info.default {
-            let default_value = if let Some(default_value) = &field_info.default_value {
+        } else if field_feature.default {
+            let default_value = if let Some(default_value) = &field_feature.default_value {
                 quote! {#default_value}
             } else {
                 quote! {std::default::Default::default()}
@@ -331,7 +354,7 @@ pub fn generate_props(input: &ItemStruct, attr: PropsAttr) -> Result<TokenStream
                 #field_ident: self.#field_ident,
             }
             .to_tokens(&mut builder_build_fields);
-        } else if field_info.extends.is_some() {
+        } else if field_feature.extends.is_some() {
             quote! {
                 #field_ident: <#field_ty as nestix::HasBuilder>::Builder::new(#start_args),
             }
@@ -353,26 +376,26 @@ pub fn generate_props(input: &ItemStruct, attr: PropsAttr) -> Result<TokenStream
             .to_tokens(&mut builder_build_fields);
         }
 
-        if !field_info.start {
-            let mut method_type_bounds = if bounds.is_empty() {
+        if !field_feature.start {
+            let mut method_type_bounds = if generic_bounds.is_empty() {
                 TokenStream::new()
             } else {
                 quote! {
-                    #bounds,
+                    #generic_bounds,
                 }
             };
-            let mut method_generics_params = if generic_params.is_empty() {
+            let mut method_generics_params = if user_generic_args.is_empty() {
                 TokenStream::new()
             } else {
                 quote! {
-                    #generic_params,
+                    #user_generic_args,
                 }
             };
-            let mut method_result_type_args = if generic_params.is_empty() {
+            let mut method_result_type_args = if user_generic_args.is_empty() {
                 TokenStream::new()
             } else {
                 quote! {
-                    #generic_params,
+                    #user_generic_args,
                 }
             };
             let mut state_params_without_self = TokenStream::new();
@@ -385,15 +408,13 @@ pub fn generate_props(input: &ItemStruct, attr: PropsAttr) -> Result<TokenStream
             for (j, builder_field) in builder_fields.iter().enumerate() {
                 let builder_field_ident = builder_field.ident.as_ref().unwrap();
                 let builder_field_ty = &builder_field.ty;
-                let builder_field_name_pascal =
-                    builder_field_ident.to_string().to_case(Case::Pascal);
 
                 if i == j {
-                    quote! {#type_param_ident: #can_set_ident,}.to_tokens(&mut method_type_bounds);
-                    quote! {#type_param_ident,}.to_tokens(&mut method_generics_params);
+                    quote! {#state_ident: #can_set_ident,}.to_tokens(&mut method_type_bounds);
+                    quote! {#state_ident,}.to_tokens(&mut method_generics_params);
                     quote! {Set,}.to_tokens(&mut method_result_type_args);
                     quote! {NewInner,}.to_tokens(&mut with_new_inner_params);
-                    if field_info.default {
+                    if field_feature.default {
                         quote! {
                             #builder_field_ident: value,
                         }
@@ -405,10 +426,8 @@ pub fn generate_props(input: &ItemStruct, attr: PropsAttr) -> Result<TokenStream
                         .to_tokens(&mut method_fields);
                     }
                 } else {
-                    let type_param_ident = Ident::new(
-                        &format!("{}State", builder_field_name_pascal),
-                        builder_field_ident.span(),
-                    );
+                    let type_param_ident =
+                        format_ident!("{}State", builder_field_ident.to_case(Case::Pascal));
                     quote! {#type_param_ident,}.to_tokens(&mut method_type_bounds);
                     quote! {#type_param_ident,}.to_tokens(&mut state_params_without_self);
                     quote! {#type_param_ident,}.to_tokens(&mut method_generics_params);
@@ -423,7 +442,7 @@ pub fn generate_props(input: &ItemStruct, attr: PropsAttr) -> Result<TokenStream
                 }
             }
 
-            if field_info.extends.is_none() {
+            if field_feature.extends.is_none() {
                 quote! {
                     impl<#method_type_bounds> #builder_ident<#method_generics_params> {
                         pub fn #field_ident(self, value: #field_ty) -> #builder_ident<#method_result_type_args> {
@@ -439,7 +458,7 @@ pub fn generate_props(input: &ItemStruct, attr: PropsAttr) -> Result<TokenStream
 
             if extensible.is_some() {
                 let ext_trait_ident = Ident::new(
-                    &format!("{}{}", builder_ext_ident, ident_pascal),
+                    &format!("{}{}", builder_ext_ident, ident_pascal_string),
                     field_ident.span(),
                 );
 
@@ -467,7 +486,7 @@ pub fn generate_props(input: &ItemStruct, attr: PropsAttr) -> Result<TokenStream
                 }.to_tokens(&mut builder_ext_impls);
             }
 
-            if let Some(extends) = &field_info.extends {
+            if field_feature.extends.is_some() {
                 let mut remainder_fields = TokenStream::new();
                 let mut remainder_values = TokenStream::new();
 
@@ -480,7 +499,7 @@ pub fn generate_props(input: &ItemStruct, attr: PropsAttr) -> Result<TokenStream
 
                 quote! {
                     impl<#method_generics_params> BuilderWrapper for #builder_ident<#method_generics_params> {
-                        type Inner = #type_param_ident;
+                        type Inner = #state_ident;
 
                         type With<NewInner> = #builder_ident<#with_new_inner_params>;
 
@@ -505,85 +524,38 @@ pub fn generate_props(input: &ItemStruct, attr: PropsAttr) -> Result<TokenStream
                         }
                     }
                 }.to_tokens(&mut builder_impl_wrappers);
-
-                let extends_trait = &extends.trait_path;
-                quote! {
-                    impl<#bounds> #extends_trait for #ident <#generic_params> {
-                        fn #field_ident(&self) -> &#field_ty {
-                            &self.#field_ident
-                        }
-                    }
-                }
-                .to_tokens(&mut impl_extends_traits);
             }
         }
-
-        quote! {
-            fn #field_ident(&self) -> &#field_ty {
-                &self.#ident_snake().#field_ident
-            }
-        }
-        .to_tokens(&mut extends_trait_methods);
     }
 
     match &mut builder_fields {
         syn::Fields::Named(fields_named) => {
-            let field = parse_quote!(_phantom: std::marker::PhantomData<(#type_params)>);
+            let field = parse_quote!(_phantom: std::marker::PhantomData<(#generated_generic_args)>);
             fields_named.named.push(field);
         }
         _ => unreachable!(),
     }
 
-    let impl_debug_output = if debug {
+    let builder_generic_args = if user_generic_args.is_empty() {
         quote! {
-            fn debug_fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-                std::fmt::Debug::fmt(&self, f)
-            }
-        }
-    } else {
-        quote! {}
-    };
-
-    let build_type_params = if generic_params.is_empty() {
-        quote! {
-            #type_params
+            #generated_generic_args
         }
     } else {
         quote! {
-            #generic_params, #type_params
+            #user_generic_args, #generated_generic_args
         }
-    };
-
-    let extends_trait_output = if let Some(extends_trait_ident) = extensible {
-        quote! {
-            #vis trait #extends_trait_ident <#bounds> {
-                fn #ident_snake(&self) -> &#ident <#generic_params>;
-
-                #extends_trait_methods
-            }
-
-            impl<#bounds> #extends_trait_ident <#generic_params> for #ident <#generic_params> {
-                fn #ident_snake(&self) -> &#ident <#generic_params> {
-                    self
-                }
-            }
-        }
-    } else {
-        quote! {}
     };
 
     Ok(quote! {
-        #modified_item
-
-        #vis mod #builder_mod_name {
+        #vis mod #builder_mod_ident {
             use super::*;
             use #crate_path::__builder_internal::*;
 
             #marker_traits
 
-            #builder_vis struct #builder_ident<#default_type_params> #builder_fields
+            #builder_vis struct #builder_ident<#builder_generic_params> #builder_fields
 
-            impl<#bounds> #builder_ident <#generic_params> {
+            impl<#generic_bounds> #builder_ident <#user_generic_args> {
                 pub fn new(#start_params) -> Self {
                     Self {
                         #builder_default_fields
@@ -594,24 +566,20 @@ pub fn generate_props(input: &ItemStruct, attr: PropsAttr) -> Result<TokenStream
 
             #builder_field_methods
 
-            impl<#build_type_params> #builder_ident<#build_type_params>
-            where
-                #builder_build_type_bounds
+            impl<#buildable_generic_params> #builder_ident<#builder_generic_args>
             {
-                pub fn build(self) -> #ident <#generic_params> {
+                pub fn build(self) -> #ident <#user_generic_args> {
                     #ident {
                         #builder_build_fields
                     }
                 }
             }
 
-            impl<#build_type_params> Buildable for #builder_ident<#build_type_params>
-            where
-                #builder_build_type_bounds
+            impl<#buildable_generic_params> Buildable for #builder_ident<#builder_generic_args>
             {
-                type Output = #ident <#generic_params>;
+                type Output = #ident <#user_generic_args>;
 
-                fn build(self) -> #ident <#generic_params> {
+                fn build(self) -> #ident <#user_generic_args> {
                     self.build()
                 }
             }
@@ -623,24 +591,107 @@ pub fn generate_props(input: &ItemStruct, attr: PropsAttr) -> Result<TokenStream
             #builder_ext_impls
         }
 
-        #vis use #builder_mod_name::#builder_ident;
+        #vis use #builder_mod_ident::#builder_ident;
 
-        impl<#bounds> #ident <#generic_params> {
-            pub fn builder(#start_params) -> #builder_ident <#generic_params> {
+        impl<#generic_bounds> #ident <#user_generic_args> {
+            pub fn builder(#start_params) -> #builder_ident <#user_generic_args> {
                 #builder_ident::new(#start_args)
             }
         }
 
-        impl<#bounds> #crate_path::Props for #ident <#generic_params> {
+        impl<#generic_bounds> #crate_path::HasBuilder for #ident <#user_generic_args> {
+            type Builder = #builder_ident <#user_generic_args>;
+        }
+    })
+}
+
+pub fn generate_props(input: ItemStruct, attr: PropsAttr) -> Result<TokenStream, syn::Error> {
+    let crate_path = crate_name().to_path();
+    let ctx = preprocess(input, attr)?;
+    let Context {
+        item_struct,
+        field_features,
+        generic_bounds,
+        user_generic_args,
+        extensible,
+        debug,
+        ..
+    } = &ctx;
+    let ItemStruct {
+        vis, ident, fields, ..
+    } = &item_struct;
+
+    let mut extends_trait_methods = TokenStream::new();
+    let mut impl_super_traits_output = TokenStream::new();
+
+    let ident_snake = ident.to_case(Case::Snake);
+    for (i, field) in fields.iter().enumerate() {
+        let field_ident = field.ident.as_ref().unwrap();
+        let field_ty = &field.ty;
+        let field_feature = &field_features[i];
+
+        if let Some(extends) = &field_feature.extends {
+            let extends_trait = &extends.trait_path;
+            quote! {
+                impl<#generic_bounds> #extends_trait for #ident <#user_generic_args> {
+                    fn #field_ident(&self) -> &#field_ty {
+                        &self.#field_ident
+                    }
+                }
+            }
+            .to_tokens(&mut impl_super_traits_output);
+        }
+
+        quote! {
+            fn #field_ident(&self) -> &#field_ty {
+                &self.#ident_snake().#field_ident
+            }
+        }
+        .to_tokens(&mut extends_trait_methods);
+    }
+
+    let impl_debug_output = if *debug {
+        quote! {
+            fn debug_fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+                std::fmt::Debug::fmt(&self, f)
+            }
+        }
+    } else {
+        quote! {}
+    };
+
+    let extends_trait_output = if let Some(extends_trait_ident) = extensible {
+        let ident_snake = ident.to_case(Case::Snake);
+        quote! {
+            #vis trait #extends_trait_ident <#generic_bounds> {
+                fn #ident_snake(&self) -> &#ident <#user_generic_args>;
+
+                #extends_trait_methods
+            }
+
+            impl<#generic_bounds> #extends_trait_ident <#user_generic_args> for #ident <#user_generic_args> {
+                fn #ident_snake(&self) -> &#ident <#user_generic_args> {
+                    self
+                }
+            }
+        }
+    } else {
+        quote! {}
+    };
+
+    let builder_output = generate_builder(&ctx)?;
+
+    Ok(quote! {
+        #item_struct
+
+        impl<#generic_bounds> #crate_path::Props for #ident <#user_generic_args> {
             #impl_debug_output
         }
 
-        impl<#bounds> #crate_path::HasBuilder for #ident <#generic_params> {
-            type Builder = #builder_ident <#generic_params>;
-        }
-
-        #impl_extends_traits
+        #impl_super_traits_output
 
         #extends_trait_output
+
+        #builder_output
     })
 }

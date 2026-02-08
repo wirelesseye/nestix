@@ -168,9 +168,9 @@ fn generate_layout_item_element(
 }
 
 fn generate_layout_item_expr(ctx: &mut Context, input: &LayoutItemExpr) -> Result<(), syn::Error> {
+    let crate_path = crate_name().to_path();
     let LayoutItemExpr { yield_token, expr } = input;
 
-    let crate_path = crate_name().to_path();
     let output = quote! {{#expr}};
 
     let element_ident = ctx.next_element_ident();
@@ -268,15 +268,15 @@ fn generate_layout_item(ctx: &mut Context, input: &LayoutItem) -> Result<(), syn
     }
 }
 
-pub fn generate_layout(input: &LayoutInput) -> Result<TokenStream, syn::Error> {
+pub fn generate_layout(input: LayoutInput) -> Result<TokenStream, syn::Error> {
+    let crate_path = crate_name().to_path();
     let LayoutInput { items } = input;
 
-    let crate_path = crate_name().to_path();
     let computed = items.iter().any(|item| item.is_yield());
     let mut ctx = Context::new(computed);
 
     for item in items {
-        generate_layout_item(&mut ctx, item)?;
+        generate_layout_item(&mut ctx, &item)?;
     }
 
     match (

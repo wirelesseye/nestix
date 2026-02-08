@@ -139,7 +139,7 @@ fn TodoList() -> Element {
             }
 
             Div {
-                For<HashMap<String, String>, _, _>(
+                For<HashMap<String, String>, _>(
                     .data = items.clone(),
                     .key = callback!(|item: &(String, String)| item.0.clone())
                 ) [items] |item: &(String, String)| {

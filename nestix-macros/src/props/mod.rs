@@ -12,7 +12,7 @@ pub fn props(
     let attr = parse_macro_input!(attr as PropsAttr);
     let item_struct = parse_macro_input!(input as ItemStruct);
 
-    generate_props(&item_struct, attr)
+    generate_props(item_struct, attr)
         .unwrap_or_else(|err| proc_macro2::TokenStream::from(err.to_compile_error()))
         .into()
 }

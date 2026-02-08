@@ -6,7 +6,7 @@ use syn::{
 #[derive(Default)]
 pub struct PropsAttr {
     pub debug: bool,
-    pub bounds: Punctuated<GenericParam, Token![,]>,
+    pub generic_bounds: Punctuated<GenericParam, Token![,]>,
     pub extensible: Option<Ident>,
 }
 
@@ -25,7 +25,7 @@ impl Parse for PropsAttr {
                 "bounds" => {
                     let inner;
                     parenthesized!(inner in input);
-                    attr.bounds = Punctuated::<GenericParam, Token![,]>::parse_terminated(&inner)?;
+                    attr.generic_bounds = Punctuated::<GenericParam, Token![,]>::parse_terminated(&inner)?;
                 }
                 "extensible" => {
                     let inner;
