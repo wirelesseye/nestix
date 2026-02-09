@@ -3,7 +3,7 @@ use std::{cell::RefCell, hash::Hash, marker::PhantomData, rc::Rc};
 use nestix_macros::{closure, component, props};
 
 use crate::{
-    ComponentOutput, Element, PredecessorContext, PropValue, Shared, effect, untrack,
+    ComponentOutput, Element, PropValue, Shared, effect, untrack,
     utils::reconcile::{ReconcileResult, reconcile},
 };
 
@@ -48,7 +48,7 @@ pub fn For<I: IntoIterator + Clone + 'static, K: Eq + Hash + 'static>(
             let ReconcileResult {
                 removed,
                 added,
-                moved,
+                moved: _,
                 mapping,
             } = result;
 
@@ -76,11 +76,7 @@ pub fn For<I: IntoIterator + Clone + 'static, K: Eq + Hash + 'static>(
                     None
                 };
 
-                if let Some(pred) = &pred {
-                    child.provide_context(PredecessorContext {
-                        element: pred.clone(),
-                    });
-                }
+                child.set_pred(pred.clone());
 
                 if added.contains(&i) {
                     child.extend_contexts(contexts.clone());
@@ -94,12 +90,6 @@ pub fn For<I: IntoIterator + Clone + 'static, K: Eq + Hash + 'static>(
                     untrack!(
                         [child, element] || {
                             child.render(Some(&element));
-                        }
-                    );
-                } else if moved.contains(&i) {
-                    untrack!(
-                        [child, pred] || {
-                            child.move_after(pred.as_ref());
                         }
                     );
                 }

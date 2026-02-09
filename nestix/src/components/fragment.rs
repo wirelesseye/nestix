@@ -3,7 +3,7 @@ use std::{cell::RefCell, rc::Rc};
 use nestix_macros::{closure, component, props};
 
 use crate::{
-    Layout, ComponentOutput, Element, PredecessorContext, effect, untrack,
+    Layout, ComponentOutput, Element, effect, untrack,
     utils::reconcile::{ReconcileResult, reconcile},
 };
 
@@ -41,14 +41,10 @@ pub fn Fragment(props: &FragmentProps, element: &Element) {
                         let pred = if next_i == 0 {
                             None
                         } else {
-                            Some(&next[next_i - 1])
+                            Some(next[next_i - 1].clone())
                         };
                         let child = &next[next_i];
-                        if let Some(pred) = pred {
-                            child.provide_context(PredecessorContext {
-                                element: pred.clone(),
-                            });
-                        }
+                        child.set_pred(pred);
                         child.extend_contexts(contexts.clone());
                         untrack!(
                             [child, element] || {
@@ -65,16 +61,7 @@ pub fn Fragment(props: &FragmentProps, element: &Element) {
                             Some(next[next_i - 1].clone())
                         };
                         let child = &next[next_i];
-                        if let Some(pred) = &pred {
-                            child.provide_context(PredecessorContext {
-                                element: pred.clone(),
-                            });
-                        }
-                        untrack!(
-                            [child, pred] || {
-                                child.move_after(pred.as_ref());
-                            }
-                        );
+                        child.set_pred(pred);
                     }
                 }
                 (Some(prev), None) => {

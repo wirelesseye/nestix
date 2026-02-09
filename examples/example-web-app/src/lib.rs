@@ -1,8 +1,7 @@
 mod components;
 
-use std::collections::HashMap;
-
 use components::*;
+use indexmap::IndexMap;
 use nanoid_wasm::nanoid;
 use nestix::{
     Element, callback, component, components::For, computed, create_state, layout, render_root,
@@ -95,7 +94,7 @@ fn Counter() -> Element {
 
 #[component]
 fn TodoList() -> Element {
-    let items = create_state::<HashMap<String, String>>(HashMap::new());
+    let items = create_state::<IndexMap<String, String>>(IndexMap::new());
     let input = create_state::<Option<Element>>(None);
 
     let add = callback!(
@@ -115,8 +114,6 @@ fn TodoList() -> Element {
         }
     );
 
-    let cond = create_state(true);
-
     layout! {
         Div {
             Div {
@@ -126,32 +123,46 @@ fn TodoList() -> Element {
                 }
             }
 
-            Div[cond] {
-                if cond.get() {
-                    Text("Test1")
-                }
-            }
-
             Div {
-                if cond.get() {
-                    Text("Test2")
-                }
-            }
-
-            Div {
-                For<HashMap<String, String>, _>(
+                For<IndexMap<String, String>, _>(
                     .data = items.clone(),
                     .key = callback!(|item: &(String, String)| item.0.clone())
-                ) [items] |item: &(String, String)| {
+                ) |item: &(String, String)| {
                     Div {
                         Button(
                             .on_click = callback!([items, item] || {
                                 items.mutate(|items| {
-                                    items.remove(&item.0);
+                                    items.shift_remove(&item.0);
                                 });
                             })
                         ) {
-                            Text("X")
+                            Text("✕")
+                        }
+                        Button(
+                            .on_click = callback!([items, item] || {
+                                items.mutate(|items| {
+                                    if let Some(index) = items.get_index_of(&item.0) {
+                                        if index > 0 {
+                                            items.swap_indices(index, index - 1);
+                                        }
+                                    }
+                                });
+                            })
+                        ) {
+                            Text("↑")
+                        }
+                        Button(
+                            .on_click = callback!([items, item] || {
+                                items.mutate(|items| {
+                                    if let Some(index) = items.get_index_of(&item.0) {
+                                        if index < items.len() - 1 {
+                                            items.swap_indices(index, index + 1);
+                                        }
+                                    }
+                                });
+                            })
+                        ) {
+                            Text("↓")
                         }
                         Text(format!("{}", item.1)),
                     }

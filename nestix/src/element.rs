@@ -91,10 +91,10 @@ impl AppendToElements for Option<Element> {
 struct ElementData {
     component_id: ComponentID,
     props: Box<dyn Props>,
-    handle: State<Option<Shared<dyn Any>>>,
     contexts: RefCell<HashMap<TypeId, Rc<dyn Any>>>,
+    pred: RefCell<State<Option<Element>>>,
+    handle: RefCell<State<Option<Shared<dyn Any>>>>,
     destroy_callbacks: RefCell<HashSet<Shared<dyn Fn()>>>,
-    moved_callbacks: RefCell<HashSet<Shared<dyn Fn(Option<&Element>)>>>,
     after_render_callbacks: RefCell<HashSet<Shared<dyn Fn()>>>,
 }
 
@@ -128,6 +128,10 @@ impl Element {
     }
 
     pub fn destroy(&self) {
+        self.data.pred.replace(create_state(None));
+        self.data.handle.replace(create_state(None));
+        self.data.after_render_callbacks.take();
+
         let destroy_callbacks = self.data.destroy_callbacks.take();
         for callback in destroy_callbacks {
             callback();
@@ -135,31 +139,25 @@ impl Element {
     }
 
     pub fn handle(&self) -> ReadonlySignal<Option<Shared<dyn Any>>> {
-        self.data.handle.clone().into_readonly_signal()
+        self.data.handle.borrow().clone().into_readonly_signal()
     }
 
     pub fn forward_handle(&self, element: &Element) {
         effect!([this: self, element] || {
-            let handle = element.data.handle.get();
-            this.data.handle.set(handle);
+            let handle = element.data.handle.borrow().get();
+            this.data.handle.borrow().set(handle);
         });
     }
 
     pub fn provide_handle<T: 'static>(&self, handle: T) {
         let handle = Shared::from(Rc::new(handle) as Rc<dyn Any>);
-        self.data.handle.set(Some(handle));
+        self.data.handle.borrow().set(Some(handle));
     }
 
     pub fn on_destroy(&self, f: impl Fn() + 'static) {
         let callback = Shared::from(Rc::new(f) as Rc<dyn Fn()>);
         let mut destroy_callbacks = self.data.destroy_callbacks.borrow_mut();
         destroy_callbacks.insert(callback);
-    }
-
-    pub fn on_moved(&self, f: impl Fn(Option<&Element>) + 'static) {
-        let callback = Shared::from(Rc::new(f) as Rc<dyn for<'a> Fn(Option<&'a Element>)>);
-        let mut moved_callbacks = self.data.moved_callbacks.borrow_mut();
-        moved_callbacks.insert(callback);
     }
 
     pub fn after_render(&self, f: impl Fn() + 'static) {
@@ -173,16 +171,12 @@ impl Element {
             .map(|ctx| Rc::downcast::<T>(ctx).unwrap())
     }
 
-    pub fn predecessor(&self) -> Option<Element> {
-        let ctx = self.context::<PredecessorContext>();
-        ctx.map(|ctx| ctx.element.clone())
+    pub fn pred(&self) -> ReadonlySignal<Option<Element>> {
+        self.data.pred.borrow().clone().into_readonly_signal()
     }
 
-    pub(crate) fn move_after(&self, pred: Option<&Element>) {
-        let moved_callbacks = self.data.moved_callbacks.take();
-        for callback in moved_callbacks {
-            callback(pred);
-        }
+    pub(crate) fn set_pred(&self, pred: Option<Element>) {
+        self.data.pred.borrow().set(pred);
     }
 
     pub(crate) fn provide_context<T: 'static>(&self, context: impl Into<Rc<T>>) {
@@ -221,15 +215,11 @@ pub fn create_element<C: Component>(props: C::Props) -> Element {
         data: Rc::new(ElementData {
             component_id: component_id::<C>(),
             props: Box::new(props),
-            handle: create_state(None),
             contexts: RefCell::new(HashMap::new()),
+            pred: RefCell::new(create_state(None)),
+            handle: RefCell::new(create_state(None)),
             destroy_callbacks: RefCell::new(HashSet::new()),
-            moved_callbacks: RefCell::new(HashSet::new()),
             after_render_callbacks: RefCell::new(HashSet::new()),
         }),
     }
-}
-
-pub(crate) struct PredecessorContext {
-    pub element: Element,
 }

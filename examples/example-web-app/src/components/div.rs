@@ -1,4 +1,4 @@
-use nestix::{Layout, Element, closure, component, components::ContextProvider, layout, props};
+use nestix::{Element, Layout, closure, component, components::ContextProvider, effect, layout, props};
 use wasm_bindgen::{JsCast, UnwrapThrowExt};
 use web_sys::{HtmlElement, Text};
 
@@ -13,7 +13,6 @@ pub struct DivProps {
 #[component]
 pub fn Div(props: &DivProps, element: &Element) -> Element {
     let parent = element.context::<ParentContext>().unwrap_throw();
-    let pred = element.predecessor();
 
     let document = web_sys::window().unwrap().document().unwrap();
     let html_element = document
@@ -21,18 +20,19 @@ pub fn Div(props: &DivProps, element: &Element) -> Element {
         .unwrap()
         .dyn_into::<HtmlElement>()
         .unwrap();
+    parent.html_element.append_child(&html_element).unwrap();
 
-    if let Some(pred) = pred {
-        if let Some(handle) = pred.handle().get() {
-            if let Some(pred_html_element) = handle.downcast_ref::<HtmlElement>() {
-                pred_html_element.after_with_node_1(&html_element).unwrap();
-            } else if let Some(text) = handle.downcast_ref::<Text>() {
-                text.after_with_node_1(&html_element).unwrap();
+    effect!([element.pred(), html_element] || {
+        if let Some(pred) = pred.get() {
+            if let Some(handle) = pred.handle().get() {
+                if let Some(pred_html_element) = handle.downcast_ref::<HtmlElement>() {
+                    pred_html_element.after_with_node_1(&html_element).unwrap();
+                } else if let Some(text) = handle.downcast_ref::<Text>() {
+                    text.after_with_node_1(&html_element).unwrap();
+                }
             }
         }
-    } else {
-        parent.html_element.append_child(&html_element).unwrap();
-    }
+    });
 
     element.on_destroy(closure!(
         [html_element] || {

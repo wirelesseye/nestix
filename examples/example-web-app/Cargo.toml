@@ -26,3 +26,4 @@ web-sys = { version = "0.3.82", features = [
     "Window",
     "CssStyleDeclaration",
 ] }
+indexmap = "2.13.0"
