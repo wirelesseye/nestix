@@ -7,8 +7,7 @@ use std::{
 };
 
 use crate::{
-    Component, ComponentID, ReadonlySignal, Shared, State, component_id, create_state, effect,
-    prop::Props,
+    Component, ComponentID, Shared, State, component_id, create_state, effect, prop::Props,
 };
 
 pub trait ComponentOutput {
@@ -138,8 +137,8 @@ impl Element {
         }
     }
 
-    pub fn handle(&self) -> ReadonlySignal<Option<Shared<dyn Any>>> {
-        self.data.handle.borrow().clone().into_readonly_signal()
+    pub fn handle(&self) -> Option<Shared<dyn Any>> {
+        self.data.handle.borrow().get()
     }
 
     pub fn forward_handle(&self, element: &Element) {
@@ -171,8 +170,8 @@ impl Element {
             .map(|ctx| Rc::downcast::<T>(ctx).unwrap())
     }
 
-    pub fn pred(&self) -> ReadonlySignal<Option<Element>> {
-        self.data.pred.borrow().clone().into_readonly_signal()
+    pub fn pred(&self) -> Option<Element> {
+        self.data.pred.borrow().get()
     }
 
     pub(crate) fn set_pred(&self, pred: Option<Element>) {

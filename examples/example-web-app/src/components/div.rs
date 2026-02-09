@@ -1,4 +1,6 @@
-use nestix::{Element, Layout, closure, component, components::ContextProvider, effect, layout, props};
+use nestix::{
+    Element, Layout, closure, component, components::ContextProvider, effect, layout, props,
+};
 use wasm_bindgen::{JsCast, UnwrapThrowExt};
 use web_sys::{HtmlElement, Text};
 
@@ -22,17 +24,19 @@ pub fn Div(props: &DivProps, element: &Element) -> Element {
         .unwrap();
     parent.html_element.append_child(&html_element).unwrap();
 
-    effect!([element.pred(), html_element] || {
-        if let Some(pred) = pred.get() {
-            if let Some(handle) = pred.handle().get() {
-                if let Some(pred_html_element) = handle.downcast_ref::<HtmlElement>() {
-                    pred_html_element.after_with_node_1(&html_element).unwrap();
-                } else if let Some(text) = handle.downcast_ref::<Text>() {
-                    text.after_with_node_1(&html_element).unwrap();
+    effect!(
+        [element, html_element] || {
+            if let Some(pred) = element.pred() {
+                if let Some(handle) = pred.handle() {
+                    if let Some(pred_html_element) = handle.downcast_ref::<HtmlElement>() {
+                        pred_html_element.after_with_node_1(&html_element).unwrap();
+                    } else if let Some(text) = handle.downcast_ref::<Text>() {
+                        text.after_with_node_1(&html_element).unwrap();
+                    }
                 }
             }
         }
-    });
+    );
 
     element.on_destroy(closure!(
         [html_element] || {

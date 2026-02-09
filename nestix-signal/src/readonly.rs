@@ -1,10 +1,10 @@
 use crate::Signal;
 
-pub struct ReadonlySignal<T> {
+pub struct Readonly<T> {
     signal: Box<dyn Signal<Output = T>>,
 }
 
-impl<T> ReadonlySignal<T> {
+impl<T> Readonly<T> {
     pub fn new(signal: impl Signal<Output = T> + 'static) -> Self {
         Self {
             signal: Box::new(signal),
@@ -12,13 +12,13 @@ impl<T> ReadonlySignal<T> {
     }
 }
 
-impl<T> ReadonlySignal<T> {
+impl<T> Readonly<T> {
     pub fn get(&self) -> T {
         self.signal.get()
     }
 }
 
-impl<T: 'static + Clone> Signal for ReadonlySignal<T> {
+impl<T: 'static + Clone> Signal for Readonly<T> {
     type Output = T;
 
     fn get(&self) -> T {
@@ -30,7 +30,7 @@ impl<T: 'static + Clone> Signal for ReadonlySignal<T> {
     }
 }
 
-impl<T> Clone for ReadonlySignal<T> {
+impl<T> Clone for Readonly<T> {
     fn clone(&self) -> Self {
         Self {
             signal: self.signal.clone(),

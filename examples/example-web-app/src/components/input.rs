@@ -21,9 +21,9 @@ pub fn Input(_props: &InputProps, element: &Element) {
     parent.html_element.append_child(&html_element).unwrap();
 
     effect!(
-        [element.pred(), html_element] || {
-            if let Some(pred) = pred.get() {
-                if let Some(handle) = pred.handle().get() {
+        [element, html_element] || {
+            if let Some(pred) = element.pred() {
+                if let Some(handle) = pred.handle() {
                     if let Some(pred_html_element) = handle.downcast_ref::<HtmlElement>() {
                         pred_html_element.after_with_node_1(&html_element).unwrap();
                     } else if let Some(text) = handle.downcast_ref::<Text>() {

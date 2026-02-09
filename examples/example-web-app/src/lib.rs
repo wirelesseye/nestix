@@ -100,8 +100,7 @@ fn TodoList() -> Element {
     let add = callback!(
         [input, items] || {
             if let Some(element) = input.get() {
-                let handle = element.handle().get();
-                if let Some(handle) = handle {
+                if let Some(handle) = element.handle() {
                     let html_element = handle.downcast_ref::<HtmlElement>().unwrap();
                     let input_element = html_element.dyn_ref::<HtmlInputElement>().unwrap();
                     let value = input_element.value();

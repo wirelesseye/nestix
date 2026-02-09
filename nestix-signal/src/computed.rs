@@ -7,9 +7,7 @@ use std::{
 
 use nestix_macros::callback;
 
-use crate::{
-    Effect, ReadonlySignal, Signal, current_effect, run_effect, set_current_effect, shared::Shared,
-};
+use crate::{Effect, Readonly, Shared, Signal, current_effect, run_effect, set_current_effect};
 
 struct ComputedData<T> {
     cached: RefCell<Option<T>>,
@@ -78,8 +76,8 @@ impl<T: 'static + Clone> Signal for Computed<T> {
 }
 
 impl<T: Clone + 'static> Computed<T> {
-    pub fn into_readonly_signal(self) -> super::ReadonlySignal<T> {
-        ReadonlySignal::new(self)
+    pub fn into_readonly(self) -> super::Readonly<T> {
+        Readonly::new(self)
     }
 }
 
@@ -92,13 +90,15 @@ pub fn computed<T: 'static>(compute: impl Fn() -> T + 'static) -> Computed<T> {
 
     let runner = Effect::new(
         location,
-        callback!([dirty, dependents] || {
-            dirty.set(true);
-            let dependents = dependents.borrow().clone();
-            for effect in dependents {
-                run_effect(&effect, location);
+        callback!(
+            [dirty, dependents] || {
+                dirty.set(true);
+                let dependents = dependents.borrow().clone();
+                for effect in dependents {
+                    run_effect(&effect, location);
+                }
             }
-        }),
+        ),
     );
 
     Computed {

@@ -5,7 +5,7 @@ use std::{
     rc::Rc,
 };
 
-use crate::{Effect, ReadonlySignal, Signal, current_effect, run_effect, shared::Shared};
+use crate::{Effect, Readonly, Signal, current_effect, run_effect, shared::Shared};
 
 #[derive(Debug)]
 struct StateData<T> {
@@ -115,8 +115,8 @@ impl<T> PartialEq for State<T> {
 }
 
 impl<T: Clone + 'static> State<T> {
-    pub fn into_readonly_signal(self) -> super::ReadonlySignal<T> {
-        ReadonlySignal::new(self)
+    pub fn into_readonly(self) -> super::Readonly<T> {
+        Readonly::new(self)
     }
 }
 
