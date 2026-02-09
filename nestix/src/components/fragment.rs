@@ -3,7 +3,7 @@ use std::{cell::RefCell, rc::Rc};
 use nestix_macros::{closure, component, props};
 
 use crate::{
-    Layout, ComponentOutput, Element, effect, untrack,
+    ComponentOutput, Element, Layout, effect, untrack,
     utils::reconcile::{ReconcileResult, reconcile},
 };
 
@@ -15,85 +15,50 @@ pub struct FragmentProps {
 
 #[component]
 pub fn Fragment(props: &FragmentProps, element: &Element) {
-    let prev: Rc<RefCell<Option<Vec<Element>>>> = Rc::new(RefCell::new(None));
+    let prev_children: Rc<RefCell<Layout>> = Rc::new(RefCell::new(Layout::default()));
     let contexts = element.contexts();
 
     effect!(
-        [element, prev, props.children] || {
-            let mut prev = prev.borrow_mut();
-            let next = children.get().into_elements();
+        [element, prev_children, props.children] || {
+            let mut prev_children = prev_children.borrow_mut();
+            let next_children = children.get();
 
-            match (&*prev, &next) {
-                (Some(prev), Some(next)) => {
-                    let result = reconcile(prev, next);
-                    let ReconcileResult {
-                        removed,
-                        added,
-                        moved,
-                        mapping: _,
-                    } = result;
+            let result = reconcile(&*prev_children, &next_children);
+            let ReconcileResult { removed, mapping } = result;
 
-                    for prev_i in removed {
-                        prev[prev_i].destroy();
-                    }
-
-                    for next_i in added {
-                        let pred = if next_i == 0 {
-                            None
-                        } else {
-                            Some(next[next_i - 1].clone())
-                        };
-                        let child = &next[next_i];
-                        child.set_pred(pred);
-                        child.extend_contexts(contexts.clone());
-                        untrack!(
-                            [child, element] || {
-                                child.render(Some(&element));
-                                element.forward_handle(&child);
-                            }
-                        );
-                    }
-
-                    for next_i in moved {
-                        let pred = if next_i == 0 {
-                            None
-                        } else {
-                            Some(next[next_i - 1].clone())
-                        };
-                        let child = &next[next_i];
-                        child.set_pred(pred);
-                    }
-                }
-                (Some(prev), None) => {
-                    for child in prev {
-                        child.destroy();
-                    }
-                }
-                (None, Some(next)) => {
-                    for child in next {
-                        child.extend_contexts(contexts.clone());
-                        untrack!(
-                            [child, element] || {
-                                child.render(Some(&element));
-                                element.forward_handle(&child);
-                            }
-                        );
-                    }
-                }
-                _ => (),
+            for prev_i in removed {
+                prev_children[prev_i].destroy();
             }
 
-            *prev = next;
+            for (i, orig_i) in mapping.iter().enumerate() {
+                let pred = if i == 0 {
+                    None
+                } else {
+                    Some(next_children[i - 1].clone())
+                };
+                let child = &next_children[i];
+                child.set_pred(pred);
+
+                if orig_i.is_none() {
+                    child.extend_contexts(contexts.clone());
+                    untrack!(
+                        [child, element] || {
+                            child.render(Some(&element));
+                            element.forward_handle(&child);
+                        }
+                    );
+                }
+            }
+
+            *prev_children = next_children;
         }
     );
 
     element.on_destroy(closure!(
-        [prev] || {
-            let prev = prev.borrow();
-            if let Some(prev) = &*prev {
-                for child in prev {
-                    child.destroy();
-                }
+        [prev_children] || {
+            let prev_children = prev_children.borrow();
+            for child in &*prev_children {
+                child.destroy();
             }
         }
     ));

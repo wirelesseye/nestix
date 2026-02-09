@@ -47,8 +47,6 @@ pub fn For<I: IntoIterator + Clone + 'static, K: Eq + Hash + 'static>(
             let result = reconcile(&*prev_keys, &next_keys);
             let ReconcileResult {
                 removed,
-                added,
-                moved: _,
                 mapping,
             } = result;
 
@@ -78,18 +76,12 @@ pub fn For<I: IntoIterator + Clone + 'static, K: Eq + Hash + 'static>(
 
                 child.set_pred(pred.clone());
 
-                if added.contains(&i) {
+                if orig_i.is_none() || rerender {
                     child.extend_contexts(contexts.clone());
                     untrack!(
                         [child, element] || {
                             child.render(Some(&element));
                             element.forward_handle(&child);
-                        }
-                    );
-                } else if rerender {
-                    untrack!(
-                        [child, element] || {
-                            child.render(Some(&element));
                         }
                     );
                 }
