@@ -2,8 +2,7 @@ use std::{cell::RefCell, collections::HashMap};
 
 use nanoid_wasm::nanoid;
 use nestix::{
-    Layout, Element, Shared, closure, component, components::ContextProvider, effect, layout,
-    props,
+    Element, Layout, Shared, closure, component, components::ContextProvider, effect, layout, props,
 };
 use wasm_bindgen::{JsCast, prelude::Closure};
 use web_sys::{Event, HtmlButtonElement, HtmlElement};
@@ -60,6 +59,15 @@ pub fn Button(props: &ButtonProps, element: &Element) -> Element {
                 None
             };
 
+            HANDLERS.with_borrow_mut(|handlers| {
+                let handlers = handlers.get_mut(&button_id).unwrap();
+                if let Some(cb) = handlers.on_click.take() {
+                    html_element
+                        .remove_event_listener_with_callback("click", cb.as_ref().unchecked_ref())
+                        .unwrap();
+                }
+            });
+
             if let Some(cb) = cb {
                 html_element
                     .add_event_listener_with_callback("click", cb.as_ref().unchecked_ref())
@@ -68,11 +76,6 @@ pub fn Button(props: &ButtonProps, element: &Element) -> Element {
                 HANDLERS.with_borrow_mut(|handlers| {
                     let handlers = handlers.get_mut(&button_id).unwrap();
                     handlers.on_click.replace(cb);
-                });
-            } else {
-                HANDLERS.with_borrow_mut(|handlers| {
-                    let handlers = handlers.get_mut(&button_id).unwrap();
-                    handlers.on_click.take();
                 });
             }
         }

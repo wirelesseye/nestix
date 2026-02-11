@@ -1,4 +1,4 @@
-use nestix::{Element, component, props, effect};
+use nestix::{Element, closure, component, effect, props};
 
 use crate::ParentContext;
 
@@ -18,6 +18,12 @@ pub fn Text(props: &TextProps, element: &Element) {
     effect!(
         [props.text, text_node] || text_node.set_data(&text.get())
     );
+
+    element.on_destroy(closure!(
+        [text_node] || {
+            text_node.remove();
+        }
+    ));
 
     element.provide_handle(text_node.clone());
 

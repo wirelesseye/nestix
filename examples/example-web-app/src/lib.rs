@@ -4,10 +4,11 @@ use components::*;
 use indexmap::IndexMap;
 use nanoid_wasm::nanoid;
 use nestix::{
-    Element, callback, component, components::For, computed, create_state, layout, render_root,
+    Element, Readonly, Shared, callback, component, components::For, computed, create_state,
+    layout, props, render_root,
 };
-use wasm_bindgen::{JsCast, prelude::wasm_bindgen};
-use web_sys::{HtmlElement, HtmlInputElement};
+use wasm_bindgen::prelude::wasm_bindgen;
+use web_sys::HtmlElement;
 
 #[wasm_bindgen(start)]
 fn init() {
@@ -95,28 +96,56 @@ fn Counter() -> Element {
 #[component]
 fn TodoList() -> Element {
     let items = create_state::<IndexMap<String, String>>(IndexMap::new());
-    let input = create_state::<Option<Element>>(None);
+    let input_value = create_state(String::new());
 
     let add = callback!(
-        [input, items] || {
-            if let Some(element) = input.get() {
-                if let Some(handle) = element.handle() {
-                    let html_element = handle.downcast_ref::<HtmlElement>().unwrap();
-                    let input_element = html_element.dyn_ref::<HtmlInputElement>().unwrap();
-                    let value = input_element.value();
-                    items.mutate(|items| {
-                        items.insert(nanoid!(), value);
-                    });
-                    input_element.set_value("");
-                }
-            }
+        [input_value, items] || {
+            items.mutate(|items| {
+                items.insert(nanoid!(), input_value.get());
+            });
+            input_value.set(String::new());
         }
     );
+
+    let remove = callback!([items] |key: &str| {
+        items.mutate(|items| {
+            items.shift_remove(key);
+        });
+    });
+
+    let move_up = callback!([items] |key: &str| {
+        items.mutate(|items| {
+            if let Some(index) = items.get_index_of(key) {
+                if index > 0 {
+                    items.swap_indices(index, index - 1);
+                }
+            }
+        });
+    });
+
+    let move_down = callback!([items] |key: &str| {
+        items.mutate(|items| {
+            if let Some(index) = items.get_index_of(key) {
+                if index < items.len() - 1 {
+                    items.swap_indices(index, index + 1);
+                }
+            }
+        });
+    });
+
+    let set_content = callback!([items] |key: &str, content: String| {
+        items.mutate(|items| {
+            items[key] = content;
+        });
+    });
 
     layout! {
         Div {
             Div {
-                input@Input(),
+                Input(
+                    .value = input_value.clone(),
+                    .on_value_change = callback!(move |value: String| input_value.set(value))
+                )
                 Button(.on_click = add) {
                     Text("Add")
                 }
@@ -126,46 +155,81 @@ fn TodoList() -> Element {
                 For<IndexMap<String, String>, _>(
                     .data = items.clone(),
                     .key = callback!(|item: &(String, String)| item.0.clone())
-                ) |item: &(String, String)| {
-                    Div {
-                        Button(
-                            .on_click = callback!([items, item] || {
-                                items.mutate(|items| {
-                                    items.shift_remove(&item.0);
-                                });
-                            })
-                        ) {
-                            Text("✕")
-                        }
-                        Button(
-                            .on_click = callback!([items, item] || {
-                                items.mutate(|items| {
-                                    if let Some(index) = items.get_index_of(&item.0) {
-                                        if index > 0 {
-                                            items.swap_indices(index, index - 1);
-                                        }
-                                    }
-                                });
-                            })
-                        ) {
-                            Text("↑")
-                        }
-                        Button(
-                            .on_click = callback!([items, item] || {
-                                items.mutate(|items| {
-                                    if let Some(index) = items.get_index_of(&item.0) {
-                                        if index < items.len() - 1 {
-                                            items.swap_indices(index, index + 1);
-                                        }
-                                    }
-                                });
-                            })
-                        ) {
-                            Text("↓")
-                        }
-                        Text(format!("{}", item.1)),
-                    }
+                ) |item: Readonly<(String, String)>| {
+                    TodoListItem(
+                        .key = computed!([item] || item.get().0),
+                        .content = computed!(move || item.get().1),
+                        .remove = remove.clone(),
+                        .move_up = move_up.clone(),
+                        .move_down = move_down.clone(),
+                        .set_content = set_content.clone(),
+                    )
                 }
+            }
+        }
+    }
+}
+
+#[props]
+struct TodoListItemProps {
+    key: String,
+    content: String,
+    remove: Shared<dyn Fn(&str)>,
+    move_up: Shared<dyn Fn(&str)>,
+    move_down: Shared<dyn Fn(&str)>,
+    set_content: Shared<dyn Fn(&str, String)>,
+}
+
+#[component]
+fn TodoListItem(props: &TodoListItemProps) -> Element {
+    let is_edit = create_state(false);
+
+    let toggle_edit = callback!(
+        [is_edit] || {
+            is_edit.update(|is_edit| !is_edit);
+        }
+    );
+
+    layout! {
+        Div {
+            Button(
+                .on_click = computed!([props.key, props.remove] || {
+                    callback!([key: key.get(), remove: remove.get()] || remove(&key))
+                })
+            ) {
+                Text("✕")
+            }
+            Button(
+                .on_click = computed!([props.key, props.move_up] || {
+                    callback!([key: key.get(), move_up: move_up.get()] || move_up(&key))
+                })
+            ) {
+                Text("↑")
+            }
+            Button(
+                .on_click = computed!([props.key, props.move_down] || {
+                    callback!([key: key.get(), move_down: move_down.get()] || move_down(&key))
+                })
+            ) {
+                Text("↓")
+            }
+            Button(
+                .on_click = toggle_edit
+            ) {
+                Text("Edit")
+            }
+
+            if is_edit.get() {
+                Input(
+                    .value = props.content.clone(),
+                    .on_value_change = computed!([props.key, props.set_content] || {
+                        callback!([key: key.get(), set_content: set_content.get()] |value: String| {
+                            set_content(&key, value);
+                        })
+                    }),
+                )
+            } else {
+                Text(props.content.clone())
             }
         }
     }

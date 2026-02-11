@@ -1,9 +1,10 @@
 use std::{cell::RefCell, rc::Rc};
 
 use nestix_macros::{closure, component, props};
+use nestix_signal::create_state;
 
 use crate::{
-    ComponentOutput, Element, Layout, effect, untrack,
+    ChildHandleContext, ComponentOutput, Element, Layout, effect, untrack,
     utils::reconcile::{ReconcileResult, reconcile},
 };
 
@@ -16,7 +17,6 @@ pub struct FragmentProps {
 #[component]
 pub fn Fragment(props: &FragmentProps, element: &Element) {
     let prev_children: Rc<RefCell<Layout>> = Rc::new(RefCell::new(Layout::default()));
-    let contexts = element.contexts();
 
     effect!(
         [element, prev_children, props.children] || {
@@ -31,22 +31,30 @@ pub fn Fragment(props: &FragmentProps, element: &Element) {
             }
 
             for (i, orig_i) in mapping.iter().enumerate() {
-                let pred = if i == 0 {
-                    None
-                } else {
-                    Some(next_children[i - 1].clone())
-                };
                 let child = &next_children[i];
-                child.set_pred(pred);
+
+                let prev_handle = if i > 0 {
+                    let pred = next_children[i - 1].clone();
+                    pred.context::<ChildHandleContext>()
+                        .map(|ctx| ctx.handle.borrow().clone())
+                        .flatten()
+                } else {
+                    None
+                };
 
                 if orig_i.is_none() {
-                    child.extend_contexts(contexts.clone());
+                    element.provide_context(ChildHandleContext {
+                        handle: RefCell::new(None),
+                        prev_handle: create_state(prev_handle),
+                    });
                     untrack!(
                         [child, element] || {
                             child.render(Some(&element));
-                            element.forward_handle(&child);
                         }
                     );
+                } else {
+                    let ctx = child.context::<ChildHandleContext>().unwrap();
+                    ctx.prev_handle.set(prev_handle);
                 }
             }
 

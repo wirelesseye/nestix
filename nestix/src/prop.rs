@@ -42,6 +42,16 @@ pub trait Props: Any {
     }
 }
 
+impl dyn Props {
+    pub fn as_any(&self) -> &dyn Any {
+        self
+    }
+
+    pub fn downcast_ref<T: 'static>(&self) -> Option<&T> {
+        self.as_any().downcast_ref::<T>()
+    }
+}
+
 impl Debug for dyn Props {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         self.debug_fmt(f)

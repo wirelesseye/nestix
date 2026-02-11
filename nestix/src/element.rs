@@ -91,7 +91,6 @@ struct ElementData {
     component_id: ComponentID,
     props: Box<dyn Props>,
     contexts: RefCell<HashMap<TypeId, Rc<dyn Any>>>,
-    pred: RefCell<State<Option<Element>>>,
     handle: RefCell<State<Option<Shared<dyn Any>>>>,
     destroy_callbacks: RefCell<HashSet<Shared<dyn Fn()>>>,
     after_render_callbacks: RefCell<HashSet<Shared<dyn Fn()>>>,
@@ -122,12 +121,11 @@ impl Element {
     }
 
     #[inline]
-    pub fn props(&self) -> &dyn Any {
+    pub fn props(&self) -> &dyn Props {
         self.data.props.as_ref()
     }
 
     pub fn destroy(&self) {
-        self.data.pred.replace(create_state(None));
         self.data.handle.replace(create_state(None));
         self.data.after_render_callbacks.take();
 
@@ -150,6 +148,11 @@ impl Element {
 
     pub fn provide_handle<T: 'static>(&self, handle: T) {
         let handle = Shared::from(Rc::new(handle) as Rc<dyn Any>);
+        if let Some(ctx) = self.context::<ChildHandleContext>() {
+            if ctx.handle.borrow().is_none() {
+                ctx.handle.replace(Some(handle.clone()));
+            }
+        }
         self.data.handle.borrow().set(Some(handle));
     }
 
@@ -170,12 +173,10 @@ impl Element {
             .map(|ctx| Rc::downcast::<T>(ctx).unwrap())
     }
 
-    pub fn pred(&self) -> Option<Element> {
-        self.data.pred.borrow().get()
-    }
-
-    pub(crate) fn set_pred(&self, pred: Option<Element>) {
-        self.data.pred.borrow().set(pred);
+    pub fn pred_handle(&self) -> Option<Shared<dyn Any>> {
+        self.context::<ChildHandleContext>()
+            .map(|child_handle| child_handle.prev_handle.get())
+            .flatten()
     }
 
     pub(crate) fn provide_context<T: 'static>(&self, context: impl Into<Rc<T>>) {
@@ -215,10 +216,15 @@ pub fn create_element<C: Component>(props: C::Props) -> Element {
             component_id: component_id::<C>(),
             props: Box::new(props),
             contexts: RefCell::new(HashMap::new()),
-            pred: RefCell::new(create_state(None)),
             handle: RefCell::new(create_state(None)),
             destroy_callbacks: RefCell::new(HashSet::new()),
             after_render_callbacks: RefCell::new(HashSet::new()),
         }),
     }
+}
+
+#[derive(Debug)]
+pub(crate) struct ChildHandleContext {
+    pub handle: RefCell<Option<Shared<dyn Any>>>,
+    pub prev_handle: State<Option<Shared<dyn Any>>>,
 }

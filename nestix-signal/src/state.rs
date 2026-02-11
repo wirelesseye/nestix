@@ -45,8 +45,10 @@ impl<T> State<T> {
     #[track_caller]
     pub fn update(&self, updater: impl FnOnce(&T) -> T) {
         let location = Location::caller();
-        let prev = self.data.value.borrow();
-        let next = updater(&prev);
+        let next = {
+            let prev = self.data.value.borrow();
+            updater(&prev)
+        };
         self.data.value.replace(next);
 
         let dependents = self.data.dependents.borrow().clone();

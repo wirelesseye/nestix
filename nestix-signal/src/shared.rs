@@ -51,7 +51,7 @@ impl<T: ?Sized> From<Rc<T>> for Shared<T> {
 impl<T: ?Sized> Debug for Shared<T> {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         f.debug_struct("Shared")
-            .field("value", &format!("{:p}", Rc::as_ptr(&self.value)))
+            .field("ptr", &Rc::as_ptr(&self.value))
             .finish()
     }
 }
