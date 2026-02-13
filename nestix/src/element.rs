@@ -135,7 +135,13 @@ impl Element {
         }
     }
 
-    pub fn handle(&self) -> Option<Shared<dyn Any>> {
+    pub fn handle<T: 'static>(&self) -> Option<Shared<T>> {
+        self.handle_any()
+            .map(|handle| Shared::downcast(handle).ok())
+            .flatten()
+    }
+
+    fn handle_any(&self) -> Option<Shared<dyn Any>> {
         self.data.handle.borrow().get()
     }
 
@@ -173,7 +179,13 @@ impl Element {
             .map(|ctx| Rc::downcast::<T>(ctx).unwrap())
     }
 
-    pub fn pred_handle(&self) -> Option<Shared<dyn Any>> {
+    pub fn pred_handle<T: 'static>(&self) -> Option<Shared<T>> {
+        self.pred_handle_any()
+            .map(|handle| Shared::downcast(handle).ok())
+            .flatten()
+    }
+
+    fn pred_handle_any(&self) -> Option<Shared<dyn Any>> {
         self.context::<ChildHandleContext>()
             .map(|child_handle| child_handle.prev_handle.get())
             .flatten()

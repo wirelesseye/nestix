@@ -129,7 +129,9 @@ fn generate_layout_item_element(
     let output = if let Some(bind) = bind {
         quote! {{
             let element = #crate_path::create_element::<#ty>(#props_output);
-            #bind.set(Some(element.clone()));
+            #crate_path::effect!([#bind, element] || {
+                #bind.set(element.handle());
+            });
             element
         }}
     } else {

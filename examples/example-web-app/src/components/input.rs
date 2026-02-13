@@ -50,12 +50,10 @@ pub fn Input(props: &InputProps, element: &Element) {
 
     effect!(
         [element, html_element] || {
-            if let Some(handle) = element.pred_handle() {
-                if let Some(pred_html_element) = handle.downcast_ref::<HtmlElement>() {
-                    pred_html_element.after_with_node_1(&html_element).unwrap();
-                } else if let Some(text) = handle.downcast_ref::<Text>() {
-                    text.after_with_node_1(&html_element).unwrap();
-                }
+            if let Some(handle) = element.pred_handle::<HtmlElement>() {
+                handle.after_with_node_1(&html_element).unwrap();
+            } else if let Some(handle) = element.pred_handle::<Text>() {
+                handle.after_with_node_1(&html_element).unwrap();
             }
         }
     );

@@ -1,4 +1,4 @@
-use std::{fmt::Debug, hash::Hash, ops::Deref, rc::Rc};
+use std::{any::Any, fmt::Debug, hash::Hash, ops::Deref, rc::Rc};
 
 pub struct Shared<T: ?Sized> {
     value: Rc<T>,
@@ -8,6 +8,15 @@ impl<T> Shared<T> {
     pub fn new(value: T) -> Self {
         Self {
             value: Rc::new(value),
+        }
+    }
+}
+
+impl Shared<dyn Any> {
+    pub fn downcast<T: Any>(self) -> Result<Shared<T>, Self> {
+        match Rc::downcast::<T>(self.value) {
+            Ok(value) => Ok(Shared { value }),
+            Err(value) => Err(Shared { value }),
         }
     }
 }
