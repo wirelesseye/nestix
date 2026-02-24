@@ -71,7 +71,7 @@ impl<T> State<T> {
     }
 }
 
-impl<T: Eq> State<T> {
+impl<T: PartialEq> State<T> {
     #[track_caller]
     pub fn set(&self, value: T) {
         {
