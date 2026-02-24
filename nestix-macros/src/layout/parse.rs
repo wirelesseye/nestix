@@ -117,6 +117,17 @@ pub struct LayoutItemIf {
     pub else_branch: Option<Box<LayoutItemElse>>,
 }
 
+impl LayoutItemIf {
+    pub fn is_single_item(&self) -> bool {
+        self.then.items.len() == 1
+            && if let Some(else_branch) = &self.else_branch {
+                else_branch.is_single_item()
+            } else {
+                true
+            }
+    }
+}
+
 impl Parse for LayoutItemIf {
     fn parse(input: syn::parse::ParseStream) -> syn::Result<Self> {
         input.parse::<Token![if]>()?;
@@ -143,6 +154,15 @@ impl Parse for LayoutItemIf {
 pub enum LayoutItemElse {
     Else(LayoutInput),
     ElseIf(LayoutItemIf),
+}
+
+impl LayoutItemElse {
+    pub fn is_single_item(&self) -> bool {
+        match self {
+            LayoutItemElse::Else(layout_input) => layout_input.items.len() == 1,
+            LayoutItemElse::ElseIf(layout_item_if) => layout_item_if.is_single_item(),
+        }
+    }
 }
 
 impl Parse for LayoutItemElse {
