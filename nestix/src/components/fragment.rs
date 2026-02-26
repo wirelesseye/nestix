@@ -47,11 +47,9 @@ pub fn Fragment(props: &FragmentProps, element: &Element) {
                         handle: RefCell::new(None),
                         prev_handle: create_state(prev_handle),
                     });
-                    untrack!(
-                        [child, element] || {
-                            child.render(Some(&element));
-                        }
-                    );
+                    untrack(|| {
+                        child.render(Some(&element));
+                    });
                 } else {
                     let ctx = child.context::<ChildHandleContext>().unwrap();
                     ctx.prev_handle.set(prev_handle);

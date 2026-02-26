@@ -78,13 +78,11 @@ pub fn For<I: IntoIterator + Clone + 'static, K: Eq + Hash + 'static>(
                 if orig_i.is_none() {
                     element.provide_context(ChildHandleContext {
                         handle: RefCell::new(None),
-                        prev_handle: create_state(prev_handle)
+                        prev_handle: create_state(prev_handle),
                     });
-                    untrack!(
-                        [child, element] || {
-                            child.render(Some(&element));
-                        }
-                    );
+                    untrack(|| {
+                        child.render(Some(&element));
+                    });
                 } else {
                     let ctx = child.context::<ChildHandleContext>().unwrap();
                     ctx.prev_handle.set(prev_handle);
