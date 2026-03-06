@@ -37,16 +37,16 @@ pub fn effect(f: impl Fn() + 'static) {
 }
 
 pub(crate) fn run_effect(effect: &Shared<Effect>, location: &'static Location<'static>) {
-    if is_effect_running(effect) {
-        log::error!(
-            "cyclic update detected, aborting effect\n\tat {}:{}\nwhen trying to modify value\n\tat {}:{}",
-            effect.location.file(),
-            effect.location.line(),
-            location.file(),
-            location.line(),
-        );
-        return;
-    }
+    // TODO: add toggle for cyclic update detection
+    // if is_effect_running(effect) {
+    //     log::warn!(
+    //         "cyclic update detected\n\tat {}:{}\nwhen trying to modify value\n\tat {}:{}",
+    //         effect.location.file(),
+    //         effect.location.line(),
+    //         location.file(),
+    //         location.line(),
+    //     );
+    // }
 
     // Cleanup old dependencies
     for dependency_set in effect.dependency_sets.take() {
