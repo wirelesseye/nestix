@@ -11,33 +11,33 @@ use crate::{
 };
 
 pub trait ComponentOutput {
-    fn render(&self, parent: Option<&Element>);
+    fn mount(&self, parent: Option<&Element>);
 
-    fn handle_destroy(&self, parent: &Element);
+    fn unmount_with_parent(&self, parent: &Element);
 }
 
 impl ComponentOutput for () {
     #[inline]
-    fn render(&self, _parent: Option<&Element>) {}
+    fn mount(&self, _parent: Option<&Element>) {}
 
     #[inline]
-    fn handle_destroy(&self, _parent: &Element) {}
+    fn unmount_with_parent(&self, _parent: &Element) {}
 }
 
 impl ComponentOutput for Option<Element> {
     #[inline]
-    fn render(&self, parent: Option<&Element>) {
+    fn mount(&self, parent: Option<&Element>) {
         if let Some(element) = self {
-            element.render(parent);
+            element.mount(parent);
         }
     }
 
     #[inline]
-    fn handle_destroy(&self, parent: &Element) {
+    fn unmount_with_parent(&self, parent: &Element) {
         if let Some(element) = self {
             let element = element.clone();
-            parent.on_destroy(move || {
-                element.destroy();
+            parent.on_unmount(move || {
+                element.unmount();
             });
         }
     }
@@ -45,19 +45,19 @@ impl ComponentOutput for Option<Element> {
 
 impl ComponentOutput for Element {
     #[inline]
-    fn render(&self, parent: Option<&Element>) {
+    fn mount(&self, parent: Option<&Element>) {
         if let Some(parent) = parent {
             self.extend_contexts(parent.contexts());
         }
-        (self.component_id().render_fn)(self);
+        (self.component_id().mount_fn)(self);
         self.execute_post_update_tasks();
     }
 
     #[inline]
-    fn handle_destroy(&self, parent: &Element) {
+    fn unmount_with_parent(&self, parent: &Element) {
         let element = self.clone();
-        parent.on_destroy(move || {
-            element.destroy();
+        parent.on_unmount(move || {
+            element.unmount();
         });
     }
 }
@@ -92,8 +92,8 @@ struct ElementData {
     props: Box<dyn Props>,
     contexts: RefCell<HashMap<TypeId, Rc<dyn Any>>>,
     handle: RefCell<State<Option<Shared<dyn Any>>>>,
-    destroy_callbacks: RefCell<HashSet<Shared<dyn Fn()>>>,
-    after_render_callbacks: RefCell<HashSet<Shared<dyn Fn()>>>,
+    unmount_callbacks: RefCell<HashSet<Shared<dyn Fn()>>>,
+    after_mount_callbacks: RefCell<HashSet<Shared<dyn Fn()>>>,
 }
 
 #[derive(Clone, Debug)]
@@ -125,12 +125,12 @@ impl Element {
         self.data.props.as_ref()
     }
 
-    pub fn destroy(&self) {
+    pub fn unmount(&self) {
         self.data.handle.replace(create_state(None));
-        self.data.after_render_callbacks.take();
+        self.data.after_mount_callbacks.take();
 
-        let destroy_callbacks = self.data.destroy_callbacks.take();
-        for callback in destroy_callbacks {
+        let unmount_callbacks = self.data.unmount_callbacks.take();
+        for callback in unmount_callbacks {
             callback();
         }
     }
@@ -162,16 +162,16 @@ impl Element {
         self.data.handle.borrow().set(Some(handle));
     }
 
-    pub fn on_destroy(&self, f: impl Fn() + 'static) {
+    pub fn on_unmount(&self, f: impl Fn() + 'static) {
         let callback = Shared::from(Rc::new(f) as Rc<dyn Fn()>);
-        let mut destroy_callbacks = self.data.destroy_callbacks.borrow_mut();
-        destroy_callbacks.insert(callback);
+        let mut unmount_callbacks = self.data.unmount_callbacks.borrow_mut();
+        unmount_callbacks.insert(callback);
     }
 
-    pub fn after_render(&self, f: impl Fn() + 'static) {
+    pub fn after_mount(&self, f: impl Fn() + 'static) {
         let callback = Shared::from(Rc::new(f) as Rc<dyn Fn()>);
-        let mut after_render_callbacks = self.data.after_render_callbacks.borrow_mut();
-        after_render_callbacks.insert(callback);
+        let mut after_mount_callbacks = self.data.after_mount_callbacks.borrow_mut();
+        after_mount_callbacks.insert(callback);
     }
 
     pub fn context<T: 'static>(&self) -> Option<Rc<T>> {
@@ -211,15 +211,15 @@ impl Element {
     }
 
     fn execute_post_update_tasks(&self) {
-        let after_render_callbacks = self.data.after_render_callbacks.take();
-        for callback in after_render_callbacks {
+        let after_mount_callbacks = self.data.after_mount_callbacks.take();
+        for callback in after_mount_callbacks {
             callback();
         }
     }
 }
 
-pub fn render_root(element: &Element) {
-    element.render(None);
+pub fn mount_root(element: &Element) {
+    element.mount(None);
 }
 
 pub fn create_element<C: Component>(props: C::Props) -> Element {
@@ -229,8 +229,8 @@ pub fn create_element<C: Component>(props: C::Props) -> Element {
             props: Box::new(props),
             contexts: RefCell::new(HashMap::new()),
             handle: RefCell::new(create_state(None)),
-            destroy_callbacks: RefCell::new(HashSet::new()),
-            after_render_callbacks: RefCell::new(HashSet::new()),
+            unmount_callbacks: RefCell::new(HashSet::new()),
+            after_mount_callbacks: RefCell::new(HashSet::new()),
         }),
     }
 }

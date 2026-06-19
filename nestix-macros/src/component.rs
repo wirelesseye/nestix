@@ -83,7 +83,7 @@ fn generate_component(
         quote! {(PhantomData<(#generic_args)>)}
     };
 
-    let render_args = if sig.inputs.len() == 0 {
+    let mount_args = if sig.inputs.len() == 0 {
         quote! {}
     } else if sig.inputs.len() == 1 {
         quote! {props}
@@ -123,14 +123,14 @@ fn generate_component(
         impl #impl_generics #crate_path::Component for #ident<#generic_args> #where_clause {
             type Props = #props_type;
 
-            fn render(element: &#crate_path::Element) {
+            fn on_mount(element: &#crate_path::Element) {
                 #[allow(non_snake_case)]
                 #raw
 
                 let props = element.props().downcast_ref::<#props_type>().unwrap();
-                let output = #ident(#render_args);
-                #crate_path::ComponentOutput::handle_destroy(&output, element);
-                #crate_path::ComponentOutput::render(&output, Some(element));
+                let output = #ident(#mount_args);
+                #crate_path::ComponentOutput::unmount_with_parent(&output, element);
+                #crate_path::ComponentOutput::mount(&output, Some(element));
             }
         }
     })

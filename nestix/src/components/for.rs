@@ -49,7 +49,7 @@ pub fn For<I: IntoIterator + Clone + 'static, K: Eq + Hash + 'static>(
             let ReconcileResult { removed, mapping } = result;
 
             for prev_i in removed {
-                prev_children[prev_i].destroy();
+                prev_children[prev_i].unmount();
             }
 
             let mut next_children: Vec<Element> = Vec::new();
@@ -81,7 +81,7 @@ pub fn For<I: IntoIterator + Clone + 'static, K: Eq + Hash + 'static>(
                         prev_handle: create_state(prev_handle),
                     });
                     untrack(|| {
-                        child.render(Some(&element));
+                        child.mount(Some(&element));
                     });
                 } else {
                     let ctx = child.context::<ChildHandleContext>().unwrap();
@@ -98,11 +98,11 @@ pub fn For<I: IntoIterator + Clone + 'static, K: Eq + Hash + 'static>(
         }
     );
 
-    element.on_destroy(closure!(
+    element.on_unmount(closure!(
         [prev_children] || {
             let children = prev_children.borrow();
             for child in &*children {
-                child.destroy();
+                child.unmount();
             }
         }
     ));

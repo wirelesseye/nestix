@@ -13,7 +13,7 @@ use crate::{Element, prop::Props};
 pub trait Component: 'static {
     type Props: Props;
 
-    fn render(element: &Element);
+    fn on_mount(element: &Element);
 }
 
 #[derive(Debug, Clone, Copy)]
@@ -21,7 +21,7 @@ pub struct ComponentID {
     #[allow(unused)]
     pub(crate) name: &'static str,
     pub(crate) type_id: TypeId,
-    pub(crate) render_fn: fn(&Element),
+    pub(crate) mount_fn: fn(&Element),
 }
 
 impl PartialEq for ComponentID {
@@ -42,6 +42,6 @@ pub fn component_id<C: Component>() -> ComponentID {
     ComponentID {
         name: std::any::type_name::<C>(),
         type_id: TypeId::of::<C>(),
-        render_fn: C::render,
+        mount_fn: C::on_mount,
     }
 }

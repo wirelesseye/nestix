@@ -88,7 +88,7 @@ pub fn Button(props: &ButtonProps, element: &Element) -> Element {
         }
     );
 
-    element.on_destroy(closure!(
+    element.on_unmount(closure!(
         [html_element, button_id] || {
             html_element.remove();
             HANDLERS.with_borrow_mut(|handlers| handlers.remove(&button_id));

@@ -104,7 +104,7 @@ pub fn Input(props: &InputProps, element: &Element) {
         }
     );
 
-    element.on_destroy(closure!(
+    element.on_unmount(closure!(
         [html_element] || {
             html_element.remove();
         }

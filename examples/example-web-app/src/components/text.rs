@@ -19,7 +19,7 @@ pub fn Text(props: &TextProps, element: &Element) {
         [props.text, text_node] || text_node.set_data(&text.get())
     );
 
-    element.on_destroy(closure!(
+    element.on_unmount(closure!(
         [text_node] || {
             text_node.remove();
         }

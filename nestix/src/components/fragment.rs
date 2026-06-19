@@ -27,7 +27,7 @@ pub fn Fragment(props: &FragmentProps, element: &Element) {
             let ReconcileResult { removed, mapping } = result;
 
             for prev_i in removed {
-                prev_children[prev_i].destroy();
+                prev_children[prev_i].unmount();
             }
 
             for (i, orig_i) in mapping.iter().enumerate() {
@@ -48,7 +48,7 @@ pub fn Fragment(props: &FragmentProps, element: &Element) {
                         prev_handle: create_state(prev_handle),
                     });
                     untrack(|| {
-                        child.render(Some(&element));
+                        child.mount(Some(&element));
                     });
                 } else {
                     let ctx = child.context::<ChildHandleContext>().unwrap();
@@ -60,11 +60,11 @@ pub fn Fragment(props: &FragmentProps, element: &Element) {
         }
     );
 
-    element.on_destroy(closure!(
+    element.on_unmount(closure!(
         [prev_children] || {
             let prev_children = prev_children.borrow();
             for child in &*prev_children {
-                child.destroy();
+                child.unmount();
             }
         }
     ));

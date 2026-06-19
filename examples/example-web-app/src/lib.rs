@@ -5,7 +5,7 @@ use indexmap::IndexMap;
 use nanoid_wasm::nanoid;
 use nestix::{
     Element, Readonly, Shared, callback, component, components::For, computed, create_state,
-    layout, props, render_root,
+    layout, mount_root, props,
 };
 use wasm_bindgen::prelude::wasm_bindgen;
 use web_sys::HtmlElement;
@@ -13,7 +13,7 @@ use web_sys::HtmlElement;
 #[wasm_bindgen(start)]
 fn init() {
     wasm_logger::init(wasm_logger::Config::default());
-    render_root(&layout! {App});
+    mount_root(&layout! {App});
 }
 
 #[derive(Clone)]
@@ -65,7 +65,7 @@ fn App() -> Element {
 #[component]
 fn Counter() -> Element {
     let count = create_state(0);
-
+    
     layout! {
         Div {
             Div {
