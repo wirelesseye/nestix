@@ -8,17 +8,11 @@ use nestix::{
     layout, mount_root, props,
 };
 use wasm_bindgen::prelude::wasm_bindgen;
-use web_sys::HtmlElement;
 
 #[wasm_bindgen(start)]
 fn init() {
     wasm_logger::init(wasm_logger::Config::default());
     mount_root(&layout! {App});
-}
-
-#[derive(Clone)]
-struct ParentContext {
-    html_element: HtmlElement,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -33,7 +27,7 @@ fn App() -> Element {
 
     layout! {
         Root {
-            Div {
+            Div(.class = "nav".to_string()) {
                 Button(
                     .on_click = callback!([page] || {
                         page.set(AppPage::Counter);
@@ -51,7 +45,7 @@ fn App() -> Element {
                     Text("Todo List")
                 }
             }
-            Div {
+            Div(.class = "content".to_string()) {
                 if page.get() == AppPage::Counter {
                     Counter
                 } else {
@@ -67,7 +61,7 @@ fn Counter() -> Element {
     let count = create_state(0);
     
     layout! {
-        Div {
+        Div(.class = "counter".to_string()) {
             Div {
                 Text(computed!(
                     [count] || format!("Count: {}", count.get())
@@ -140,8 +134,8 @@ fn TodoList() -> Element {
     });
 
     layout! {
-        Div {
-            Div {
+        Div(.class = "todo".to_string()) {
+            Div(.class = "todo-input".to_string()) {
                 Input(
                     .value = input_value.clone(),
                     .on_value_change = callback!(move |value: String| input_value.set(value))
@@ -151,7 +145,7 @@ fn TodoList() -> Element {
                 }
             }
 
-            Div {
+            Div(.class = "todo-list".to_string()) {
                 For<IndexMap<String, String>, _>(
                     .data = items.clone(),
                     .key = callback!(|item: &(String, String)| item.0.clone())
@@ -191,7 +185,7 @@ fn TodoListItem(props: &TodoListItemProps) -> Element {
     );
 
     layout! {
-        Div {
+        Div(.class = "todo-list-item".to_string()) {
             Button(
                 .on_click = computed!([props.key, props.remove] || {
                     callback!([key: key.get(), remove: remove.get()] || remove(&key))

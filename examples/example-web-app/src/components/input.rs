@@ -2,10 +2,8 @@ use std::{cell::RefCell, collections::HashMap};
 
 use nanoid_wasm::nanoid;
 use nestix::{Element, Shared, closure, component, effect, props};
-use wasm_bindgen::{JsCast, UnwrapThrowExt, prelude::Closure};
-use web_sys::{Event, HtmlElement, HtmlInputElement, Text};
-
-use crate::ParentContext;
+use wasm_bindgen::{JsCast, prelude::Closure};
+use web_sys::{Event, HtmlElement, HtmlInputElement};
 
 thread_local! {
     static HANDLERS: RefCell<HashMap<String, InputEventHandlers>> = RefCell::new(HashMap::new());
@@ -33,30 +31,33 @@ pub struct InputProps {
 
 #[component]
 pub fn Input(props: &InputProps, element: &Element) {
-    let parent = element.context::<ParentContext>().unwrap_throw();
-
     let document = web_sys::window().unwrap().document().unwrap();
     let html_element = document
         .create_element("input")
         .unwrap()
         .dyn_into::<HtmlElement>()
         .unwrap();
-    parent.html_element.append_child(&html_element).unwrap();
 
     let input_id = nanoid!();
     HANDLERS.with_borrow_mut(|handlers| {
         handlers.insert(input_id.clone(), InputEventHandlers::new());
     });
 
-    effect!(
-        [element, html_element] || {
-            if let Some(handle) = element.pred_handle::<HtmlElement>() {
-                handle.after_with_node_1(&html_element).unwrap();
-            } else if let Some(handle) = element.pred_handle::<Text>() {
-                handle.after_with_node_1(&html_element).unwrap();
+    element.on_place(closure!(
+        [html_element] | placement | {
+            if let Some(pred) = &placement.pred {
+                if let Some(handle) = pred.downcast_ref::<HtmlElement>() {
+                    handle.after_with_node_1(&html_element).unwrap();
+                } else if let Some(handle) = pred.downcast_ref::<web_sys::Text>() {
+                    handle.after_with_node_1(&html_element).unwrap();
+                }
+            } else if let Some(parent) = &placement.parent {
+                if let Some(parent) = parent.downcast_ref::<HtmlElement>() {
+                    parent.append_child(&html_element).unwrap();
+                }
             }
         }
-    );
+    ));
 
     effect!(
         [html_element, input_id, props.on_value_change]

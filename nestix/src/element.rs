@@ -1,27 +1,20 @@
 use std::{
     any::{Any, TypeId},
-    cell::RefCell,
+    cell::{Cell, RefCell},
     collections::{HashMap, HashSet},
     hash::Hash,
     rc::Rc,
 };
 
-use crate::{
-    Component, ComponentID, Shared, State, component_id, create_state, effect, prop::Props,
-};
+use crate::{Component, ComponentID, Shared, component_id, prop::Props};
 
 pub trait ComponentOutput {
     fn mount(&self, parent: Option<&Element>);
-
-    fn unmount_with_parent(&self, parent: &Element);
 }
 
 impl ComponentOutput for () {
     #[inline]
     fn mount(&self, _parent: Option<&Element>) {}
-
-    #[inline]
-    fn unmount_with_parent(&self, _parent: &Element) {}
 }
 
 impl ComponentOutput for Option<Element> {
@@ -31,16 +24,6 @@ impl ComponentOutput for Option<Element> {
             element.mount(parent);
         }
     }
-
-    #[inline]
-    fn unmount_with_parent(&self, parent: &Element) {
-        if let Some(element) = self {
-            let element = element.clone();
-            parent.on_unmount(move || {
-                element.unmount();
-            });
-        }
-    }
 }
 
 impl ComponentOutput for Element {
@@ -48,17 +31,12 @@ impl ComponentOutput for Element {
     fn mount(&self, parent: Option<&Element>) {
         if let Some(parent) = parent {
             self.extend_contexts(parent.contexts());
+            parent.add_child(self.clone());
         }
+        self.data.parent.replace(parent.cloned());
         (self.component_id().mount_fn)(self);
-        self.execute_post_update_tasks();
-    }
-
-    #[inline]
-    fn unmount_with_parent(&self, parent: &Element) {
-        let element = self.clone();
-        parent.on_unmount(move || {
-            element.unmount();
-        });
+        self.notify_after_mount();
+        self.notify_place();
     }
 }
 
@@ -91,9 +69,14 @@ struct ElementData {
     component_id: ComponentID,
     props: Box<dyn Props>,
     contexts: RefCell<HashMap<TypeId, Rc<dyn Any>>>,
-    handle: RefCell<State<Option<Shared<dyn Any>>>>,
-    unmount_callbacks: RefCell<HashSet<Shared<dyn Fn()>>>,
+    handle: RefCell<Option<Shared<dyn Any>>>,
+    parent: RefCell<Option<Element>>,
+    // ^ does this cause circular reference?
+    children: RefCell<Vec<Element>>,
+    in_list: Cell<bool>,
+    on_unmount_callbacks: RefCell<HashSet<Shared<dyn Fn()>>>,
     after_mount_callbacks: RefCell<HashSet<Shared<dyn Fn()>>>,
+    on_place_callbacks: RefCell<HashSet<Shared<dyn Fn(&Placement)>>>,
 }
 
 #[derive(Clone, Debug)]
@@ -126,46 +109,88 @@ impl Element {
     }
 
     pub fn unmount(&self) {
-        self.data.handle.replace(create_state(None));
-        self.data.after_mount_callbacks.take();
+        let children = self.data.children.take();
+        for child in children {
+            child.unmount();
+        }
 
-        let unmount_callbacks = self.data.unmount_callbacks.take();
-        for callback in unmount_callbacks {
+        let on_unmount_callbacks = self.data.on_unmount_callbacks.take();
+        for callback in on_unmount_callbacks {
             callback();
+        }
+
+        let parent = self.data.parent.take();
+        if let Some(parent) = parent {
+            parent.remove_child(self);
+        }
+
+        self.data.after_mount_callbacks.take();
+        self.data.on_place_callbacks.take();
+    }
+
+    /// Get the handle of the precedent element in the nearest list
+    pub fn pred_handle(&self) -> Option<Shared<dyn Any>> {
+        let parent = self.data.parent.borrow().clone()?;
+
+        if !self.is_in_list() {
+            return parent.pred_handle();
+        }
+
+        let children = parent.data.children.borrow();
+        let index = children.iter().position(|child| child == self)?;
+
+        if index == 0 {
+            return None;
+        }
+
+        let pred_node = children[index - 1].clone();
+        drop(children);
+
+        pred_node.last_handle()
+    }
+
+    pub fn last_handle(&self) -> Option<Shared<dyn Any>> {
+        if let Some(handle) = self.handle() {
+            return Some(handle);
+        }
+
+        let last_node = self.data.children.borrow().last().cloned()?;
+        last_node.last_handle()
+    }
+
+    pub fn parent_handle(&self) -> Option<Shared<dyn Any>> {
+        let parent = self.data.parent.borrow().clone()?;
+        if let Some(handle) = parent.handle() {
+            Some(handle)
+        } else {
+            parent.parent_handle()
         }
     }
 
-    pub fn handle<T: 'static>(&self) -> Option<Shared<T>> {
-        self.handle_any()
-            .map(|handle| Shared::downcast(handle).ok())
-            .flatten()
-    }
-
-    fn handle_any(&self) -> Option<Shared<dyn Any>> {
-        self.data.handle.borrow().get()
-    }
-
-    pub fn forward_handle(&self, element: &Element) {
-        effect!([this: self, element] || {
-            let handle = element.data.handle.borrow().get();
-            this.data.handle.borrow().set(handle);
-        });
+    pub fn handle(&self) -> Option<Shared<dyn Any>> {
+        self.data.handle.borrow().clone()
     }
 
     pub fn provide_handle<T: 'static>(&self, handle: T) {
         let handle = Shared::from(Rc::new(handle) as Rc<dyn Any>);
-        if let Some(ctx) = self.context::<ChildHandleContext>() {
-            if ctx.handle.borrow().is_none() {
-                ctx.handle.replace(Some(handle.clone()));
-            }
-        }
-        self.data.handle.borrow().set(Some(handle));
+        self.data.handle.replace(Some(handle));
+
+        // let children = self.data.children.borrow().clone();
+        // for child in children {
+        //     child.notify_place();
+        // }
     }
 
     pub fn on_unmount(&self, f: impl Fn() + 'static) {
         let callback = Shared::from(Rc::new(f) as Rc<dyn Fn()>);
-        let mut unmount_callbacks = self.data.unmount_callbacks.borrow_mut();
-        unmount_callbacks.insert(callback);
+        let mut on_unmount_callbacks = self.data.on_unmount_callbacks.borrow_mut();
+        on_unmount_callbacks.insert(callback);
+    }
+
+    pub fn on_place(&self, f: impl Fn(&Placement) + 'static) {
+        let callback = Shared::from(Rc::new(f) as Rc<dyn Fn(&Placement)>);
+        let mut on_place_callbacks = self.data.on_place_callbacks.borrow_mut();
+        on_place_callbacks.insert(callback);
     }
 
     pub fn after_mount(&self, f: impl Fn() + 'static) {
@@ -177,18 +202,6 @@ impl Element {
     pub fn context<T: 'static>(&self) -> Option<Rc<T>> {
         self.context_any::<T>()
             .map(|ctx| Rc::downcast::<T>(ctx).unwrap())
-    }
-
-    pub fn pred_handle<T: 'static>(&self) -> Option<Shared<T>> {
-        self.pred_handle_any()
-            .map(|handle| Shared::downcast(handle).ok())
-            .flatten()
-    }
-
-    fn pred_handle_any(&self) -> Option<Shared<dyn Any>> {
-        self.context::<ChildHandleContext>()
-            .map(|child_handle| child_handle.prev_handle.get())
-            .flatten()
     }
 
     pub(crate) fn provide_context<T: 'static>(&self, context: impl Into<Rc<T>>) {
@@ -210,10 +223,47 @@ impl Element {
         contexts.get(&TypeId::of::<T>()).cloned()
     }
 
-    fn execute_post_update_tasks(&self) {
+    fn notify_after_mount(&self) {
         let after_mount_callbacks = self.data.after_mount_callbacks.take();
         for callback in after_mount_callbacks {
             callback();
+        }
+    }
+
+    pub(crate) fn take_children(&self) -> Vec<Element> {
+        self.data.children.take()
+    }
+
+    pub(crate) fn add_child(&self, child: Element) {
+        self.data.children.borrow_mut().push(child);
+    }
+
+    pub(crate) fn remove_child(&self, child: &Element) {
+        self.data.children.borrow_mut().retain(|x| x != child);
+    }
+
+    pub(crate) fn is_in_list(&self) -> bool {
+        self.data.in_list.get()
+    }
+
+    pub(crate) fn set_in_list(&self, in_list: bool) {
+        self.data.in_list.set(in_list);
+    }
+
+    pub fn notify_place(&self) {
+        let placement = Placement {
+            pred: self.pred_handle(),
+            parent: self.parent_handle(),
+        };
+
+        let on_place_callbacks = self.data.on_place_callbacks.borrow().clone();
+        for callback in on_place_callbacks {
+            callback(&placement);
+        }
+
+        let children = self.data.children.borrow().clone();
+        for child in children {
+            child.notify_place();
         }
     }
 }
@@ -228,15 +278,19 @@ pub fn create_element<C: Component>(props: C::Props) -> Element {
             component_id: component_id::<C>(),
             props: Box::new(props),
             contexts: RefCell::new(HashMap::new()),
-            handle: RefCell::new(create_state(None)),
-            unmount_callbacks: RefCell::new(HashSet::new()),
+            handle: RefCell::new(None),
+            parent: RefCell::new(None),
+            children: RefCell::new(Vec::new()),
+            in_list: Cell::new(false),
+            on_unmount_callbacks: RefCell::new(HashSet::new()),
             after_mount_callbacks: RefCell::new(HashSet::new()),
+            on_place_callbacks: RefCell::new(HashSet::new()),
         }),
     }
 }
 
 #[derive(Debug)]
-pub(crate) struct ChildHandleContext {
-    pub handle: RefCell<Option<Shared<dyn Any>>>,
-    pub prev_handle: State<Option<Shared<dyn Any>>>,
+pub struct Placement {
+    pub pred: Option<Shared<dyn Any>>,
+    pub parent: Option<Shared<dyn Any>>,
 }

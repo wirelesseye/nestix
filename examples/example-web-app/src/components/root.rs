@@ -1,10 +1,8 @@
 use nestix::{
-    Layout, Element, component, components::ContextProvider, layout, props
+    Element, Fragment, Layout, component, layout, props
 };
 use wasm_bindgen::JsCast;
 use web_sys::HtmlElement;
-
-use crate::ParentContext;
 
 #[props(debug)]
 #[derive(Debug)]
@@ -23,12 +21,11 @@ pub fn Root(props: &RootProps, element: &Element) -> Element {
         .dyn_into::<HtmlElement>()
         .unwrap();
 
-    element.provide_handle(html_element.clone());
+    element.provide_handle(html_element);
 
     layout! {
-        ContextProvider<ParentContext>(
-            .value = ParentContext { html_element },
-            .children = props.children.clone(),
-        )
+        Fragment {
+            $(props.children.clone())
+        }
     }
 }

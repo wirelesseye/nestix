@@ -129,7 +129,6 @@ fn generate_component(
 
                 let props = element.props().downcast_ref::<#props_type>().unwrap();
                 let output = #ident(#mount_args);
-                #crate_path::ComponentOutput::unmount_with_parent(&output, element);
                 #crate_path::ComponentOutput::mount(&output, Some(element));
             }
         }

@@ -1,10 +1,10 @@
 use std::{cell::RefCell, hash::Hash, marker::PhantomData, rc::Rc};
 
-use nestix_macros::{closure, component, props};
+use nestix_macros::{component, props};
 use nestix_signal::{Readonly, State, create_state};
 
 use crate::{
-    ChildHandleContext, ComponentOutput, Element, PropValue, Shared, effect, untrack,
+    ComponentOutput, Element, PropValue, Shared, effect, untrack,
     utils::reconcile::{ReconcileResult, reconcile},
 };
 
@@ -25,16 +25,10 @@ pub fn For<I: IntoIterator + Clone + 'static, K: Eq + Hash + 'static>(
     let prev_signals: Rc<RefCell<Vec<State<<I as IntoIterator>::Item>>>> =
         Rc::new(RefCell::new(vec![]));
     let prev_keys: Rc<RefCell<Vec<K>>> = Rc::new(RefCell::new(vec![]));
-    let prev_children: Rc<RefCell<Vec<Element>>> = Rc::new(RefCell::new(vec![]));
 
     effect!(
-        [
-            element,
-            props.data,
-            props.key,
-            props.children,
-            prev_children
-        ] || {
+        [element, props.data, props.key, props.children] || {
+            let prev_children = element.take_children();
             let mut prev_signals = prev_signals.borrow_mut();
             let mut prev_keys = prev_keys.borrow_mut();
             let key_fn = key.get();
@@ -43,9 +37,9 @@ pub fn For<I: IntoIterator + Clone + 'static, K: Eq + Hash + 'static>(
                 .iter()
                 .map(|item| key_fn(item))
                 .collect::<Vec<_>>();
-            let mut prev_children = prev_children.borrow_mut();
 
             let result = reconcile(&*prev_keys, &next_keys);
+            // log::debug!("{:?}", result);
             let ReconcileResult { removed, mapping } = result;
 
             for prev_i in removed {
@@ -54,10 +48,10 @@ pub fn For<I: IntoIterator + Clone + 'static, K: Eq + Hash + 'static>(
 
             let mut next_children: Vec<Element> = Vec::new();
             let mut next_signals: Vec<State<<I as IntoIterator>::Item>> = Vec::new();
-            for (i, orig_i) in mapping.iter().enumerate() {
-                let (signal, child) = if let Some(orig_i) = orig_i {
-                    let signal = prev_signals[*orig_i].clone();
-                    let child = prev_children[*orig_i].clone();
+            for (i, prev_i) in mapping.iter().enumerate() {
+                let (signal, child) = if let Some(prev_i) = prev_i {
+                    let signal = prev_signals[*prev_i].clone();
+                    let child = prev_children[*prev_i].clone();
                     signal.set(next_data[i].clone());
                     (signal, child)
                 } else {
@@ -66,26 +60,28 @@ pub fn For<I: IntoIterator + Clone + 'static, K: Eq + Hash + 'static>(
                     (signal, child)
                 };
 
-                let prev_handle = if i > 0 {
-                    let pred = next_children[i - 1].clone();
-                    pred.context::<ChildHandleContext>()
-                        .map(|ctx| ctx.handle.borrow().clone())
-                        .flatten()
-                } else {
-                    None
-                };
+                if let Some(prev_i) = *prev_i {
+                    element.add_child(child.clone());
 
-                if orig_i.is_none() {
-                    element.provide_context(ChildHandleContext {
-                        handle: RefCell::new(None),
-                        prev_handle: create_state(prev_handle),
-                    });
+                    let pred = if i > 0 {
+                        Some(&next_children[i - 1])
+                    } else {
+                        None
+                    };
+                    let prev_pred = if prev_i > 0 {
+                        Some(&prev_children[prev_i - 1])
+                    } else {
+                        None
+                    };
+                    
+                    if pred != prev_pred {
+                        child.notify_place();
+                    }
+                } else {
                     untrack(|| {
+                        child.set_in_list(true);
                         child.mount(Some(&element));
                     });
-                } else {
-                    let ctx = child.context::<ChildHandleContext>().unwrap();
-                    ctx.prev_handle.set(prev_handle);
                 }
 
                 next_signals.push(signal);
@@ -94,16 +90,6 @@ pub fn For<I: IntoIterator + Clone + 'static, K: Eq + Hash + 'static>(
 
             *prev_keys = next_keys;
             *prev_signals = next_signals;
-            *prev_children = next_children;
         }
     );
-
-    element.on_unmount(closure!(
-        [prev_children] || {
-            let children = prev_children.borrow();
-            for child in &*children {
-                child.unmount();
-            }
-        }
-    ));
 }

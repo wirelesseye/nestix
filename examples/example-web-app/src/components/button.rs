@@ -1,13 +1,9 @@
 use std::{cell::RefCell, collections::HashMap};
 
 use nanoid_wasm::nanoid;
-use nestix::{
-    Element, Layout, Shared, closure, component, components::ContextProvider, effect, layout, props,
-};
+use nestix::{Element, Fragment, Layout, Shared, closure, component, effect, layout, props};
 use wasm_bindgen::{JsCast, prelude::Closure};
 use web_sys::{Event, HtmlButtonElement, HtmlElement};
-
-use crate::ParentContext;
 
 thread_local! {
     static HANDLERS: RefCell<HashMap<String, ButtonEventHandlers>> = RefCell::new(HashMap::new());
@@ -34,15 +30,28 @@ pub struct ButtonProps {
 
 #[component]
 pub fn Button(props: &ButtonProps, element: &Element) -> Element {
-    let parent = element.context::<ParentContext>().unwrap();
-
     let document = web_sys::window().unwrap().document().unwrap();
     let html_element = document
         .create_element("button")
         .unwrap()
         .dyn_into::<HtmlElement>()
         .unwrap();
-    parent.html_element.append_child(&html_element).unwrap();
+
+    element.on_place(closure!(
+        [html_element] | placement | {
+            if let Some(pred) = &placement.pred {
+                if let Some(handle) = pred.downcast_ref::<HtmlElement>() {
+                    handle.after_with_node_1(&html_element).unwrap();
+                } else if let Some(handle) = pred.downcast_ref::<web_sys::Text>() {
+                    handle.after_with_node_1(&html_element).unwrap();
+                }
+            } else if let Some(parent) = &placement.parent {
+                if let Some(parent) = parent.downcast_ref::<HtmlElement>() {
+                    parent.append_child(&html_element).unwrap();
+                }
+            }
+        }
+    ));
 
     let button_id = nanoid!();
     HANDLERS.with_borrow_mut(|handlers| {
@@ -98,9 +107,8 @@ pub fn Button(props: &ButtonProps, element: &Element) -> Element {
     element.provide_handle(html_element.clone());
 
     layout! {
-        ContextProvider<ParentContext>(
-            .value = ParentContext { html_element },
-            .children = props.children.clone()
-        )
+        Fragment {
+            $(props.children.clone())
+        }
     }
 }

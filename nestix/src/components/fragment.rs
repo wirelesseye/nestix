@@ -1,10 +1,7 @@
-use std::{cell::RefCell, rc::Rc};
-
-use nestix_macros::{closure, component, props};
-use nestix_signal::create_state;
+use nestix_macros::{component, props};
 
 use crate::{
-    ChildHandleContext, ComponentOutput, Element, Layout, effect, untrack,
+    ComponentOutput, Element, Layout, effect, untrack,
     utils::reconcile::{ReconcileResult, reconcile},
 };
 
@@ -16,56 +13,45 @@ pub struct FragmentProps {
 
 #[component]
 pub fn Fragment(props: &FragmentProps, element: &Element) {
-    let prev_children: Rc<RefCell<Layout>> = Rc::new(RefCell::new(Layout::default()));
-
     effect!(
-        [element, prev_children, props.children] || {
-            let mut prev_children = prev_children.borrow_mut();
+        [element, props.children] || {
+            let prev_children = element.take_children();
             let next_children = children.get();
 
-            let result = reconcile(&*prev_children, &next_children);
+            let result = reconcile(&prev_children, &next_children);
             let ReconcileResult { removed, mapping } = result;
 
             for prev_i in removed {
                 prev_children[prev_i].unmount();
             }
 
-            for (i, orig_i) in mapping.iter().enumerate() {
+            for (i, prev_i) in mapping.iter().enumerate() {
                 let child = &next_children[i];
 
-                let prev_handle = if i > 0 {
-                    let pred = next_children[i - 1].clone();
-                    pred.context::<ChildHandleContext>()
-                        .map(|ctx| ctx.handle.borrow().clone())
-                        .flatten()
-                } else {
-                    None
-                };
+                if let Some(prev_i) = *prev_i {
+                    element.add_child(child.clone());
+                    
+                    let pred = if i > 0 {
+                        Some(&next_children[i - 1])
+                    } else {
+                        None
+                    };
+                    let prev_pred = if prev_i > 0 {
+                        Some(&prev_children[prev_i - 1])
+                    } else {
+                        None
+                    };
 
-                if orig_i.is_none() {
-                    element.provide_context(ChildHandleContext {
-                        handle: RefCell::new(None),
-                        prev_handle: create_state(prev_handle),
-                    });
+                    if pred != prev_pred {
+                        child.notify_place();
+                    }
+                } else {
                     untrack(|| {
+                        child.set_in_list(true);
                         child.mount(Some(&element));
                     });
-                } else {
-                    let ctx = child.context::<ChildHandleContext>().unwrap();
-                    ctx.prev_handle.set(prev_handle);
                 }
             }
-
-            *prev_children = next_children;
         }
     );
-
-    element.on_unmount(closure!(
-        [prev_children] || {
-            let prev_children = prev_children.borrow();
-            for child in &*prev_children {
-                child.unmount();
-            }
-        }
-    ));
 }
