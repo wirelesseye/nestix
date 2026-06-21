@@ -14,26 +14,20 @@ For more examples, see [examples](./examples) folder.
 ```rust
 #[component]
 fn Counter() -> Element {
-    log::debug!("render Counter");
-
-    let counter = state(|| 0);
-    let increment = remember(|| {
-        callback!(
-            [counter] || {
-                counter.update(|prev| *prev += 1);
-            }
-        )
-    });
+    let count = create_state(0);
 
     layout! {
-        FlexView(
-            .direction = FlexDirection::Column,
-            .width = 100.0
-        ) {
-            Text(counter.get().to_string()),
-            Button(.on_click = increment.clone_shared()) {
-                Text("Increment")
-            },
+        FlexView {
+            Label(.text = computed!([count] || format!("Count: {}", count.get())))
+            Button(
+                .title = "Click",
+                .on_click = callback!([count] || {
+                    count.mutate(|count| *count += 1);
+                })
+            )
+            if count.get() % 2 == 0 {
+                Label(.text = "Is Even!")
+            }
         }
     }
 }
