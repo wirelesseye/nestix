@@ -39,7 +39,6 @@ pub fn For<I: IntoIterator + Clone + 'static, K: Eq + Hash + 'static>(
                 .collect::<Vec<_>>();
 
             let result = reconcile(&*prev_keys, &next_keys);
-            // log::debug!("{:?}", result);
             let ReconcileResult { removed, mapping } = result;
 
             for prev_i in removed {
@@ -75,7 +74,7 @@ pub fn For<I: IntoIterator + Clone + 'static, K: Eq + Hash + 'static>(
                     };
                     
                     if pred != prev_pred {
-                        child.notify_place();
+                        child.notify_place(true);
                     }
                 } else {
                     untrack(|| {

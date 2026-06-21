@@ -2,6 +2,7 @@ use std::{
     any::{Any, TypeId},
     cell::{Cell, RefCell},
     collections::{HashMap, HashSet},
+    fmt::Debug,
     hash::Hash,
     rc::Rc,
 };
@@ -36,7 +37,7 @@ impl ComponentOutput for Element {
         self.data.parent.replace(parent.cloned());
         (self.component_id().mount_fn)(self);
         self.notify_after_mount();
-        self.notify_place();
+        self.notify_place(false);
     }
 }
 
@@ -79,9 +80,18 @@ struct ElementData {
     on_place_callbacks: RefCell<HashSet<Shared<dyn Fn(&Placement)>>>,
 }
 
-#[derive(Clone, Debug)]
+#[derive(Clone)]
 pub struct Element {
     data: Rc<ElementData>,
+}
+
+impl Debug for Element {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "Element(")?;
+        Rc::as_ptr(&self.data).fmt(f)?;
+        write!(f, ")")?;
+        Ok(())
+    }
 }
 
 impl PartialEq for Element {
@@ -167,6 +177,18 @@ impl Element {
         }
     }
 
+    pub fn index(&self) -> Option<usize> {
+        let parent = self.data.parent.borrow().clone()?;
+
+        if !self.is_in_list() {
+            return parent.index();
+        }
+
+        let children = parent.data.children.borrow();
+        let index = children.iter().position(|child| child == self)?;
+        Some(index)
+    }
+
     pub fn handle(&self) -> Option<Shared<dyn Any>> {
         self.data.handle.borrow().clone()
     }
@@ -250,10 +272,11 @@ impl Element {
         self.data.in_list.set(in_list);
     }
 
-    pub fn notify_place(&self) {
+    pub(crate) fn notify_place(&self, recursive: bool) {
         let placement = Placement {
             pred: self.pred_handle(),
             parent: self.parent_handle(),
+            index: self.index(),
         };
 
         let on_place_callbacks = self.data.on_place_callbacks.borrow().clone();
@@ -261,9 +284,11 @@ impl Element {
             callback(&placement);
         }
 
-        let children = self.data.children.borrow().clone();
-        for child in children {
-            child.notify_place();
+        if recursive {
+            let children = self.data.children.borrow().clone();
+            for child in children {
+                child.notify_place(recursive);
+            }
         }
     }
 }
@@ -293,4 +318,5 @@ pub fn create_element<C: Component>(props: C::Props) -> Element {
 pub struct Placement {
     pub pred: Option<Shared<dyn Any>>,
     pub parent: Option<Shared<dyn Any>>,
+    pub index: Option<usize>,
 }

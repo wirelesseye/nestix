@@ -43,7 +43,7 @@ pub fn Fragment(props: &FragmentProps, element: &Element) {
                     };
 
                     if pred != prev_pred {
-                        child.notify_place();
+                        child.notify_place(true);
                     }
                 } else {
                     untrack(|| {
