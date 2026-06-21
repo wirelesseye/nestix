@@ -41,27 +41,19 @@ impl ComponentOutput for Element {
     }
 }
 
-pub trait AppendToElements {
+pub trait ToElements {
     fn append_to_elements(self, elements: &mut Vec<Element>);
 }
 
-impl AppendToElements for Element {
+impl ToElements for Element {
     fn append_to_elements(self, elements: &mut Vec<Element>) {
         elements.push(self);
     }
 }
 
-impl AppendToElements for Vec<Element> {
-    fn append_to_elements(mut self, elements: &mut Vec<Element>) {
-        elements.append(&mut self);
-    }
-}
-
-impl AppendToElements for Option<Element> {
+impl<I: IntoIterator<Item = Element>> ToElements for I {
     fn append_to_elements(self, elements: &mut Vec<Element>) {
-        if let Some(element) = self {
-            elements.push(element);
-        }
+        elements.extend(self);
     }
 }
 
