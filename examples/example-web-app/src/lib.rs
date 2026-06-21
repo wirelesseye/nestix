@@ -4,8 +4,7 @@ use components::*;
 use indexmap::IndexMap;
 use nanoid_wasm::nanoid;
 use nestix::{
-    Element, Readonly, Shared, callback, component, components::For, computed, create_state,
-    layout, mount_root, props,
+    Element, Shared, callback, component, computed, create_state, layout, mount_root, props,
 };
 use wasm_bindgen::prelude::wasm_bindgen;
 
@@ -59,7 +58,7 @@ fn App() -> Element {
 #[component]
 fn Counter() -> Element {
     let count = create_state(0);
-    
+
     layout! {
         Div(.class = "counter".to_string()) {
             Div {
@@ -146,10 +145,7 @@ fn TodoList() -> Element {
             }
 
             Div(.class = "todo-list".to_string()) {
-                For<IndexMap<String, String>, _>(
-                    .data = items.clone(),
-                    .key = callback!(|item: &(String, String)| item.0.clone())
-                ) |item: Readonly<(String, String)>| {
+                for item in items.clone() where key = item.0.clone() {
                     TodoListItem(
                         .key = computed!([item] || item.get().0),
                         .content = computed!(move || item.get().1),

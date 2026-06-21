@@ -1,11 +1,12 @@
 use std::{cell::RefCell, hash::Hash, marker::PhantomData, rc::Rc};
 
 use nestix_macros::{component, props};
-use nestix_signal::{Readonly, State, create_state};
+use nestix_signal::{create_state, Readonly, Signal, State};
 
 use crate::{
-    ComponentOutput, Element, PropValue, Shared, effect, untrack,
-    utils::reconcile::{ReconcileResult, reconcile},
+    effect, untrack,
+    utils::reconcile::{reconcile, ReconcileResult},
+    ComponentOutput, Element, PropValue, Shared,
 };
 
 #[props(bounds(I: IntoIterator + 'static, K: 'static))]
@@ -13,6 +14,41 @@ pub struct ForProps<I: IntoIterator, K> {
     data: I,
     key: Shared<dyn Fn(&<I as IntoIterator>::Item) -> K>,
     children: Shared<dyn Fn(Readonly<<I as IntoIterator>::Item>) -> PropValue<Element>>,
+}
+
+#[doc(hidden)]
+pub fn create_for_from_signal<S, K, Key, Children>(data: S, key: Key, children: Children) -> Element
+where
+    S: Signal + 'static,
+    S::Output: IntoIterator + Clone + 'static,
+    <S::Output as IntoIterator>::Item: Eq + Clone,
+    K: Eq + Hash + 'static,
+    Key: Fn(&<S::Output as IntoIterator>::Item) -> K + 'static,
+    Children: Fn(Readonly<<S::Output as IntoIterator>::Item>) -> PropValue<Element> + 'static,
+{
+    crate::create_element::<For<S::Output, K>>(ForProps {
+        data: PropValue::from_signal(data),
+        key: PropValue::from_plain(Shared::from(
+            Rc::new(key) as Rc<dyn Fn(&<S::Output as IntoIterator>::Item) -> K>
+        )),
+        children: PropValue::from_plain(Shared::from(Rc::new(children)
+            as Rc<dyn Fn(Readonly<<S::Output as IntoIterator>::Item>) -> PropValue<Element>>)),
+    })
+}
+
+#[doc(hidden)]
+pub fn create_for_identity_from_signal<S, Children>(data: S, children: Children) -> Element
+where
+    S: Signal + 'static,
+    S::Output: IntoIterator + Clone + 'static,
+    <S::Output as IntoIterator>::Item: Eq + Hash + Clone + 'static,
+    Children: Fn(Readonly<<S::Output as IntoIterator>::Item>) -> PropValue<Element> + 'static,
+{
+    create_for_from_signal(
+        data,
+        |item: &<S::Output as IntoIterator>::Item| item.clone(),
+        children,
+    )
 }
 
 #[component(generics(I, K))]
@@ -72,7 +108,7 @@ pub fn For<I: IntoIterator + Clone + 'static, K: Eq + Hash + 'static>(
                     } else {
                         None
                     };
-                    
+
                     if pred != prev_pred {
                         child.notify_place(true);
                     }

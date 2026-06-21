@@ -1,7 +1,7 @@
 use proc_macro2::TokenStream;
 use syn::{
-    Expr, FnArg, Ident, Token, Type, braced, bracketed, parenthesized, parse::Parse,
-    punctuated::Punctuated, token,
+    braced, bracketed, parenthesized, parse::Parse, punctuated::Punctuated, token, Expr, FnArg,
+    Ident, Token, Type,
 };
 
 use crate::clone_var::CloneVar;
@@ -180,10 +180,51 @@ impl Parse for LayoutItemElse {
     }
 }
 
+pub struct LayoutItemFor {
+    pub bind: Ident,
+    pub data: Expr,
+    pub key: Option<Expr>,
+    pub children: TokenStream,
+}
+
+impl Parse for LayoutItemFor {
+    fn parse(input: syn::parse::ParseStream) -> syn::Result<Self> {
+        input.parse::<Token![for]>()?;
+        let bind = input.parse()?;
+        input.parse::<Token![in]>()?;
+        let data = Expr::parse_without_eager_brace(input)?;
+
+        let key = if input.peek(Token![where]) {
+            input.parse::<Token![where]>()?;
+            let fork = input.fork();
+            let ident: Ident = fork.parse()?;
+            if ident == "key" {
+                input.parse::<Ident>()?;
+                input.parse::<Token![=]>()?;
+                Some(Expr::parse_without_eager_brace(input)?)
+            } else {
+                None
+            }
+        } else {
+            None
+        };
+
+        let inner;
+        braced!(inner in input);
+        Ok(Self {
+            bind,
+            data,
+            key,
+            children: inner.parse()?,
+        })
+    }
+}
+
 pub enum LayoutItem {
     Element(LayoutItemElement),
     Expr(LayoutItemExpr),
     If(LayoutItemIf),
+    For(LayoutItemFor),
 }
 
 impl LayoutItem {
@@ -192,6 +233,7 @@ impl LayoutItem {
             LayoutItem::Element(item) => item.yield_token.is_some(),
             LayoutItem::Expr(item) => item.yield_token.is_some(),
             LayoutItem::If(_) => true,
+            LayoutItem::For(_) => false,
         }
     }
 }
@@ -209,6 +251,8 @@ impl Parse for LayoutItem {
                 Ok(Self::Expr(input.parse()?))
             } else if input.peek(Token![if]) {
                 Ok(Self::If(input.parse()?))
+            } else if input.peek(Token![for]) {
+                Ok(Self::For(input.parse()?))
             } else {
                 Ok(Self::Element(input.parse()?))
             }

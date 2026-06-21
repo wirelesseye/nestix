@@ -5,7 +5,8 @@ use syn::Ident;
 use crate::{
     clone_var::generate_clone_var,
     layout::parse::{
-        LayoutInput, LayoutItem, LayoutItemElement, LayoutItemElse, LayoutItemExpr, LayoutItemIf,
+        LayoutInput, LayoutItem, LayoutItemElement, LayoutItemElse, LayoutItemExpr, LayoutItemFor,
+        LayoutItemIf,
     },
     util::{FoundCrateExt, crate_name},
 };
@@ -128,9 +129,11 @@ fn generate_layout_item_element(
         quote! {()}
     };
 
+    let create_element = quote! { #crate_path::create_element::<#ty>(#props_output) };
+
     let output = if let Some(bind) = bind {
         quote! {{
-            let element = #crate_path::create_element::<#ty>(#props_output);
+            let element = #create_element;
             #crate_path::effect!([#bind, element] || {
                 #bind.set(element.handle());
             });
@@ -138,7 +141,7 @@ fn generate_layout_item_element(
         }}
     } else {
         quote! {{
-            #crate_path::create_element::<#ty>(#props_output)
+            #create_element
         }}
     };
 
@@ -179,6 +182,64 @@ fn generate_layout_item_element(
         }
         ctx.element_outputs.push((element_ident, output));
     }
+
+    Ok(())
+}
+
+fn generate_layout_item_for(ctx: &mut Context, input: &LayoutItemFor) -> Result<(), syn::Error> {
+    let crate_path = crate_name().to_path();
+    let LayoutItemFor {
+        bind,
+        data,
+        key,
+        children,
+    } = input;
+
+    let children = quote! {
+        move |#bind| {
+            #crate_path::prop_value!(#crate_path::layout! { #children })
+        }
+    };
+    let output = if let Some(key) = key {
+        quote! {
+            #crate_path::components::create_for_from_signal(
+                #data,
+                move |#bind| #key,
+                #children,
+            )
+        }
+    } else {
+        quote! {
+            #crate_path::components::create_for_identity_from_signal(
+                #data,
+                #children,
+            )
+        }
+    };
+
+    let element_ident = ctx.next_element_ident();
+    if ctx.generate_output {
+        if ctx.computed {
+            quote! {
+                __items.push(#element_ident.clone());
+            }
+            .to_tokens(&mut ctx.push_output);
+            quote! {
+                #element_ident.clone()
+            }
+            .to_tokens(&mut ctx.direct_output);
+        } else {
+            quote! {
+                __items.push(#element_ident);
+            }
+            .to_tokens(&mut ctx.push_output);
+            quote! {
+                #element_ident
+            }
+            .to_tokens(&mut ctx.direct_output);
+        }
+    }
+    ctx.element_outputs.push((element_ident, output));
 
     Ok(())
 }
@@ -320,6 +381,7 @@ fn generate_layout_item(ctx: &mut Context, input: &LayoutItem) -> Result<(), syn
         LayoutItem::Element(item) => generate_layout_item_element(ctx, item),
         LayoutItem::Expr(item) => generate_layout_item_expr(ctx, item),
         LayoutItem::If(item) => generate_layout_item_if(ctx, item),
+        LayoutItem::For(item) => generate_layout_item_for(ctx, item),
     }
 }
 
