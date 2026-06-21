@@ -1,7 +1,7 @@
 use proc_macro::TokenStream;
 use proc_macro2::TokenStream as TokenStream2;
-use quote::{ToTokens, quote};
-use syn::{Pat, Token, parse_macro_input, punctuated::Punctuated, spanned::Spanned};
+use quote::quote;
+use syn::{Pat, parse_macro_input};
 
 use crate::{
     closure::{ClosureInput, generate_closure},
@@ -19,26 +19,19 @@ fn generate_callback(input: ClosureInput) -> Result<TokenStream2, syn::Error> {
     let crate_path = proc_macro_crate::crate_name("nestix-signal")
         .unwrap_or_else(|_| proc_macro_crate::crate_name("nestix").unwrap())
         .to_path();
-    let param_types = if let Some(expr_closure) = &input.expr_closure {
-        let types = expr_closure
-            .inputs
-            .iter()
-            .map(|pat| match pat {
-                Pat::Type(ty) => Ok(ty.ty.clone()),
-                other => Err(syn::Error::new(
-                    other.span(),
-                    format!("type annotation missing: {}", other.to_token_stream()),
-                )),
-            })
-            .collect::<syn::Result<Punctuated<_, Token![,]>>>()?;
-        Some(types)
-    } else {
-        None
-    };
-
-    let cast_type = if let Some(param_types) = param_types {
+    let cast_type = if let Some(expr_closure) = &input.expr_closure {
+        // `_` leaves omitted argument types to be inferred from the callback's
+        // expected type at its call site. Preserve supplied types: notably,
+        // references such as `&str` retain their higher-ranked lifetime.
+        let parameter_types = expr_closure.inputs.iter().map(|pat| match pat {
+            Pat::Type(ty) => {
+                let ty = &ty.ty;
+                quote!(#ty)
+            }
+            _ => quote!(_),
+        });
         quote! {
-            as std::rc::Rc<dyn Fn(#param_types) -> _>
+            as std::rc::Rc<dyn Fn(#(#parameter_types),*) -> _>
         }
     } else {
         quote! {}

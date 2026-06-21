@@ -138,7 +138,7 @@ fn TodoList() -> Element {
             Div(.class = "todo-input".to_string()) {
                 Input(
                     .value = input_value.clone(),
-                    .on_value_change = callback!(move |value: String| input_value.set(value))
+                    .on_value_change = callback!(move |value| input_value.set(value))
                 )
                 Button(.on_click = add) {
                     Text("Add")
