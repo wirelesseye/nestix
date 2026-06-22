@@ -204,7 +204,7 @@ fn generate_layout_item_for(ctx: &mut Context, input: &LayoutItemFor) -> Result<
         quote! {
             #crate_path::components::create_for_from_signal(
                 #data,
-                move |#bind| #key,
+                #key,
                 #children,
             )
         }

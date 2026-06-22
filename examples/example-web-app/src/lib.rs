@@ -145,10 +145,9 @@ fn TodoList() -> Element {
             }
 
             Div(.class = "todo-list".to_string()) {
-                for item in items.clone() where key = item.0.clone() {
+                for item in items.clone() where key = |item| item.0.clone() {
                     TodoListItem(
-                        .key = computed!([item] || item.get().0),
-                        .content = computed!(move || item.get().1),
+                        .data = item,
                         .remove = remove.clone(),
                         .move_up = move_up.clone(),
                         .move_down = move_down.clone(),
@@ -162,8 +161,7 @@ fn TodoList() -> Element {
 
 #[props]
 struct TodoListItemProps {
-    key: String,
-    content: String,
+    data: (String, String),
     remove: Shared<dyn Fn(&str)>,
     move_up: Shared<dyn Fn(&str)>,
     move_down: Shared<dyn Fn(&str)>,
@@ -180,24 +178,27 @@ fn TodoListItem(props: &TodoListItemProps) -> Element {
         }
     );
 
+    let key = computed!([props.data] || data.get().0);
+    let value = computed!([props.data] || data.get().1);
+
     layout! {
         Div(.class = "todo-list-item".to_string()) {
             Button(
-                .on_click = computed!([props.key, props.remove] || {
+                .on_click = computed!([key, props.remove] || {
                     callback!([key: key.get(), remove: remove.get()] || remove(&key))
                 })
             ) {
                 Text("✕")
             }
             Button(
-                .on_click = computed!([props.key, props.move_up] || {
+                .on_click = computed!([key, props.move_up] || {
                     callback!([key: key.get(), move_up: move_up.get()] || move_up(&key))
                 })
             ) {
                 Text("↑")
             }
             Button(
-                .on_click = computed!([props.key, props.move_down] || {
+                .on_click = computed!([key, props.move_down] || {
                     callback!([key: key.get(), move_down: move_down.get()] || move_down(&key))
                 })
             ) {
@@ -211,15 +212,15 @@ fn TodoListItem(props: &TodoListItemProps) -> Element {
 
             if is_edit.get() {
                 Input(
-                    .value = props.content.clone(),
-                    .on_value_change = computed!([props.key, props.set_content] || {
+                    .value = value.clone(),
+                    .on_value_change = computed!([key, props.set_content] || {
                         callback!([key: key.get(), set_content: set_content.get()] |value: String| {
                             set_content(&key, value);
                         })
                     }),
                 )
             } else {
-                Text(props.content.clone())
+                Text(value.clone())
             }
         }
     }
