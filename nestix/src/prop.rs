@@ -27,6 +27,7 @@ pub mod __builder_internal {
     pub trait Buildable {
         type Output;
 
+        #[doc(hidden)]
         fn build(self) -> Self::Output;
     }
 }

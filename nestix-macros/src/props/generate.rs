@@ -568,6 +568,7 @@ fn generate_builder(ctx: &Context) -> Result<TokenStream, syn::Error> {
 
             impl<#buildable_generic_params> #builder_ident<#builder_generic_args>
             {
+                #[doc(hidden)]
                 pub fn build(self) -> #ident <#user_generic_args> {
                     #ident {
                         #builder_build_fields
