@@ -22,6 +22,7 @@ impl ButtonEventHandlers {
 #[props(debug)]
 #[derive(Debug)]
 pub struct ButtonProps {
+    #[props(default)]
     children: Layout,
     on_click: Option<Shared<dyn Fn()>>,
     #[props(default)]

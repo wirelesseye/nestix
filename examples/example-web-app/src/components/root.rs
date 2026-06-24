@@ -7,6 +7,7 @@ use web_sys::HtmlElement;
 #[props(debug)]
 #[derive(Debug)]
 pub struct RootProps {
+    #[props(default)]
     children: Layout,
 }
 

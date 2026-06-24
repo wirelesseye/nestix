@@ -6,6 +6,7 @@ use web_sys::{HtmlElement};
 #[derive(Debug)]
 pub struct DivProps {
     class: Option<String>,
+    #[props(default)]
     children: Layout,
 }
 
