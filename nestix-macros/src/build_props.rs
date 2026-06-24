@@ -20,6 +20,12 @@ struct NamedField {
     expr_tokens: Option<TokenStream2>,
 }
 
+impl NamedField {
+    fn is_placeholder(&self) -> bool {
+        self.expr_tokens.is_none()
+    }
+}
+
 impl Parse for NamedField {
     fn parse(input: syn::parse::ParseStream) -> syn::Result<Self> {
         let dot: Token![.] = input.parse()?;
@@ -112,7 +118,7 @@ fn parse_start_arg(input: syn::parse::ParseStream) -> syn::Result<TokenStream2> 
 struct PropsInput {
     ty: Type,
     start: Punctuated<TokenStream2, Token![,]>,
-    named: Punctuated<NamedField, Token![,]>,
+    named: Vec<NamedField>,
 }
 
 impl Parse for PropsInput {
@@ -137,7 +143,18 @@ impl Parse for PropsInput {
             Punctuated::new()
         };
 
-        let named: Punctuated<NamedField, Token![,]> = Punctuated::parse_terminated(&inner)?;
+        let mut named = Vec::new();
+        while !inner.is_empty() {
+            let field: NamedField = inner.parse()?;
+            let is_placeholder = field.is_placeholder();
+            named.push(field);
+
+            if inner.is_empty() || is_placeholder {
+                continue;
+            }
+
+            inner.parse::<Token![,]>()?;
+        }
 
         Ok(Self { ty, start, named })
     }
