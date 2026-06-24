@@ -1,8 +1,31 @@
 use std::{cell::RefCell, collections::HashSet, panic::Location, rc::Rc};
 
-use crate::{
-    current_effect, end_effect, is_effect_running, set_current_effect, shared::Shared, start_effect,
-};
+use crate::{get_config, shared::Shared};
+
+thread_local! {
+    static CURRENT_EFFECT: RefCell<Option<Shared<Effect>>> = RefCell::new(None);
+    static RUNNING_EFFECTS: RefCell<HashSet<Shared<Effect>>> = RefCell::new(HashSet::new());
+}
+
+pub(crate) fn current_effect() -> Option<Shared<Effect>> {
+    CURRENT_EFFECT.with_borrow(|effect| effect.clone())
+}
+
+pub(crate) fn set_current_effect(effect: Option<Shared<Effect>>) {
+    CURRENT_EFFECT.replace(effect);
+}
+
+pub(crate) fn is_effect_running(effect: &Shared<Effect>) -> bool {
+    RUNNING_EFFECTS.with_borrow(|effects| effects.contains(effect))
+}
+
+pub(crate) fn start_effect(effect: Shared<Effect>) {
+    RUNNING_EFFECTS.with_borrow_mut(|effects| effects.insert(effect));
+}
+
+pub(crate) fn end_effect(effect: &Shared<Effect>) {
+    RUNNING_EFFECTS.with_borrow_mut(|effects| effects.remove(effect));
+}
 
 pub(crate) struct Effect {
     location: &'static Location<'static>,
@@ -37,16 +60,19 @@ pub fn effect(f: impl Fn() + 'static) {
 }
 
 pub(crate) fn run_effect(effect: &Shared<Effect>, location: &'static Location<'static>) {
-    // TODO: add toggle for cyclic update detection
-    // if is_effect_running(effect) {
-    //     log::warn!(
-    //         "cyclic update detected\n\tat {}:{}\nwhen trying to modify value\n\tat {}:{}",
-    //         effect.location.file(),
-    //         effect.location.line(),
-    //         location.file(),
-    //         location.line(),
-    //     );
-    // }
+    #[cfg(debug_assertions)]
+    {
+        let config = get_config();
+        if config.detect_cyclic && is_effect_running(effect) {
+            log::warn!(
+                "cyclic update detected\n\tat {}:{}\nwhen trying to modify value\n\tat {}:{}",
+                effect.location.file(),
+                effect.location.line(),
+                location.file(),
+                location.line(),
+            );
+        }
+    }
 
     // Cleanup old dependencies
     for dependency_set in effect.dependency_sets.take() {
