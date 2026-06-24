@@ -5,7 +5,7 @@ use syn::{
     Ident, Token, Type, parenthesized, parse::Parse, parse_macro_input, punctuated::Punctuated,
 };
 
-use crate::util::{FoundCrateExt, crate_name};
+use crate::util::{nestix_path};
 
 pub fn build_props(input: TokenStream) -> TokenStream {
     let props_input = parse_macro_input!(input as PropsInput);
@@ -70,7 +70,7 @@ impl Parse for NamedField {
 }
 
 fn generate_named_field(input: &NamedField) -> Result<TokenStream2, syn::Error> {
-    let crate_path = crate_name().to_path();
+    let nestix_path = nestix_path();
 
     let NamedField {
         dot,
@@ -79,7 +79,7 @@ fn generate_named_field(input: &NamedField) -> Result<TokenStream2, syn::Error> 
     } = input;
     let prop_value = expr_tokens.as_ref().map(|tokens| {
         quote! {
-            #crate_path::prop_value!(#tokens)
+            #nestix_path::prop_value!(#tokens)
         }
     });
 
@@ -144,14 +144,14 @@ impl Parse for PropsInput {
 }
 
 fn generate_build_props(input: &PropsInput) -> Result<TokenStream2, syn::Error> {
-    let crate_path = crate_name().to_path();
+    let nestix_path = nestix_path();
 
     let PropsInput { ty, start, named } = input;
 
     let mut start_output = TokenStream2::new();
     for field in start {
         quote! {
-            #crate_path::prop_value!(#field),
+            #nestix_path::prop_value!(#field),
         }
         .to_tokens(&mut start_output);
     }

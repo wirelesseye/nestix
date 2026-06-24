@@ -4,8 +4,7 @@ use quote::quote;
 use syn::{Pat, parse_macro_input};
 
 use crate::{
-    closure::{ClosureInput, generate_closure},
-    util::FoundCrateExt,
+    closure::{ClosureInput, generate_closure}, util::nestix_path,
 };
 
 pub fn callback(input: TokenStream) -> TokenStream {
@@ -16,9 +15,7 @@ pub fn callback(input: TokenStream) -> TokenStream {
 }
 
 fn generate_callback(input: ClosureInput) -> Result<TokenStream2, syn::Error> {
-    let crate_path = proc_macro_crate::crate_name("nestix-signal")
-        .unwrap_or_else(|_| proc_macro_crate::crate_name("nestix").unwrap())
-        .to_path();
+    let nestix_path = nestix_path();
     let cast_type = if let Some(expr_closure) = &input.expr_closure {
         // `_` leaves omitted argument types to be inferred from the callback's
         // expected type at its call site. Preserve supplied types: notably,
@@ -40,6 +37,6 @@ fn generate_callback(input: ClosureInput) -> Result<TokenStream2, syn::Error> {
     let closure_output = generate_closure(input)?;
 
     Ok(quote! {
-        #crate_path::Shared::from(std::rc::Rc::new(#closure_output) #cast_type)
+        #nestix_path::Shared::from(std::rc::Rc::new(#closure_output) #cast_type)
     })
 }

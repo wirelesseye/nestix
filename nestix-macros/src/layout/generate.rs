@@ -8,7 +8,7 @@ use crate::{
         LayoutInput, LayoutItem, LayoutItemElement, LayoutItemElse, LayoutItemExpr, LayoutItemFor,
         LayoutItemIf,
     },
-    util::{FoundCrateExt, crate_name},
+    util::nestix_path,
 };
 
 struct Context {
@@ -52,7 +52,7 @@ fn generate_layout_item_element(
     ctx: &mut Context,
     input: &LayoutItemElement,
 ) -> Result<(), syn::Error> {
-    let crate_path = crate_name().to_path();
+    let nestix_path = nestix_path();
     let LayoutItemElement {
         yield_token,
         bind,
@@ -92,8 +92,8 @@ fn generate_layout_item_element(
         if let Some((or_1, args, or_2)) = args {
             let children = children.as_ref().unwrap();
             quote! {
-                .children = #crate_path::callback!(
-                    [#clone_vars] #or_1 #args #or_2 #crate_path::prop_value!(#crate_path::layout! {
+                .children = #nestix_path::callback!(
+                    [#clone_vars] #or_1 #args #or_2 #nestix_path::prop_value!(#nestix_path::layout! {
                         #children
                     })
                 ),
@@ -104,7 +104,7 @@ fn generate_layout_item_element(
                 quote! {
                     .children = {
                         #clone_vars_output
-                        #crate_path::layout! {
+                        #nestix_path::layout! {
                             #children
                         }
                     },
@@ -112,7 +112,7 @@ fn generate_layout_item_element(
                 .to_tokens(&mut tokens);
             } else {
                 quote! {
-                    .children = #crate_path::layout! {
+                    .children = #nestix_path::layout! {
                         #children
                     },
                 }
@@ -121,7 +121,7 @@ fn generate_layout_item_element(
         }
 
         quote! {
-            #crate_path::build_props!(<#ty as #crate_path::Component>::Props(
+            #nestix_path::build_props!(<#ty as #nestix_path::Component>::Props(
                 #tokens
             ))
         }
@@ -129,12 +129,12 @@ fn generate_layout_item_element(
         quote! {()}
     };
 
-    let create_element = quote! { #crate_path::create_element::<#ty>(#props_output) };
+    let create_element = quote! { #nestix_path::create_element::<#ty>(#props_output) };
 
     let output = if let Some(bind) = bind {
         quote! {{
             let element = #create_element;
-            #crate_path::effect!([#bind, element] || {
+            #nestix_path::effect!([#bind, element] || {
                 #bind.set(element.handle());
             });
             element
@@ -187,7 +187,7 @@ fn generate_layout_item_element(
 }
 
 fn generate_layout_item_for(ctx: &mut Context, input: &LayoutItemFor) -> Result<(), syn::Error> {
-    let crate_path = crate_name().to_path();
+    let nestix_path = nestix_path();
     let LayoutItemFor {
         bind,
         data,
@@ -197,12 +197,12 @@ fn generate_layout_item_for(ctx: &mut Context, input: &LayoutItemFor) -> Result<
 
     let children = quote! {
         move |#bind| {
-            #crate_path::prop_value!(#crate_path::layout! { #children })
+            #nestix_path::prop_value!(#nestix_path::layout! { #children })
         }
     };
     let output = if let Some(key) = key {
         quote! {
-            #crate_path::components::create_for_from_signal(
+            #nestix_path::components::create_for_from_signal(
                 #data,
                 #key,
                 #children,
@@ -210,7 +210,7 @@ fn generate_layout_item_for(ctx: &mut Context, input: &LayoutItemFor) -> Result<
         }
     } else {
         quote! {
-            #crate_path::components::create_for_identity_from_signal(
+            #nestix_path::components::create_for_identity_from_signal(
                 #data,
                 #children,
             )
@@ -245,7 +245,7 @@ fn generate_layout_item_for(ctx: &mut Context, input: &LayoutItemFor) -> Result<
 }
 
 fn generate_layout_item_expr(ctx: &mut Context, input: &LayoutItemExpr) -> Result<(), syn::Error> {
-    let crate_path = crate_name().to_path();
+    let nestix_path = nestix_path();
     let LayoutItemExpr { yield_token, expr } = input;
 
     let output = quote! {{#expr}};
@@ -254,7 +254,7 @@ fn generate_layout_item_expr(ctx: &mut Context, input: &LayoutItemExpr) -> Resul
     if yield_token.is_some() {
         if ctx.generate_output {
             quote! {
-                #crate_path::ToElements::append_to_elements(#element_ident, &mut __items);
+                #nestix_path::ToElements::append_to_elements(#element_ident, &mut __items);
             }
             .to_tokens(&mut ctx.push_output);
             quote! {
@@ -267,7 +267,7 @@ fn generate_layout_item_expr(ctx: &mut Context, input: &LayoutItemExpr) -> Resul
         if ctx.generate_output {
             if ctx.computed {
                 quote! {
-                    #crate_path::ToElements::append_to_elements(#element_ident.clone(), &mut __items);
+                    #nestix_path::ToElements::append_to_elements(#element_ident.clone(), &mut __items);
                 }.to_tokens(&mut ctx.push_output);
                 quote! {
                     #element_ident.clone()
@@ -275,7 +275,7 @@ fn generate_layout_item_expr(ctx: &mut Context, input: &LayoutItemExpr) -> Resul
                 .to_tokens(&mut ctx.direct_output);
             } else {
                 quote! {
-                    #crate_path::ToElements::append_to_elements(#element_ident, &mut __items);
+                    #nestix_path::ToElements::append_to_elements(#element_ident, &mut __items);
                 }
                 .to_tokens(&mut ctx.push_output);
                 quote! {
@@ -386,7 +386,7 @@ fn generate_layout_item(ctx: &mut Context, input: &LayoutItem) -> Result<(), syn
 }
 
 pub fn generate_layout(input: LayoutInput) -> Result<TokenStream, syn::Error> {
-    let crate_path = crate_name().to_path();
+    let nestix_path = nestix_path();
     let LayoutInput { items } = input;
 
     let computed = items.iter().any(|item| item.is_yield());
@@ -420,7 +420,7 @@ pub fn generate_layout(input: LayoutInput) -> Result<TokenStream, syn::Error> {
 
                 return Ok(quote! {{
                     #element_defs
-                    #crate_path::computed(#crate_path::closure!(
+                    #nestix_path::computed(#nestix_path::closure!(
                         move || {
                             #computed_element_defs
                             #direct_output
@@ -451,7 +451,7 @@ pub fn generate_layout(input: LayoutInput) -> Result<TokenStream, syn::Error> {
 
                 Ok(quote! {{
                     #element_defs
-                    #crate_path::computed(#crate_path::closure!(
+                    #nestix_path::computed(#nestix_path::closure!(
                         move || {
                             #direct_output
                         }
@@ -475,7 +475,7 @@ pub fn generate_layout(input: LayoutInput) -> Result<TokenStream, syn::Error> {
             let direct_output = ctx.direct_output;
 
             Ok(quote! {{
-                #crate_path::computed(#crate_path::closure!(
+                #nestix_path::computed(#nestix_path::closure!(
                     #computed_element_defs
                     move || {
                         #direct_output
@@ -506,7 +506,7 @@ pub fn generate_layout(input: LayoutInput) -> Result<TokenStream, syn::Error> {
 
                 Ok(quote! {{
                     #element_defs
-                    #crate_path::computed(#crate_path::closure!(
+                    #nestix_path::computed(#nestix_path::closure!(
                         move || {
                             let mut __items = Vec::new();
                             #computed_element_defs

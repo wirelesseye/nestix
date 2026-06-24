@@ -24,10 +24,6 @@ impl<T> State<T> {
             effect.add_dependency_set(self.data.dependents.clone());
             self.data.dependents.borrow_mut().insert(effect);
         }
-        self.borrow_untrack()
-    }
-
-    pub fn borrow_untrack(&'_ self) -> Ref<'_, T> {
         self.data.value.borrow()
     }
 

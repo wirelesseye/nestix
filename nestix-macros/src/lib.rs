@@ -8,6 +8,7 @@ mod component;
 mod layout;
 mod prop_value;
 mod props;
+mod signals;
 mod util;
 
 #[proc_macro]
@@ -44,4 +45,14 @@ pub fn layout(input: TokenStream) -> TokenStream {
 #[proc_macro_attribute]
 pub fn component(attr: TokenStream, input: TokenStream) -> TokenStream {
     component::component(attr, input)
+}
+
+#[proc_macro]
+pub fn computed(input: TokenStream) -> TokenStream {
+    signals::computed(input)
+}
+
+#[proc_macro]
+pub fn effect(input: TokenStream) -> TokenStream {
+    signals::effect(input)
 }

@@ -10,7 +10,7 @@ use syn::{
 
 use crate::{
     props::parse::{Extends, PropsAttr, PropsFieldAttr},
-    util::{FoundCrateExt, IdentExt, crate_name},
+    util::{IdentExt, nestix_path},
 };
 
 struct Context {
@@ -54,7 +54,7 @@ fn preprocess(input: ItemStruct, attr: PropsAttr) -> Result<Context, syn::Error>
         }
     }
 
-    let crate_path = crate_name().to_path();
+    let nestix_path = nestix_path();
     let mut item_struct = input;
     let mut field_features = Vec::new();
 
@@ -138,7 +138,7 @@ fn preprocess(input: ItemStruct, attr: PropsAttr) -> Result<Context, syn::Error>
 
         if field_feature.extends.is_none() {
             let ty = &field.ty;
-            let path = parse_quote!(#crate_path::PropValue<#ty>);
+            let path = parse_quote!(#nestix_path::PropValue<#ty>);
             field.ty = Type::Path(TypePath {
                 qself: None,
                 path: path,
@@ -176,7 +176,7 @@ fn preprocess(input: ItemStruct, attr: PropsAttr) -> Result<Context, syn::Error>
 }
 
 fn generate_builder(ctx: &Context) -> Result<TokenStream, syn::Error> {
-    let crate_path = crate_name().to_path();
+    let nestix_path = nestix_path();
     let Context {
         item_struct,
         field_features,
@@ -346,7 +346,7 @@ fn generate_builder(ctx: &Context) -> Result<TokenStream, syn::Error> {
             };
 
             quote! {
-                #field_ident: #crate_path::PropValue::from_plain(#default_value),
+                #field_ident: #nestix_path::PropValue::from_plain(#default_value),
             }
             .to_tokens(&mut builder_default_fields);
 
@@ -549,7 +549,7 @@ fn generate_builder(ctx: &Context) -> Result<TokenStream, syn::Error> {
     Ok(quote! {
         #vis mod #builder_mod_ident {
             use super::*;
-            use #crate_path::__builder_internal::*;
+            use #nestix_path::__builder_internal::*;
 
             #marker_traits
 
@@ -599,14 +599,14 @@ fn generate_builder(ctx: &Context) -> Result<TokenStream, syn::Error> {
             }
         }
 
-        impl<#generic_bounds> #crate_path::HasBuilder for #ident <#user_generic_args> {
+        impl<#generic_bounds> #nestix_path::HasBuilder for #ident <#user_generic_args> {
             type Builder = #builder_ident <#user_generic_args>;
         }
     })
 }
 
 pub fn generate_props(input: ItemStruct, attr: PropsAttr) -> Result<TokenStream, syn::Error> {
-    let crate_path = crate_name().to_path();
+    let nestix_path = nestix_path();
     let ctx = preprocess(input, attr)?;
     let Context {
         item_struct,
@@ -684,7 +684,7 @@ pub fn generate_props(input: ItemStruct, attr: PropsAttr) -> Result<TokenStream,
     Ok(quote! {
         #item_struct
 
-        impl<#generic_bounds> #crate_path::Props for #ident <#user_generic_args> {
+        impl<#generic_bounds> #nestix_path::Props for #ident <#user_generic_args> {
             #impl_debug_output
         }
 

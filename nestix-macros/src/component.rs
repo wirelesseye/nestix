@@ -6,7 +6,7 @@ use syn::{
     parse_quote, punctuated::Punctuated, spanned::Spanned,
 };
 
-use crate::util::{FoundCrateExt, crate_name};
+use crate::util::{nestix_path};
 
 pub fn component(attr: TokenStream, input: TokenStream) -> TokenStream {
     let raw = TokenStream2::from(input.clone());
@@ -63,7 +63,7 @@ fn generate_component(
     attr: &PropsAttr,
     item: &ItemFn,
 ) -> Result<TokenStream2, syn::Error> {
-    let crate_path = crate_name().to_path();
+    let nestix_path = nestix_path();
     let PropsAttr { generic_params } = attr;
     let ItemFn { vis, sig, .. } = item;
     let impl_generics = &sig.generics;
@@ -120,16 +120,16 @@ fn generate_component(
     Ok(quote! {
         #vis struct #ident<#generic_params> #struct_fields;
 
-        impl #impl_generics #crate_path::Component for #ident<#generic_args> #where_clause {
+        impl #impl_generics #nestix_path::Component for #ident<#generic_args> #where_clause {
             type Props = #props_type;
 
-            fn on_mount(element: &#crate_path::Element) {
+            fn on_mount(element: &#nestix_path::Element) {
                 #[allow(non_snake_case)]
                 #raw
 
                 let props = element.props().downcast_ref::<#props_type>().unwrap();
                 let output = #ident(#mount_args);
-                #crate_path::ComponentOutput::mount(&output, Some(element));
+                #nestix_path::ComponentOutput::mount(&output, Some(element));
             }
         }
     })

@@ -14,8 +14,6 @@ pub use shared::*;
 pub use state::*;
 pub use untrack::*;
 
-pub use nestix_macros::closure;
-
 thread_local! {
     static CURRENT_EFFECT: RefCell<Option<Shared<Effect>>> = RefCell::new(None);
     static RUNNING_EFFECTS: RefCell<HashSet<Shared<Effect>>> = RefCell::new(HashSet::new());

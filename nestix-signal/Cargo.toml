@@ -5,4 +5,3 @@ edition = "2024"
 
 [dependencies]
 log = "0.4.28"
-nestix-macros = { path = "../nestix-macros" }

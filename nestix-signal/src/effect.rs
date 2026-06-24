@@ -61,10 +61,3 @@ pub(crate) fn run_effect(effect: &Shared<Effect>, location: &'static Location<'s
     set_current_effect(prev);
     end_effect(effect);
 }
-
-#[macro_export]
-macro_rules! effect {
-    ($($tt:tt)*) => {
-        $crate::effect($crate::closure!($($tt)*))
-    };
-}
