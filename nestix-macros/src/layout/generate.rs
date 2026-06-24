@@ -69,11 +69,13 @@ fn generate_layout_item_element(
             props_tokens.to_tokens(&mut tokens);
 
             let last = props_tokens.clone().into_iter().last();
-            let last_is_comma = match &last {
-                Some(TokenTree::Punct(punct)) if punct.as_char() == ',' => true,
-                _ => false,
+            let append_comma = match last {
+                Some(TokenTree::Punct(punct)) if punct.as_char() == ',' => false,
+                Some(TokenTree::Punct(punct)) if punct.as_char() == '.' => false,
+                None => false,
+                _ => true
             };
-            if last.is_some() && !last_is_comma {
+            if append_comma {
                 quote! {,}.to_tokens(&mut tokens);
             }
         }
