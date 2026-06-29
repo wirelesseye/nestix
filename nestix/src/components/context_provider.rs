@@ -7,6 +7,7 @@ use crate::{Element, Layout, components::Fragment, effect};
 /// Props for [`ContextProvider`].
 #[props(bounds(T: 'static))]
 pub struct ContextProviderProps<T> {
+    #[props(start)]
     value: Rc<T>,
     children: Layout,
 }
