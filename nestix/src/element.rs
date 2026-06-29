@@ -4,7 +4,7 @@ use std::{
     collections::{HashMap, HashSet},
     fmt::Debug,
     hash::Hash,
-    rc::Rc,
+    rc::{Rc, Weak},
 };
 
 use crate::{Component, ComponentID, Shared, component_id, prop::Props};
@@ -39,7 +39,7 @@ impl ComponentOutput for Element {
             self.extend_contexts(parent.contexts());
             parent.add_child(self.clone());
         }
-        self.data.parent.replace(parent.cloned());
+        self.data.parent.replace(parent.map(Element::downgrade));
         (self.component_id().mount_fn)(self);
         self.notify_after_mount();
         self.notify_place(false);
@@ -70,8 +70,7 @@ struct ElementData {
     props: Box<dyn Props>,
     contexts: RefCell<HashMap<TypeId, Rc<dyn Any>>>,
     handle: RefCell<Option<Shared<dyn Any>>>,
-    parent: RefCell<Option<Element>>,
-    // ^ does this cause circular reference?
+    parent: RefCell<Option<WeakElement>>,
     children: RefCell<Vec<Element>>,
     in_list: Cell<bool>,
     on_unmount_callbacks: RefCell<HashSet<Shared<dyn Fn()>>>,
@@ -123,6 +122,13 @@ impl Element {
         self.data.props.as_ref()
     }
 
+    /// Returns a weak reference to this element.
+    pub fn downgrade(&self) -> WeakElement {
+        WeakElement {
+            data: Rc::downgrade(&self.data),
+        }
+    }
+
     /// Unmounts this element and all of its children.
     ///
     /// Registered unmount callbacks are called once, and the element is removed
@@ -138,7 +144,8 @@ impl Element {
             callback();
         }
 
-        let parent = self.data.parent.take();
+        let parent = self.parent();
+        self.data.parent.take();
         if let Some(parent) = parent {
             parent.remove_child(self);
         }
@@ -149,7 +156,7 @@ impl Element {
 
     /// Returns the handle of the preceding element in the nearest list.
     pub fn pred_handle(&self) -> Option<Shared<dyn Any>> {
-        let parent = self.data.parent.borrow().clone()?;
+        let parent = self.parent()?;
 
         if !self.is_in_list() {
             return parent.pred_handle();
@@ -180,7 +187,7 @@ impl Element {
 
     /// Returns the nearest ancestor host handle.
     pub fn parent_handle(&self) -> Option<Shared<dyn Any>> {
-        let parent = self.data.parent.borrow().clone()?;
+        let parent = self.parent()?;
         if let Some(handle) = parent.handle() {
             Some(handle)
         } else {
@@ -190,7 +197,7 @@ impl Element {
 
     /// Returns this element's index in the nearest list.
     pub fn index(&self) -> Option<usize> {
-        let parent = self.data.parent.borrow().clone()?;
+        let parent = self.parent()?;
 
         if !self.is_in_list() {
             return parent.index();
@@ -204,6 +211,11 @@ impl Element {
     /// Returns this element's host handle, if one has been provided.
     pub fn handle(&self) -> Option<Shared<dyn Any>> {
         self.data.handle.borrow().clone()
+    }
+
+    /// Returns this element's parent if it is still mounted and owned.
+    pub fn parent(&self) -> Option<Element> {
+        self.data.parent.borrow().as_ref()?.upgrade()
     }
 
     /// Stores a host-renderer handle on this element.
@@ -308,6 +320,46 @@ impl Element {
                 child.notify_place(recursive);
             }
         }
+    }
+}
+
+/// A weak reference to an [`Element`].
+///
+/// Child elements use this for parent links so parent-child relationships do
+/// not form reference cycles.
+#[derive(Clone)]
+pub struct WeakElement {
+    data: Weak<ElementData>,
+}
+
+
+impl Debug for WeakElement {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "WeakElement(")?;
+        self.data.as_ptr().fmt(f)?;
+        write!(f, ")")?;
+        Ok(())
+    }
+}
+
+impl PartialEq for WeakElement {
+    fn eq(&self, other: &Self) -> bool {
+        Weak::ptr_eq(&self.data, &other.data)
+    }
+}
+
+impl Eq for WeakElement {}
+
+impl Hash for WeakElement {
+    fn hash<H: std::hash::Hasher>(&self, state: &mut H) {
+        self.data.as_ptr().hash(state);
+    }
+}
+
+impl WeakElement {
+    /// Attempts to upgrade this weak reference to a strong [`Element`].
+    pub fn upgrade(&self) -> Option<Element> {
+        self.data.upgrade().map(|data| Element { data })
     }
 }
 

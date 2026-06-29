@@ -1,5 +1,7 @@
 mod components;
 
+use std::mem;
+
 use components::*;
 use indexmap::IndexMap;
 use nanoid_wasm::nanoid;
@@ -11,7 +13,9 @@ use wasm_bindgen::prelude::wasm_bindgen;
 #[wasm_bindgen(start)]
 fn init() {
     wasm_logger::init(wasm_logger::Config::default());
-    mount_root(&layout! {App});
+    let app = layout! {App};
+    mount_root(&app);
+    mem::forget(app);
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
