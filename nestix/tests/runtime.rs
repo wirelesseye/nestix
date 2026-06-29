@@ -64,14 +64,20 @@ fn layout_conversions_expose_expected_elements() {
     assert_eq!(single.get(0), Some(&first));
     assert!(single.get(1).is_none());
     assert_eq!(single[0], first);
-    assert_eq!(single.iter().cloned().collect::<Vec<_>>(), vec![first.clone()]);
+    assert_eq!(
+        single.iter().cloned().collect::<Vec<_>>(),
+        vec![first.clone()]
+    );
     assert_eq!(single.into_elements(), vec![first.clone()]);
 
     let many = Layout::from(vec![first.clone(), second.clone()]);
     assert_eq!(many.len(), 2);
     assert_eq!(many.get(0), Some(&first));
     assert_eq!(many.get(1), Some(&second));
-    assert_eq!(many.iter().cloned().collect::<Vec<_>>(), vec![first, second]);
+    assert_eq!(
+        many.iter().cloned().collect::<Vec<_>>(),
+        vec![first, second]
+    );
 }
 
 #[test]
@@ -127,7 +133,10 @@ fn mounting_an_element_runs_lifecycle_callbacks_and_resolves_parent_handle() {
     child.mount(Some(&parent));
 
     assert!(after_mount_called.get());
-    assert_eq!(child.parent_handle().and_then(handle_name), Some(String::from("host")));
+    assert_eq!(
+        child.parent_handle().and_then(handle_name),
+        Some(String::from("host"))
+    );
 
     let placements = placements.borrow();
     assert_eq!(placements.len(), 1);
@@ -191,5 +200,8 @@ fn capture_placement(placement: &Placement) -> CapturedPlacement {
 }
 
 fn handle_name(handle: nestix::Shared<dyn std::any::Any>) -> Option<String> {
-    handle.downcast::<String>().ok().map(|value| (*value).clone())
+    handle
+        .downcast::<String>()
+        .ok()
+        .map(|value| (*value).clone())
 }

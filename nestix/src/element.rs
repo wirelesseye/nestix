@@ -332,7 +332,6 @@ pub struct WeakElement {
     data: Weak<ElementData>,
 }
 
-
 impl Debug for WeakElement {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         write!(f, "WeakElement(")?;

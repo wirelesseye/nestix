@@ -1,6 +1,4 @@
-use nestix::{
-    Element, Fragment, Layout, component, layout, props
-};
+use nestix::{Element, Fragment, Layout, component, layout, props};
 use wasm_bindgen::JsCast;
 use web_sys::HtmlElement;
 

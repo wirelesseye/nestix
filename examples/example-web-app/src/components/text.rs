@@ -29,9 +29,7 @@ pub fn Text(props: &TextProps, element: &Element) {
         }
     ));
 
-    effect!(
-        [props.text, text_node] || text_node.set_data(&text.get())
-    );
+    effect!([props.text, text_node] || text_node.set_data(&text.get()));
 
     element.on_unmount(closure!(
         [text_node] || {
