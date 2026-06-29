@@ -15,11 +15,17 @@ struct ComputedData<T> {
     compute: Rc<dyn Fn() -> T>,
 }
 
+/// A lazily evaluated value derived from other signals.
+///
+/// A `Computed` caches its value until one of the signals read during its last
+/// evaluation changes. Reading it inside an effect or another computed value
+/// records a dependency on the computed value.
 pub struct Computed<T> {
     data: Rc<ComputedData<T>>,
 }
 
 impl<T: Clone> Computed<T> {
+    /// Reads the current computed value, re-evaluating it if it is dirty.
     pub fn get(&self) -> T {
         if let Some(effect) = current_effect() {
             effect.add_dependency_set(self.data.dependents.clone());
@@ -74,11 +80,17 @@ impl<T: 'static + Clone> Signal for Computed<T> {
 }
 
 impl<T: Clone + 'static> Computed<T> {
+    /// Converts this computed value into a read-only signal handle.
     pub fn into_readonly(self) -> super::Readonly<T> {
         Readonly::new(self)
     }
 }
 
+/// Creates a lazily cached value from `compute`.
+///
+/// Signals read while `compute` runs become dependencies. When any dependency
+/// changes, the cached value is marked dirty and dependents of this computed
+/// value are notified.
 #[track_caller]
 pub fn computed<T: 'static>(compute: impl Fn() -> T + 'static) -> Computed<T> {
     let location = Location::caller();

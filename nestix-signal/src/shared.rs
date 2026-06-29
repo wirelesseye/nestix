@@ -1,10 +1,15 @@
 use std::{any::Any, fmt::Debug, hash::Hash, ops::Deref, rc::Rc};
 
+/// A reference-counted pointer that compares and hashes by pointer identity.
+///
+/// `Shared` is a small wrapper around [`Rc`] used by the signal runtime when
+/// values need stable identity in sets and maps.
 pub struct Shared<T: ?Sized> {
     value: Rc<T>,
 }
 
 impl<T> Shared<T> {
+    /// Creates a new shared pointer containing `value`.
     pub fn new(value: T) -> Self {
         Self {
             value: Rc::new(value),
@@ -13,6 +18,10 @@ impl<T> Shared<T> {
 }
 
 impl Shared<dyn Any> {
+    /// Attempts to downcast this dynamically typed pointer to `Shared<T>`.
+    ///
+    /// Returns the original pointer when the contained value has a different
+    /// concrete type.
     pub fn downcast<T: Any>(self) -> Result<Shared<T>, Self> {
         match Rc::downcast::<T>(self.value) {
             Ok(value) => Ok(Shared { value }),

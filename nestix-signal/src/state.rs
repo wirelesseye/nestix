@@ -13,12 +13,17 @@ struct StateData<T> {
     dependents: Shared<RefCell<HashSet<Shared<Effect>>>>,
 }
 
+/// A mutable reactive value.
+///
+/// Reading a `State` from inside an effect or computed value records a
+/// dependency. Updating it notifies the recorded dependents.
 #[derive(Debug)]
 pub struct State<T> {
     data: Rc<StateData<T>>,
 }
 
 impl<T> State<T> {
+    /// Borrows the current value and records a dependency if tracking is active.
     pub fn borrow(&'_ self) -> Ref<'_, T> {
         if let Some(effect) = current_effect() {
             effect.add_dependency_set(self.data.dependents.clone());
@@ -27,6 +32,9 @@ impl<T> State<T> {
         self.data.value.borrow()
     }
 
+    /// Replaces the current value and always notifies dependents.
+    ///
+    /// Unlike [`State::set`], this does not compare the old and new values.
     #[track_caller]
     pub fn set_unchecked(&self, value: T) {
         let location = Location::caller();
@@ -38,6 +46,9 @@ impl<T> State<T> {
         }
     }
 
+    /// Replaces the current value with the result of `updater`.
+    ///
+    /// Dependents are notified after the new value is stored.
     #[track_caller]
     pub fn update(&self, updater: impl FnOnce(&T) -> T) {
         let location = Location::caller();
@@ -53,6 +64,7 @@ impl<T> State<T> {
         }
     }
 
+    /// Mutates the current value in place and then notifies dependents.
     #[track_caller]
     pub fn mutate(&self, mutator: impl FnOnce(&mut T)) {
         let location = Location::caller();
@@ -68,6 +80,7 @@ impl<T> State<T> {
 }
 
 impl<T: PartialEq> State<T> {
+    /// Replaces the current value and notifies dependents only when it changes.
     #[track_caller]
     pub fn set(&self, value: T) {
         {
@@ -81,6 +94,8 @@ impl<T: PartialEq> State<T> {
 }
 
 impl<T: Clone> State<T> {
+    /// Clones and returns the current value, recording a dependency if tracking
+    /// is active.
     pub fn get(&self) -> T {
         (*self.borrow()).clone()
     }
@@ -113,11 +128,13 @@ impl<T> PartialEq for State<T> {
 }
 
 impl<T: Clone + 'static> State<T> {
+    /// Converts this mutable state handle into a read-only signal handle.
     pub fn into_readonly(self) -> super::Readonly<T> {
         Readonly::new(self)
     }
 }
 
+/// Creates a new reactive state value.
 pub fn create_state<T>(value: T) -> State<T> {
     State {
         data: Rc::new(StateData {

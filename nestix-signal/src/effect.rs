@@ -51,6 +51,10 @@ impl Effect {
     }
 }
 
+/// Registers a reactive side effect and runs it immediately.
+///
+/// Signals read while `f` runs become dependencies. When any of those signals
+/// changes, the effect runs again and refreshes its dependency list.
 #[track_caller]
 pub fn effect(f: impl Fn() + 'static) {
     let location = Location::caller();

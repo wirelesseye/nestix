@@ -2,6 +2,9 @@ use std::sync::RwLock;
 
 static CONFIG: RwLock<DebugConfig> = RwLock::new(default_config());
 
+/// Configures debug-only signal runtime checks.
+///
+/// In release builds this function has no effect.
 pub fn debug_signals(config: DebugConfig) {
     #[cfg(debug_assertions)]
     {
@@ -15,8 +18,11 @@ pub(crate) fn get_config() -> DebugConfig {
     *read
 }
 
+/// Debug-only runtime options for the signal system.
 #[derive(Debug, Clone, Copy)]
 pub struct DebugConfig {
+    /// Warns when an effect attempts to trigger itself while it is already
+    /// running.
     pub detect_cyclic: bool,
 }
 

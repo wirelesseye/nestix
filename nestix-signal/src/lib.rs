@@ -1,3 +1,7 @@
+//! This crate provides state cells, computed values, effects, and readonly
+//! signal wrappers. Reading a signal inside an effect or computed value records
+//! a dependency, and writes notify the dependent computations.
+
 mod computed;
 mod config;
 mod effect;
