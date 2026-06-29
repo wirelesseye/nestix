@@ -1,14 +1,17 @@
 use std::{cell::RefCell, hash::Hash, marker::PhantomData, rc::Rc};
 
 use nestix_macros::{component, props};
-use nestix_signal::{create_state, Readonly, Signal, State};
+use nestix_signal::{Readonly, Signal, State, create_state};
 
 use crate::{
-    effect, untrack,
-    utils::reconcile::{reconcile, ReconcileResult},
-    ComponentOutput, Element, PropValue, Shared,
+    ComponentOutput, Element, PropValue, Shared, effect, untrack,
+    utils::reconcile::{ReconcileResult, reconcile},
 };
 
+/// Props for [`For`].
+///
+/// `data` supplies the items, `key` provides stable identity for each item, and
+/// `children` creates an element for an item signal.
 #[props(bounds(I: IntoIterator + 'static, K: 'static))]
 pub struct ForProps<I: IntoIterator, K> {
     data: I,
@@ -17,6 +20,7 @@ pub struct ForProps<I: IntoIterator, K> {
 }
 
 #[doc(hidden)]
+/// Creates a keyed [`For`] element from a signal.
 pub fn create_for_from_signal<S, K, Key, Children>(data: S, key: Key, children: Children) -> Element
 where
     S: Signal + 'static,
@@ -37,6 +41,7 @@ where
 }
 
 #[doc(hidden)]
+/// Creates a [`For`] element using each item as its key.
 pub fn create_for_identity_from_signal<S, Children>(data: S, children: Children) -> Element
 where
     S: Signal + 'static,
@@ -51,6 +56,10 @@ where
     )
 }
 
+/// Renders a keyed list of elements.
+///
+/// Existing children are reused by key. Each rendered child receives a readonly
+/// signal for its item, so reused children can react to item value changes.
 #[component(generics(I, K))]
 pub fn For<I: IntoIterator + Clone + 'static, K: Eq + Hash + 'static>(
     props: &ForProps<I, K>,

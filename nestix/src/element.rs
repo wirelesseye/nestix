@@ -9,7 +9,12 @@ use std::{
 
 use crate::{Component, ComponentID, Shared, component_id, prop::Props};
 
+/// A value that can mount itself into an optional parent element.
+///
+/// Component functions use this trait for return values that may produce no
+/// element, one element, or another mountable output.
 pub trait ComponentOutput {
+    /// Mounts this output under `parent`.
     fn mount(&self, parent: Option<&Element>);
 }
 
@@ -41,18 +46,20 @@ impl ComponentOutput for Element {
     }
 }
 
+/// Converts a value into one or more elements.
 pub trait ToElements {
-    fn append_to_elements(self, elements: &mut Vec<Element>);
+    /// Appends this value's elements to `elements`.
+    fn to_elements(self, elements: &mut Vec<Element>);
 }
 
 impl ToElements for Element {
-    fn append_to_elements(self, elements: &mut Vec<Element>) {
+    fn to_elements(self, elements: &mut Vec<Element>) {
         elements.push(self);
     }
 }
 
 impl<I: IntoIterator<Item = Element>> ToElements for I {
-    fn append_to_elements(self, elements: &mut Vec<Element>) {
+    fn to_elements(self, elements: &mut Vec<Element>) {
         elements.extend(self);
     }
 }
@@ -72,6 +79,10 @@ struct ElementData {
     on_place_callbacks: RefCell<HashSet<Shared<dyn Fn(&Placement)>>>,
 }
 
+/// A node in the Nestix component tree.
+///
+/// Elements store component props, parent-child relationships, typed contexts,
+/// lifecycle callbacks, and optional host handles supplied by render backends.
 #[derive(Clone)]
 pub struct Element {
     data: Rc<ElementData>,
@@ -101,15 +112,21 @@ impl Hash for Element {
 }
 
 impl Element {
+    /// Returns this element's component identity.
     pub fn component_id(&self) -> ComponentID {
         self.data.component_id
     }
 
+    /// Returns this element's props as a type-erased props object.
     #[inline]
     pub fn props(&self) -> &dyn Props {
         self.data.props.as_ref()
     }
 
+    /// Unmounts this element and all of its children.
+    ///
+    /// Registered unmount callbacks are called once, and the element is removed
+    /// from its parent.
     pub fn unmount(&self) {
         let children = self.data.children.take();
         for child in children {
@@ -130,7 +147,7 @@ impl Element {
         self.data.on_place_callbacks.take();
     }
 
-    /// Get the handle of the precedent element in the nearest list
+    /// Returns the handle of the preceding element in the nearest list.
     pub fn pred_handle(&self) -> Option<Shared<dyn Any>> {
         let parent = self.data.parent.borrow().clone()?;
 
@@ -151,6 +168,7 @@ impl Element {
         pred_node.last_handle()
     }
 
+    /// Returns the last host handle in this element's subtree.
     pub fn last_handle(&self) -> Option<Shared<dyn Any>> {
         if let Some(handle) = self.handle() {
             return Some(handle);
@@ -160,6 +178,7 @@ impl Element {
         last_node.last_handle()
     }
 
+    /// Returns the nearest ancestor host handle.
     pub fn parent_handle(&self) -> Option<Shared<dyn Any>> {
         let parent = self.data.parent.borrow().clone()?;
         if let Some(handle) = parent.handle() {
@@ -169,6 +188,7 @@ impl Element {
         }
     }
 
+    /// Returns this element's index in the nearest list.
     pub fn index(&self) -> Option<usize> {
         let parent = self.data.parent.borrow().clone()?;
 
@@ -181,10 +201,12 @@ impl Element {
         Some(index)
     }
 
+    /// Returns this element's host handle, if one has been provided.
     pub fn handle(&self) -> Option<Shared<dyn Any>> {
         self.data.handle.borrow().clone()
     }
 
+    /// Stores a host-renderer handle on this element.
     pub fn provide_handle<T: 'static>(&self, handle: T) {
         let handle = Shared::from(Rc::new(handle) as Rc<dyn Any>);
         self.data.handle.replace(Some(handle));
@@ -195,24 +217,28 @@ impl Element {
         // }
     }
 
+    /// Registers a callback to run when this element is unmounted.
     pub fn on_unmount(&self, f: impl Fn() + 'static) {
         let callback = Shared::from(Rc::new(f) as Rc<dyn Fn()>);
         let mut on_unmount_callbacks = self.data.on_unmount_callbacks.borrow_mut();
         on_unmount_callbacks.insert(callback);
     }
 
+    /// Registers a callback to run when this element's placement changes.
     pub fn on_place(&self, f: impl Fn(&Placement) + 'static) {
         let callback = Shared::from(Rc::new(f) as Rc<dyn Fn(&Placement)>);
         let mut on_place_callbacks = self.data.on_place_callbacks.borrow_mut();
         on_place_callbacks.insert(callback);
     }
 
+    /// Registers a callback to run after this element is mounted.
     pub fn after_mount(&self, f: impl Fn() + 'static) {
         let callback = Shared::from(Rc::new(f) as Rc<dyn Fn()>);
         let mut after_mount_callbacks = self.data.after_mount_callbacks.borrow_mut();
         after_mount_callbacks.insert(callback);
     }
 
+    /// Looks up a typed context value from this element.
     pub fn context<T: 'static>(&self) -> Option<Rc<T>> {
         self.context_any::<T>()
             .map(|ctx| Rc::downcast::<T>(ctx).unwrap())
@@ -285,10 +311,12 @@ impl Element {
     }
 }
 
+/// Mounts an element as the root of a tree.
 pub fn mount_root(element: &Element) {
     element.mount(None);
 }
 
+/// Creates an element for component `C` with `props`.
 pub fn create_element<C: Component>(props: C::Props) -> Element {
     Element {
         data: Rc::new(ElementData {
@@ -306,9 +334,13 @@ pub fn create_element<C: Component>(props: C::Props) -> Element {
     }
 }
 
+/// Placement information for an element relative to host-rendered nodes.
 #[derive(Debug)]
 pub struct Placement {
+    /// Handle of the preceding host node, if any.
     pub pred: Option<Shared<dyn Any>>,
+    /// Handle of the nearest parent host node, if any.
     pub parent: Option<Shared<dyn Any>>,
+    /// Index of the element in the nearest list, if any.
     pub index: Option<usize>,
 }

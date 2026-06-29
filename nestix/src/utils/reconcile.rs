@@ -3,12 +3,19 @@ use std::{
     hash::Hash,
 };
 
+/// Result of reconciling two ordered collections.
 #[derive(Debug)]
 pub struct ReconcileResult {
+    /// Indices from the previous collection that do not appear in the next one.
     pub removed: Vec<usize>,
+    /// For each item in the next collection, the matching previous index.
     pub mapping: Vec<Option<usize>>,
 }
 
+/// Compares previous and next keyed collections.
+///
+/// The result identifies which previous items should be removed and which next
+/// items can reuse an existing previous item by index.
 pub fn reconcile<T: Eq + Hash, P, N>(prev: &P, next: &N) -> ReconcileResult
 where
     for<'a> &'a P: IntoIterator<Item = &'a T>,

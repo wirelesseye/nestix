@@ -9,10 +9,16 @@ enum LayoutInner {
     ElementList(Vec<Element>),
 }
 
+/// A component output containing zero, one, or many elements.
+///
+/// Layouts are used for children and component return values. They can be
+/// created from `()`, a single [`Element`], an `Option<Element>`, or a vector of
+/// elements.
 #[derive(Debug, Clone)]
 pub struct Layout(LayoutInner);
 
 impl Layout {
+    /// Returns the number of elements in this layout.
     pub fn len(&self) -> usize {
         match &self.0 {
             LayoutInner::Empty => 0,
@@ -21,6 +27,7 @@ impl Layout {
         }
     }
 
+    /// Returns the element at `index`, or `None` when it is out of bounds.
     pub fn get(&self, index: usize) -> Option<&Element> {
         match &self.0 {
             LayoutInner::Element(element) if index == 0 => Some(element),
@@ -29,10 +36,12 @@ impl Layout {
         }
     }
 
+    /// Iterates over the elements in this layout by reference.
     pub fn iter(&self) -> impl Iterator<Item = &Element> {
         self.into_iter()
     }
 
+    /// Converts this layout into its contained elements.
     pub fn into_elements(self) -> Vec<Element> {
         match self.0 {
             LayoutInner::Empty => vec![],
@@ -84,9 +93,13 @@ impl From<Vec<Element>> for Layout {
     }
 }
 
+/// Borrowing iterator over a [`Layout`].
 pub enum Iter<'a> {
+    /// Iterator for an empty layout.
     Empty,
+    /// Iterator for a single-element layout.
     Element(std::iter::Once<&'a Element>),
+    /// Iterator for a many-element layout.
     ElementList(std::slice::Iter<'a, Element>),
 }
 
@@ -115,9 +128,13 @@ impl<'a> IntoIterator for &'a Layout {
     }
 }
 
+/// Owning iterator over a [`Layout`].
 pub enum IntoIter {
+    /// Iterator for an empty layout.
     Empty,
+    /// Iterator for a single-element layout.
     Element(std::iter::Once<Element>),
+    /// Iterator for a many-element layout.
     ElementList(<Vec<Element> as IntoIterator>::IntoIter),
 }
 

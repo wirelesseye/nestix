@@ -1,5 +1,8 @@
+/// Context provider component.
 pub mod context_provider;
+/// List rendering component.
 pub mod r#for;
+/// Fragment component.
 pub mod fragment;
 
 pub use context_provider::*;
@@ -10,12 +13,21 @@ use std::{any::TypeId, hash::Hash};
 
 use crate::{Element, prop::Props};
 
+/// A mountable Nestix component.
+///
+/// Components are usually declared with the `#[component]` macro. The runtime
+/// calls [`Component::on_mount`] when an element for the component is mounted.
 pub trait Component: 'static {
+    /// The props type accepted by this component.
     type Props: Props;
 
+    /// Mounts the component into the given element.
     fn on_mount(element: &Element);
 }
 
+/// Stable identity for a component type.
+///
+/// Component IDs compare and hash by Rust [`TypeId`].
 #[derive(Debug, Clone, Copy)]
 pub struct ComponentID {
     #[allow(unused)]
@@ -38,6 +50,7 @@ impl Hash for ComponentID {
     }
 }
 
+/// Returns the runtime ID for a component type.
 pub fn component_id<C: Component>() -> ComponentID {
     ComponentID {
         name: std::any::type_name::<C>(),

@@ -6,11 +6,17 @@ use crate::{
 };
 
 #[props(debug)]
+/// Props for [`Fragment`].
 #[derive(Debug)]
 pub struct FragmentProps {
+    /// Child layout rendered by the fragment.
     pub children: Layout,
 }
 
+/// Renders a layout without adding its own host node.
+///
+/// The fragment reconciles its children when the layout changes, preserving
+/// existing elements where possible and unmounting removed elements.
 #[component]
 pub fn Fragment(props: &FragmentProps, element: &Element) {
     effect!(
@@ -30,7 +36,7 @@ pub fn Fragment(props: &FragmentProps, element: &Element) {
 
                 if let Some(prev_i) = *prev_i {
                     element.add_child(child.clone());
-                    
+
                     let pred = if i > 0 {
                         Some(&next_children[i - 1])
                     } else {

@@ -256,7 +256,7 @@ fn generate_layout_item_expr(ctx: &mut Context, input: &LayoutItemExpr) -> Resul
     if yield_token.is_some() {
         if ctx.generate_output {
             quote! {
-                #nestix_path::ToElements::append_to_elements(#element_ident, &mut __items);
+                #nestix_path::ToElements::to_elements(#element_ident, &mut __items);
             }
             .to_tokens(&mut ctx.push_output);
             quote! {
@@ -269,7 +269,7 @@ fn generate_layout_item_expr(ctx: &mut Context, input: &LayoutItemExpr) -> Resul
         if ctx.generate_output {
             if ctx.computed {
                 quote! {
-                    #nestix_path::ToElements::append_to_elements(#element_ident.clone(), &mut __items);
+                    #nestix_path::ToElements::to_elements(#element_ident.clone(), &mut __items);
                 }.to_tokens(&mut ctx.push_output);
                 quote! {
                     #element_ident.clone()
@@ -277,7 +277,7 @@ fn generate_layout_item_expr(ctx: &mut Context, input: &LayoutItemExpr) -> Resul
                 .to_tokens(&mut ctx.direct_output);
             } else {
                 quote! {
-                    #nestix_path::ToElements::append_to_elements(#element_ident, &mut __items);
+                    #nestix_path::ToElements::to_elements(#element_ident, &mut __items);
                 }
                 .to_tokens(&mut ctx.push_output);
                 quote! {
