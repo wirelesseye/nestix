@@ -1,5 +1,5 @@
 use syn::{
-    Expr, FnArg, GenericParam, Ident, Path, Token, parenthesized, parse::Parse,
+    Expr, FnArg, GenericParam, Ident, Path, Token, bracketed, parenthesized, parse::Parse,
     punctuated::Punctuated, token::Paren,
 };
 
@@ -8,11 +8,30 @@ pub struct PropsAttr {
     pub debug: bool,
     pub generic_bounds: Punctuated<GenericParam, Token![,]>,
     pub extensible: Option<Extensible>,
+    pub groups: Vec<Group>,
 }
 
 pub struct Extensible {
     pub trait_ident: Ident,
     pub wrapper_ident: Ident,
+}
+
+pub struct Group {
+    pub ident: Ident,
+    pub fields: Punctuated<Ident, Token![,]>,
+}
+
+impl Parse for Group {
+    fn parse(input: syn::parse::ParseStream) -> syn::Result<Self> {
+        let ident: Ident = input.parse()?;
+        input.parse::<Token![=>]>()?;
+
+        let inner;
+        bracketed!(inner in input);
+        let fields = Punctuated::<Ident, Token![,]>::parse_terminated(&inner)?;
+
+        Ok(Self { ident, fields })
+    }
 }
 
 impl Parse for PropsAttr {
@@ -43,6 +62,11 @@ impl Parse for PropsAttr {
                         trait_ident,
                         wrapper_ident,
                     });
+                }
+                "group" => {
+                    let inner;
+                    parenthesized!(inner in input);
+                    attr.groups.push(inner.parse()?);
                 }
                 _ => {
                     return Err(syn::Error::new(

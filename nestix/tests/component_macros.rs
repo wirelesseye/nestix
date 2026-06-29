@@ -44,6 +44,28 @@ struct MultiExtendsProps {
     own: usize,
 }
 
+#[props(
+    extensible(SpacingPropsExt, SpacingPropsWrapper),
+    group(inset => [left, right, top, bottom]),
+    group(vertical => [top, bottom]),
+)]
+struct SpacingProps {
+    #[props(default)]
+    left: usize,
+    #[props(default)]
+    right: usize,
+    #[props(default)]
+    top: usize,
+    #[props(default)]
+    bottom: usize,
+}
+
+#[props]
+struct SpacingExtendsProps {
+    #[props(extends(SpacingPropsExt, SpacingPropsWrapper))]
+    spacing_props: SpacingProps,
+}
+
 #[component]
 fn Wrapper(props: &WrapperProps) -> Element {
     layout! {
@@ -132,6 +154,32 @@ fn generated_props_can_extend_multiple_prop_groups() {
     assert_eq!(props.first_props.first.get(), 1);
     assert_eq!(props.second_props.second.get(), 2);
     assert_eq!(props.own.get(), 3);
+}
+
+#[test]
+fn generated_props_can_set_grouped_fields() {
+    let props = build_props!(SpacingProps(
+        .vertical = 8usize,
+    ));
+
+    assert_eq!(props.left.get(), 0);
+    assert_eq!(props.right.get(), 0);
+    assert_eq!(props.top.get(), 8);
+    assert_eq!(props.bottom.get(), 8);
+}
+
+#[test]
+fn generated_props_can_set_grouped_fields_through_extends() {
+    use spacing_props_builder::SpacingPropsBuilderExtInset;
+
+    let props = build_props!(SpacingExtendsProps(
+        .inset = 6usize,
+    ));
+
+    assert_eq!(props.spacing_props.left.get(), 6);
+    assert_eq!(props.spacing_props.right.get(), 6);
+    assert_eq!(props.spacing_props.top.get(), 6);
+    assert_eq!(props.spacing_props.bottom.get(), 6);
 }
 
 #[test]

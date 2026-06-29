@@ -9,7 +9,7 @@ use syn::{
 };
 
 use crate::{
-    props::parse::{Extends, Extensible, PropsAttr, PropsFieldAttr},
+    props::parse::{Extends, Extensible, Group, PropsAttr, PropsFieldAttr},
     util::{IdentExt, nestix_path},
 };
 
@@ -19,6 +19,7 @@ struct Context {
     generic_bounds: Punctuated<GenericParam, Token![,]>,
     user_generic_args: Punctuated<GenericParam, Token![,]>,
     extensible: Option<Extensible>,
+    groups: Vec<Group>,
     debug: bool,
 }
 
@@ -163,12 +164,86 @@ fn preprocess(input: ItemStruct, attr: PropsAttr) -> Result<Context, syn::Error>
         }
     }
 
+    for group in &attr.groups {
+        if group.fields.is_empty() {
+            return Err(syn::Error::new(
+                group.ident.span(),
+                "props group must contain at least one field",
+            ));
+        }
+
+        let mut seen_group_fields = Vec::new();
+        for group_field in &group.fields {
+            let group_field_name = group_field.to_string();
+            if seen_group_fields.contains(&group_field_name) {
+                return Err(syn::Error::new(
+                    group_field.span(),
+                    format!("duplicate props group field `{}`", group_field),
+                ));
+            }
+            seen_group_fields.push(group_field_name);
+        }
+
+        if item_struct
+            .fields
+            .iter()
+            .any(|field| field.ident.as_ref() == Some(&group.ident))
+        {
+            return Err(syn::Error::new(
+                group.ident.span(),
+                format!("props group conflicts with field `{}`", group.ident),
+            ));
+        }
+
+        let mut group_ty: Option<&Type> = None;
+        for group_field in &group.fields {
+            let Some((field_index, field)) = item_struct
+                .fields
+                .iter()
+                .enumerate()
+                .find(|(_, field)| field.ident.as_ref() == Some(group_field))
+            else {
+                return Err(syn::Error::new(
+                    group_field.span(),
+                    format!("unknown props group field `{}`", group_field),
+                ));
+            };
+
+            let field_feature = &field_features[field_index];
+            if field_feature.start {
+                return Err(syn::Error::new(
+                    group_field.span(),
+                    "props group fields cannot be start fields",
+                ));
+            }
+            if field_feature.extends.is_some() {
+                return Err(syn::Error::new(
+                    group_field.span(),
+                    "props group fields cannot be extends fields",
+                ));
+            }
+
+            if let Some(group_ty) = group_ty {
+                if group_ty.to_token_stream().to_string() != field.ty.to_token_stream().to_string()
+                {
+                    return Err(syn::Error::new(
+                        group_field.span(),
+                        "all props group fields must have the same type",
+                    ));
+                }
+            } else {
+                group_ty = Some(&field.ty);
+            }
+        }
+    }
+
     Ok(Context {
         item_struct,
         field_features,
         generic_bounds: attr.generic_bounds,
         user_generic_args,
         extensible: attr.extensible,
+        groups: attr.groups,
         debug: attr.debug,
     })
 }
@@ -181,6 +256,7 @@ fn generate_builder(ctx: &Context) -> Result<TokenStream, syn::Error> {
         generic_bounds,
         user_generic_args,
         extensible,
+        groups,
         ..
     } = ctx;
     let ItemStruct {
@@ -246,6 +322,7 @@ fn generate_builder(ctx: &Context) -> Result<TokenStream, syn::Error> {
     let mut builder_default_fields = TokenStream::new();
     let mut builder_build_fields = TokenStream::new();
     let mut builder_field_methods = TokenStream::new();
+    let mut builder_group_methods = TokenStream::new();
     let mut builder_ext_traits = TokenStream::new();
     let mut builder_ext_impls = TokenStream::new();
     let mut builder_impl_wrappers = TokenStream::new();
@@ -540,6 +617,128 @@ fn generate_builder(ctx: &Context) -> Result<TokenStream, syn::Error> {
         }
     }
 
+    for group in groups {
+        let group_ident = &group.ident;
+        let group_fields = group.fields.iter().collect::<Vec<_>>();
+        let group_field_names = group_fields
+            .iter()
+            .map(|ident| ident.to_string())
+            .collect::<Vec<_>>();
+        let group_value_ty = fields
+            .iter()
+            .find(|field| field.ident.as_ref() == Some(group_fields[0]))
+            .map(|field| &field.ty)
+            .unwrap();
+
+        let mut method_type_bounds = if generic_bounds.is_empty() {
+            TokenStream::new()
+        } else {
+            quote! {
+                #generic_bounds,
+            }
+        };
+        let mut method_generics_params = if user_generic_args.is_empty() {
+            TokenStream::new()
+        } else {
+            quote! {
+                #user_generic_args,
+            }
+        };
+        let mut method_result_type_args = if user_generic_args.is_empty() {
+            TokenStream::new()
+        } else {
+            quote! {
+                #user_generic_args,
+            }
+        };
+        let mut method_fields = TokenStream::new();
+
+        for builder_field in builder_fields.iter() {
+            let builder_field_ident = builder_field.ident.as_ref().unwrap();
+            let ident_pascal_string = builder_field_ident.to_string().to_case(Case::Pascal);
+            let state_ident = Ident::new(
+                &format!("{}State", ident_pascal_string),
+                builder_field_ident.span(),
+            );
+
+            if group_field_names.contains(&builder_field_ident.to_string()) {
+                let can_set_ident =
+                    Ident::new(&format!("{}CanSet", ident_pascal_string), Span::call_site());
+                quote! {#state_ident: #can_set_ident,}.to_tokens(&mut method_type_bounds);
+                quote! {#state_ident,}.to_tokens(&mut method_generics_params);
+                quote! {Set,}.to_tokens(&mut method_result_type_args);
+                if Some(builder_field_ident) == group_fields.last().copied() {
+                    quote! {
+                        #builder_field_ident: value,
+                    }
+                    .to_tokens(&mut method_fields);
+                } else {
+                    quote! {
+                        #builder_field_ident: value.clone(),
+                    }
+                    .to_tokens(&mut method_fields);
+                }
+            } else {
+                quote! {#state_ident,}.to_tokens(&mut method_type_bounds);
+                quote! {#state_ident,}.to_tokens(&mut method_generics_params);
+                quote! {#state_ident,}.to_tokens(&mut method_result_type_args);
+                quote! {
+                    #builder_field_ident: self.#builder_field_ident,
+                }
+                .to_tokens(&mut method_fields);
+            }
+        }
+
+        quote! {
+            impl<#method_type_bounds> #builder_ident<#method_generics_params> {
+                pub fn #group_ident(self, value: #group_value_ty) -> #builder_ident<#method_result_type_args> {
+                    #builder_ident {
+                        #method_fields
+                        _phantom: std::marker::PhantomData,
+                    }
+                }
+            }
+        }
+        .to_tokens(&mut builder_group_methods);
+
+        if extensible.is_some() {
+            let group_pascal_string = group_ident.to_string().to_case(Case::Pascal);
+            let ext_trait_ident = Ident::new(
+                &format!("{}{}", builder_ext_ident, group_pascal_string),
+                group_ident.span(),
+            );
+
+            quote! {
+                pub trait #ext_trait_ident {
+                    fn #group_ident<#method_type_bounds>(
+                        self,
+                        value: #group_value_ty,
+                    ) -> <Self as #builder_wrapper_ident>::With<#builder_ident<#method_result_type_args>>
+                    where
+                        Self: #builder_wrapper_ident<Inner = #builder_ident<#method_generics_params>>;
+                }
+            }
+            .to_tokens(&mut builder_ext_traits);
+
+            quote! {
+                impl<W> #ext_trait_ident for W {
+                    fn #group_ident<#method_type_bounds>(
+                        self,
+                        value: #group_value_ty,
+                    ) -> <Self as #builder_wrapper_ident>::With<#builder_ident<#method_result_type_args>>
+                    where
+                        Self: #builder_wrapper_ident<Inner = #builder_ident<#method_generics_params>>,
+                    {
+                        let (inner, remainder) = <W as #builder_wrapper_ident>::into_parts(self);
+                        let new_inner = inner.#group_ident(value);
+                        <W as #builder_wrapper_ident>::from_parts(new_inner, remainder)
+                    }
+                }
+            }
+            .to_tokens(&mut builder_ext_impls);
+        }
+    }
+
     match &mut builder_fields {
         syn::Fields::Named(fields_named) => {
             let field = parse_quote!(_phantom: std::marker::PhantomData<(#generated_generic_args)>);
@@ -606,6 +805,7 @@ fn generate_builder(ctx: &Context) -> Result<TokenStream, syn::Error> {
             }
 
             #builder_field_methods
+            #builder_group_methods
 
             impl<#buildable_generic_params> #builder_ident<#builder_generic_args>
             {
