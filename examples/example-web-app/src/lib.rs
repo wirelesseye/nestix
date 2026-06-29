@@ -188,23 +188,17 @@ fn TodoListItem(props: &TodoListItemProps) -> Element {
     layout! {
         Div(.class = "todo-list-item".to_string()) {
             Button(
-                .on_click = computed!([key, props.remove] || {
-                    callback!([key: key.get(), remove: remove.get()] || remove(&key))
-                })
+                .on_click = callback!([key, props.remove] || (remove.get())(&key.get()))
             ) {
                 Text("✕")
             }
             Button(
-                .on_click = computed!([key, props.move_up] || {
-                    callback!([key: key.get(), move_up: move_up.get()] || move_up(&key))
-                })
+                .on_click = callback!([key, props.move_up] || (move_up.get())(&key.get()))
             ) {
                 Text("↑")
             }
             Button(
-                .on_click = computed!([key, props.move_down] || {
-                    callback!([key: key.get(), move_down: move_down.get()] || move_down(&key))
-                })
+                .on_click = callback!([key, props.move_down] || (move_down.get())(&key.get()))
             ) {
                 Text("↓")
             }
@@ -217,10 +211,8 @@ fn TodoListItem(props: &TodoListItemProps) -> Element {
             if is_edit.get() {
                 Input(
                     .value = value.clone(),
-                    .on_value_change = computed!([key, props.set_content] || {
-                        callback!([key: key.get(), set_content: set_content.get()] |value: String| {
-                            set_content(&key, value);
-                        })
+                    .on_value_change = callback!([key, props.set_content] |value: String| {
+                        (set_content.get())(&key.get(), value);
                     }),
                 )
             } else {
