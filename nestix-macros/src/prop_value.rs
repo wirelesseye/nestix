@@ -2,7 +2,7 @@ use proc_macro::TokenStream;
 use proc_macro2::TokenStream as TokenStream2;
 use quote::quote;
 
-use crate::util::{nestix_path};
+use crate::util::nestix_path;
 
 pub fn prop_value(input: TokenStream) -> TokenStream {
     let nestix_path = nestix_path();
@@ -11,6 +11,8 @@ pub fn prop_value(input: TokenStream) -> TokenStream {
         {
             #[allow(unused_imports)]
             use #nestix_path::{PlainKind, SignalKind};
+            // Runtime trait dispatch selects plain values, signals, or an
+            // already-built PropValue without requiring separate macro syntax.
             match {#input} {
                 value => (&value).prop_value_tag().new(value),
             }

@@ -32,6 +32,9 @@ impl Parse for ClosureInput {
         };
 
         let closure_tokens: TokenStream2 = input.parse()?;
+        // Keep the raw closure tokens so callers can pass unusual closure-like
+        // input through to Rust, but parse real closures when possible so we can
+        // detect whether `move` is already present.
         let expr_closure: Option<ExprClosure> = syn::parse2(closure_tokens.clone()).ok();
 
         Ok(Self {
@@ -57,6 +60,8 @@ pub fn generate_closure(input: ClosureInput) -> Result<TokenStream2, syn::Error>
     let mut closure_tokens = input.closure_tokens;
     if let Some(expr_closure) = input.expr_closure {
         if expr_closure.capture.is_none() && has_clone_vars {
+            // Captured variables were cloned into fresh locals above; `move`
+            // makes the closure own those locals instead of borrowing them.
             closure_tokens = quote! {
                 move #closure_tokens
             };

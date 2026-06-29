@@ -4,7 +4,8 @@ use quote::quote;
 use syn::{Pat, parse_macro_input};
 
 use crate::{
-    closure::{ClosureInput, generate_closure}, util::nestix_path,
+    closure::{ClosureInput, generate_closure},
+    util::nestix_path,
 };
 
 pub fn callback(input: TokenStream) -> TokenStream {

@@ -35,7 +35,11 @@ impl ToTokens for CloneVar {
 }
 
 pub fn generate_clone_var(input: &CloneVar) -> Result<TokenStream, syn::Error> {
-    let CloneVar { expr, colon_token: _, ident } = input;
+    let CloneVar {
+        expr,
+        colon_token: _,
+        ident,
+    } = input;
     if let Some(ident) = ident {
         Ok(quote! {
             let #ident = #expr.clone();
@@ -53,6 +57,9 @@ pub fn generate_clone_var(input: &CloneVar) -> Result<TokenStream, syn::Error> {
 }
 
 fn get_ident_from_expr(expr: &Expr) -> Option<Ident> {
+    // Infer a binding name for common capture expressions:
+    // `[state]`, `[props.value]`, and `[foo.bar()]` become `state`, `value`,
+    // and `bar` respectively. More complex expressions need `[name: expr]`.
     match expr {
         Expr::Call(expr_call) => get_ident_from_expr(&expr_call.func),
         Expr::MethodCall(expr_method_call) => Some(expr_method_call.method.clone()),

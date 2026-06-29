@@ -25,7 +25,8 @@ impl Parse for PropsAttr {
                 "bounds" => {
                     let inner;
                     parenthesized!(inner in input);
-                    attr.generic_bounds = Punctuated::<GenericParam, Token![,]>::parse_terminated(&inner)?;
+                    attr.generic_bounds =
+                        Punctuated::<GenericParam, Token![,]>::parse_terminated(&inner)?;
                 }
                 "extensible" => {
                     let inner;

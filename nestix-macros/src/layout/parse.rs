@@ -1,7 +1,7 @@
 use proc_macro2::TokenStream;
 use syn::{
-    braced, bracketed, parenthesized, parse::Parse, punctuated::Punctuated, token, Expr, FnArg,
-    Ident, Token, Type,
+    Expr, FnArg, Ident, Token, Type, braced, bracketed, parenthesized, parse::Parse,
+    punctuated::Punctuated, token,
 };
 
 use crate::clone_var::CloneVar;

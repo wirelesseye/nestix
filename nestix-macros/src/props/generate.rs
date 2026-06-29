@@ -33,11 +33,7 @@ fn is_option_ty(ty: &Type) -> bool {
     match ty {
         Type::Path(type_path) => {
             let segments = &type_path.path.segments;
-            if segments.len() == 1 && segments.first().unwrap().ident == "Option" {
-                true
-            } else {
-                false
-            }
+            segments.len() == 1 && segments.first().unwrap().ident == "Option"
         }
         _ => false,
     }
@@ -61,6 +57,8 @@ fn preprocess(input: ItemStruct, attr: PropsAttr) -> Result<Context, syn::Error>
     for field in &mut item_struct.fields {
         let option = is_option_ty(&field.ty);
 
+        // Field-level `#[props(...)]` attributes configure the generated
+        // builder only. Retain every other attribute on the user-facing struct.
         let attrs = mem::take(&mut field.attrs);
         let mut retained_attrs = Vec::new();
         let mut field_attrs = Vec::new();
@@ -262,7 +260,7 @@ fn generate_builder(ctx: &Context) -> Result<TokenStream, syn::Error> {
 
         if let Some(extends) = &field_feature.extends {
             quote! {
-                #state_ident=<#field_ty as nestix::HasBuilder>::Builder,
+                #state_ident=<#field_ty as #nestix_path::HasBuilder>::Builder,
             }
             .to_tokens(&mut builder_generic_params);
             quote! {
@@ -356,7 +354,7 @@ fn generate_builder(ctx: &Context) -> Result<TokenStream, syn::Error> {
             .to_tokens(&mut builder_build_fields);
         } else if field_feature.extends.is_some() {
             quote! {
-                #field_ident: <#field_ty as nestix::HasBuilder>::Builder::new(#start_args),
+                #field_ident: <#field_ty as #nestix_path::HasBuilder>::Builder::new(#start_args),
             }
             .to_tokens(&mut builder_default_fields);
 

@@ -46,6 +46,68 @@ impl Context {
     fn current_element_ident(&self) -> Ident {
         format_ident!("__element_{}", self.index)
     }
+
+    fn record_element_output(&mut self, element_ident: &Ident, output: TokenStream, yielded: bool) {
+        if yielded {
+            self.computed_element_outputs
+                .push((element_ident.clone(), output));
+        } else {
+            self.element_outputs.push((element_ident.clone(), output));
+        }
+    }
+
+    fn append_direct_output(&mut self, element_ident: &Ident, clone_when_computed: bool) {
+        let should_clone = self.computed && clone_when_computed;
+
+        if should_clone {
+            quote! { #element_ident.clone() }.to_tokens(&mut self.direct_output);
+        } else {
+            quote! { #element_ident }.to_tokens(&mut self.direct_output);
+        }
+    }
+
+    fn append_push_output(
+        &mut self,
+        element_ident: &Ident,
+        clone_when_computed: bool,
+        use_to_elements: bool,
+    ) {
+        if !self.generate_output {
+            return;
+        }
+
+        let nestix_path = nestix_path();
+        let should_clone = self.computed && clone_when_computed;
+        let item = if should_clone {
+            quote! { #element_ident.clone() }
+        } else {
+            quote! { #element_ident }
+        };
+
+        if use_to_elements {
+            quote! {
+                #nestix_path::ToElements::to_elements(#item, &mut __items);
+            }
+            .to_tokens(&mut self.push_output);
+        } else {
+            quote! {
+                __items.push(#item);
+            }
+            .to_tokens(&mut self.push_output);
+        }
+    }
+
+    fn append_output(&mut self, element_ident: &Ident, yielded: bool, use_to_elements: bool) {
+        if !self.generate_output {
+            return;
+        }
+
+        // Yielded items are created inside the computed closure, so they do not
+        // need the clone used for pre-created elements in computed layouts.
+        let clone_when_computed = !yielded;
+        self.append_push_output(element_ident, clone_when_computed, use_to_elements);
+        self.append_direct_output(element_ident, clone_when_computed);
+    }
 }
 
 fn generate_layout_item_element(
@@ -73,7 +135,7 @@ fn generate_layout_item_element(
                 Some(TokenTree::Punct(punct)) if punct.as_char() == ',' => false,
                 Some(TokenTree::Punct(punct)) if punct.as_char() == '.' => false,
                 None => false,
-                _ => true
+                _ => true,
             };
             if append_comma {
                 quote! {,}.to_tokens(&mut tokens);
@@ -148,42 +210,9 @@ fn generate_layout_item_element(
     };
 
     let element_ident = ctx.next_element_ident();
-    if yield_token.is_some() {
-        if ctx.generate_output {
-            quote! {
-                __items.push(#element_ident);
-            }
-            .to_tokens(&mut ctx.push_output);
-            quote! {
-                #element_ident
-            }
-            .to_tokens(&mut ctx.direct_output);
-        }
-        ctx.computed_element_outputs.push((element_ident, output));
-    } else {
-        if ctx.generate_output {
-            if ctx.computed {
-                quote! {
-                    __items.push(#element_ident.clone());
-                }
-                .to_tokens(&mut ctx.push_output);
-                quote! {
-                    #element_ident.clone()
-                }
-                .to_tokens(&mut ctx.direct_output);
-            } else {
-                quote! {
-                    __items.push(#element_ident);
-                }
-                .to_tokens(&mut ctx.push_output);
-                quote! {
-                    #element_ident
-                }
-                .to_tokens(&mut ctx.direct_output);
-            }
-        }
-        ctx.element_outputs.push((element_ident, output));
-    }
+    let yielded = yield_token.is_some();
+    ctx.append_output(&element_ident, yielded, false);
+    ctx.record_element_output(&element_ident, output, yielded);
 
     Ok(())
 }
@@ -220,74 +249,21 @@ fn generate_layout_item_for(ctx: &mut Context, input: &LayoutItemFor) -> Result<
     };
 
     let element_ident = ctx.next_element_ident();
-    if ctx.generate_output {
-        if ctx.computed {
-            quote! {
-                __items.push(#element_ident.clone());
-            }
-            .to_tokens(&mut ctx.push_output);
-            quote! {
-                #element_ident.clone()
-            }
-            .to_tokens(&mut ctx.direct_output);
-        } else {
-            quote! {
-                __items.push(#element_ident);
-            }
-            .to_tokens(&mut ctx.push_output);
-            quote! {
-                #element_ident
-            }
-            .to_tokens(&mut ctx.direct_output);
-        }
-    }
-    ctx.element_outputs.push((element_ident, output));
+    ctx.append_output(&element_ident, false, false);
+    ctx.record_element_output(&element_ident, output, false);
 
     Ok(())
 }
 
 fn generate_layout_item_expr(ctx: &mut Context, input: &LayoutItemExpr) -> Result<(), syn::Error> {
-    let nestix_path = nestix_path();
     let LayoutItemExpr { yield_token, expr } = input;
 
     let output = quote! {{#expr}};
 
     let element_ident = ctx.next_element_ident();
-    if yield_token.is_some() {
-        if ctx.generate_output {
-            quote! {
-                #nestix_path::ToElements::to_elements(#element_ident, &mut __items);
-            }
-            .to_tokens(&mut ctx.push_output);
-            quote! {
-                #element_ident
-            }
-            .to_tokens(&mut ctx.direct_output);
-        }
-        ctx.computed_element_outputs.push((element_ident, output));
-    } else {
-        if ctx.generate_output {
-            if ctx.computed {
-                quote! {
-                    #nestix_path::ToElements::to_elements(#element_ident.clone(), &mut __items);
-                }.to_tokens(&mut ctx.push_output);
-                quote! {
-                    #element_ident.clone()
-                }
-                .to_tokens(&mut ctx.direct_output);
-            } else {
-                quote! {
-                    #nestix_path::ToElements::to_elements(#element_ident, &mut __items);
-                }
-                .to_tokens(&mut ctx.push_output);
-                quote! {
-                    #element_ident
-                }
-                .to_tokens(&mut ctx.direct_output);
-            }
-        }
-        ctx.element_outputs.push((element_ident, output));
-    }
+    let yielded = yield_token.is_some();
+    ctx.append_output(&element_ident, yielded, true);
+    ctx.record_element_output(&element_ident, output, yielded);
 
     Ok(())
 }

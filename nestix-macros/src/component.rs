@@ -6,7 +6,7 @@ use syn::{
     parse_quote, punctuated::Punctuated, spanned::Spanned,
 };
 
-use crate::util::{nestix_path};
+use crate::util::nestix_path;
 
 pub fn component(attr: TokenStream, input: TokenStream) -> TokenStream {
     let raw = TokenStream2::from(input.clone());
@@ -83,7 +83,7 @@ fn generate_component(
         quote! {(PhantomData<(#generic_args)>)}
     };
 
-    let mount_args = if sig.inputs.len() == 0 {
+    let mount_args = if sig.inputs.is_empty() {
         quote! {}
     } else if sig.inputs.len() == 1 {
         quote! {props}
@@ -124,6 +124,8 @@ fn generate_component(
             type Props = #props_type;
 
             fn on_mount(element: &#nestix_path::Element) {
+                // Re-introduce the user's function inside `on_mount` so the
+                // exported component type can share the function's identifier.
                 #[allow(non_snake_case)]
                 #raw
 

@@ -5,7 +5,7 @@ use syn::{
     Ident, Token, Type, parenthesized, parse::Parse, parse_macro_input, punctuated::Punctuated,
 };
 
-use crate::util::{nestix_path};
+use crate::util::nestix_path;
 
 pub fn build_props(input: TokenStream) -> TokenStream {
     let props_input = parse_macro_input!(input as PropsInput);
@@ -42,6 +42,9 @@ impl Parse for NamedField {
         }
         input.parse::<Token![=]>()?;
 
+        // A named prop value can be any Rust expression, including closures and
+        // macro calls. Capture raw tokens until the next top-level comma and let
+        // `prop_value!` type-dispatch the expression during expansion.
         let expr_tokens = input.step(|cursor| {
             let mut rest = *cursor;
             let mut tokens = TokenStream2::new();
@@ -89,6 +92,8 @@ fn generate_named_field(input: &NamedField) -> Result<TokenStream2, syn::Error> 
 }
 
 fn parse_start_arg(input: syn::parse::ParseStream) -> syn::Result<TokenStream2> {
+    // Start args share the same loose expression grammar as named values, but
+    // they are positional builder arguments instead of method calls.
     input.step(|cursor| {
         let mut rest = *cursor;
         let mut tokens = TokenStream2::new();
