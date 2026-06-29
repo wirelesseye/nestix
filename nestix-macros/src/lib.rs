@@ -80,9 +80,9 @@ pub fn callback(input: TokenStream) -> TokenStream {
 /// Derives Nestix prop behavior and a typed builder for a named-field struct.
 ///
 /// Every field becomes a `PropValue<T>` unless it uses
-/// `#[props(extends(...))]`. `Option<T>` fields are defaulted automatically;
-/// other fields must be set by the generated builder unless marked with
-/// `#[props(default)]` or `#[props(start)]`.
+/// `#[props(extends(TraitName, WrapperTraitName))]`. `Option<T>` fields are
+/// defaulted automatically; other fields must be set by the generated builder
+/// unless marked with `#[props(default)]` or `#[props(start)]`.
 ///
 /// ```ignore
 /// #[props]

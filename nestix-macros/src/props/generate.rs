@@ -9,7 +9,7 @@ use syn::{
 };
 
 use crate::{
-    props::parse::{Extends, PropsAttr, PropsFieldAttr},
+    props::parse::{Extends, Extensible, PropsAttr, PropsFieldAttr},
     util::{IdentExt, nestix_path},
 };
 
@@ -18,7 +18,7 @@ struct Context {
     field_features: Vec<FieldFeature>,
     generic_bounds: Punctuated<GenericParam, Token![,]>,
     user_generic_args: Punctuated<GenericParam, Token![,]>,
-    extensible: Option<Ident>,
+    extensible: Option<Extensible>,
     debug: bool,
 }
 
@@ -194,6 +194,10 @@ fn generate_builder(ctx: &Context) -> Result<TokenStream, syn::Error> {
     let builder_ident = format_ident!("{}Builder", ident);
     let builder_mod_ident = builder_ident.to_case(Case::Snake);
     let builder_ext_ident = format_ident!("{}BuilderExt", ident);
+    let builder_wrapper_ident = extensible
+        .as_ref()
+        .map(|extensible| extensible.wrapper_ident.clone())
+        .unwrap_or_else(|| format_ident!("{}Wrapper", builder_ident));
 
     let mut builder_fields = fields.clone();
     for (i, field) in builder_fields.iter_mut().enumerate() {
@@ -257,6 +261,7 @@ fn generate_builder(ctx: &Context) -> Result<TokenStream, syn::Error> {
         let is_set_ident = Ident::new(&format!("{}IsSet", ident_pascal_string), Span::call_site());
         let can_set_ident =
             Ident::new(&format!("{}CanSet", ident_pascal_string), Span::call_site());
+        let mut extended_start_args = TokenStream::new();
 
         if let Some(extends) = &field_feature.extends {
             quote! {
@@ -287,6 +292,10 @@ fn generate_builder(ctx: &Context) -> Result<TokenStream, syn::Error> {
                     #super_start_args,
                 }
                 .to_tokens(&mut start_args);
+                quote! {
+                    #super_start_args,
+                }
+                .to_tokens(&mut extended_start_args);
             }
         } else {
             quote! {
@@ -354,7 +363,7 @@ fn generate_builder(ctx: &Context) -> Result<TokenStream, syn::Error> {
             .to_tokens(&mut builder_build_fields);
         } else if field_feature.extends.is_some() {
             quote! {
-                #field_ident: <#field_ty as #nestix_path::HasBuilder>::Builder::new(#start_args),
+                #field_ident: <#field_ty as #nestix_path::HasBuilder>::Builder::new(#extended_start_args),
             }
             .to_tokens(&mut builder_default_fields);
 
@@ -461,24 +470,28 @@ fn generate_builder(ctx: &Context) -> Result<TokenStream, syn::Error> {
                 );
 
                 quote! {
-                    pub trait #ext_trait_ident<#state_params_without_self> {
-                        type Output<NewInner>;
-
-                        fn #field_ident(self, value: #field_ty) -> Self::Output<#builder_ident<#method_result_type_args>>;
+                    pub trait #ext_trait_ident {
+                        fn #field_ident<#method_type_bounds>(
+                            self,
+                            value: #field_ty,
+                        ) -> <Self as #builder_wrapper_ident>::With<#builder_ident<#method_result_type_args>>
+                        where
+                            Self: #builder_wrapper_ident<Inner = #builder_ident<#method_generics_params>>;
                     }
                 }.to_tokens(&mut builder_ext_traits);
 
                 quote! {
-                    impl<W, #method_type_bounds> #ext_trait_ident<#state_params_without_self> for W
-                    where
-                        W: BuilderWrapper<Inner = #builder_ident<#method_generics_params>>,
-                    {
-                        type Output<NewInner> = W::With<NewInner>;
-
-                        fn #field_ident(self, value: #field_ty) -> Self::Output<#builder_ident<#method_result_type_args>> {
-                            let (inner, remainder) = self.into_parts();
+                    impl<W> #ext_trait_ident for W {
+                        fn #field_ident<#method_type_bounds>(
+                            self,
+                            value: #field_ty,
+                        ) -> <Self as #builder_wrapper_ident>::With<#builder_ident<#method_result_type_args>>
+                        where
+                            Self: #builder_wrapper_ident<Inner = #builder_ident<#method_generics_params>>,
+                        {
+                            let (inner, remainder) = <W as #builder_wrapper_ident>::into_parts(self);
                             let new_inner = inner.#field_ident(value);
-                            W::from_parts(new_inner, remainder)
+                            <W as #builder_wrapper_ident>::from_parts(new_inner, remainder)
                         }
                     }
                 }.to_tokens(&mut builder_ext_impls);
@@ -487,6 +500,7 @@ fn generate_builder(ctx: &Context) -> Result<TokenStream, syn::Error> {
             if field_feature.extends.is_some() {
                 let mut remainder_fields = TokenStream::new();
                 let mut remainder_values = TokenStream::new();
+                let wrapper_trait = &field_feature.extends.as_ref().unwrap().wrapper_path;
 
                 for (i, ident) in remainder_idents.iter().enumerate() {
                     let index = Index::from(i);
@@ -496,7 +510,7 @@ fn generate_builder(ctx: &Context) -> Result<TokenStream, syn::Error> {
                 }
 
                 quote! {
-                    impl<#method_generics_params> BuilderWrapper for #builder_ident<#method_generics_params> {
+                    impl<#method_generics_params> #wrapper_trait for #builder_ident<#method_generics_params> {
                         type Inner = #state_ident;
 
                         type With<NewInner> = #builder_ident<#with_new_inner_params>;
@@ -544,6 +558,35 @@ fn generate_builder(ctx: &Context) -> Result<TokenStream, syn::Error> {
         }
     };
 
+    let builder_wrapper_trait = if extensible.is_some() {
+        quote! {
+            pub trait #builder_wrapper_ident {
+                type Inner;
+                type With<NewInner>;
+                type Remainder;
+
+                fn into_parts(self) -> (Self::Inner, Self::Remainder);
+
+                fn from_parts<NewInner>(
+                    inner: NewInner,
+                    remainder: Self::Remainder,
+                ) -> Self::With<NewInner>;
+            }
+        }
+    } else {
+        quote! {}
+    };
+
+    let builder_use = if extensible.is_some() {
+        quote! {
+            #vis use #builder_mod_ident::{#builder_ident, #builder_wrapper_ident};
+        }
+    } else {
+        quote! {
+            #vis use #builder_mod_ident::#builder_ident;
+        }
+    };
+
     Ok(quote! {
         #vis mod #builder_mod_ident {
             use super::*;
@@ -585,12 +628,14 @@ fn generate_builder(ctx: &Context) -> Result<TokenStream, syn::Error> {
 
             #builder_impl_wrappers
 
+            #builder_wrapper_trait
+
             #builder_ext_traits
 
             #builder_ext_impls
         }
 
-        #vis use #builder_mod_ident::#builder_ident;
+        #builder_use
 
         impl<#generic_bounds> #ident <#user_generic_args> {
             pub fn builder(#start_params) -> #builder_ident <#user_generic_args> {
@@ -659,7 +704,8 @@ pub fn generate_props(input: ItemStruct, attr: PropsAttr) -> Result<TokenStream,
         quote! {}
     };
 
-    let extends_trait_output = if let Some(extends_trait_ident) = extensible {
+    let extends_trait_output = if let Some(extensible) = extensible {
+        let extends_trait_ident = &extensible.trait_ident;
         let ident_snake = ident.to_case(Case::Snake);
         quote! {
             #vis trait #extends_trait_ident <#generic_bounds> {

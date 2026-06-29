@@ -21,6 +21,29 @@ struct WrapperProps {
     count: Rc<Cell<usize>>,
 }
 
+#[props(extensible(FirstPropsExt, FirstPropsWrapper))]
+struct FirstProps {
+    #[props(default)]
+    first: usize,
+}
+
+#[props(extensible(SecondPropsExt, SecondPropsWrapper))]
+struct SecondProps {
+    #[props(default)]
+    second: usize,
+}
+
+#[props]
+struct MultiExtendsProps {
+    #[props(extends(FirstPropsExt, FirstPropsWrapper))]
+    first_props: FirstProps,
+
+    #[props(extends(SecondPropsExt, SecondPropsWrapper))]
+    second_props: SecondProps,
+
+    own: usize,
+}
+
 #[component]
 fn Wrapper(props: &WrapperProps) -> Element {
     layout! {
@@ -93,6 +116,22 @@ fn generated_default_layout_props_start_empty() {
     };
 
     mount_root(&element);
+}
+
+#[test]
+fn generated_props_can_extend_multiple_prop_groups() {
+    use first_props_builder::FirstPropsBuilderExtFirst;
+    use second_props_builder::SecondPropsBuilderExtSecond;
+
+    let props = build_props!(MultiExtendsProps(
+        .first = 1usize,
+        .second = 2usize,
+        .own = 3usize,
+    ));
+
+    assert_eq!(props.first_props.first.get(), 1);
+    assert_eq!(props.second_props.second.get(), 2);
+    assert_eq!(props.own.get(), 3);
 }
 
 #[test]

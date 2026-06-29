@@ -7,7 +7,12 @@ use syn::{
 pub struct PropsAttr {
     pub debug: bool,
     pub generic_bounds: Punctuated<GenericParam, Token![,]>,
-    pub extensible: Option<Ident>,
+    pub extensible: Option<Extensible>,
+}
+
+pub struct Extensible {
+    pub trait_ident: Ident,
+    pub wrapper_ident: Ident,
 }
 
 impl Parse for PropsAttr {
@@ -31,8 +36,13 @@ impl Parse for PropsAttr {
                 "extensible" => {
                     let inner;
                     parenthesized!(inner in input);
-                    let ident: Ident = inner.parse()?;
-                    attr.extensible = Some(ident);
+                    let trait_ident: Ident = inner.parse()?;
+                    inner.parse::<Token![,]>()?;
+                    let wrapper_ident: Ident = inner.parse()?;
+                    attr.extensible = Some(Extensible {
+                        trait_ident,
+                        wrapper_ident,
+                    });
                 }
                 _ => {
                     return Err(syn::Error::new(
@@ -54,12 +64,15 @@ impl Parse for PropsAttr {
 #[derive(Clone)]
 pub struct Extends {
     pub trait_path: Path,
+    pub wrapper_path: Path,
     pub inputs: Option<Punctuated<FnArg, Token![,]>>,
 }
 
 impl Parse for Extends {
     fn parse(input: syn::parse::ParseStream) -> syn::Result<Self> {
         let trait_path: Path = input.parse()?;
+        input.parse::<Token![,]>()?;
+        let wrapper_path: Path = input.parse()?;
 
         let inputs = if input.peek(Paren) {
             let inner;
@@ -70,7 +83,11 @@ impl Parse for Extends {
             None
         };
 
-        Ok(Self { trait_path, inputs })
+        Ok(Self {
+            trait_path,
+            wrapper_path,
+            inputs,
+        })
     }
 }
 
