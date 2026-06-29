@@ -1,16 +1,36 @@
 # Nestix
-A React-like declarative layout and state management library for Rust.
+
+Nestix is a React-like declarative layout and state management library for
+Rust. This repository contains the core, renderer-agnostic Nestix workspace:
+
+- `nestix`: the main public API for components, elements, props, layouts, and
+  built-in structural components.
+- `nestix-signal`: the reactive runtime for state, computed values, effects,
+  readonly signals, and shared callback/handle pointers.
+- `nestix-macros`: the procedural macros behind `#[component]`, `#[props]`,
+  `layout!`, `callback!`, `computed!`, and related syntax.
+- `examples`: small applications and renderer examples that show how Nestix can
+  be used from real Rust code.
 
 > [!WARNING]  
 > This library is still in early stages of development. Although all major features have been implemented, APIs can break at any time.
 
 > [!NOTE]  
-> Just like you need `react-dom` or `react-native` to build an actual application, Nestix itself does not handle any platform-specific logics like rendering. If you want to know how to build an application or UI library using Nestix, see [examples](#examples).
+> Just like you need `react-dom` or `react-native` to build an actual application, Nestix itself does not handle platform-specific rendering. It manages component trees, reactive state, props, layout, and lifecycle; a renderer or UI component library supplies host components for the DOM, native views, terminal widgets, or another target.
+
+## Documentation
+
+See the [Nestix wiki](https://github.com/wirelesseye/nestix/wiki) for
+comprehensive documentation, including getting started guides, core concepts,
+signals, components, props, layout syntax, renderer integration, examples, and
+API references.
 
 ## Examples
-For more examples, see [examples](./examples) folder.
+
+For more examples, see the [examples](./examples) folder.
 
 ### Counter
+
 ```rust
 #[component]
 fn Counter() -> Element {
@@ -32,6 +52,3 @@ fn Counter() -> Element {
     }
 }
 ```
-
-## Documentation
-WIP
