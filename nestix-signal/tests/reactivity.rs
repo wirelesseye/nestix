@@ -21,6 +21,74 @@ fn state_notifies_effects_when_value_changes() {
 }
 
 #[test]
+fn cancelled_effects_stop_rerunning() {
+    let count = create_state(1);
+    let observed = Rc::new(Cell::new(0));
+    let runs = Rc::new(Cell::new(0));
+
+    let handle = effect({
+        let count = count.clone();
+        let observed = observed.clone();
+        let runs = runs.clone();
+        move || {
+            observed.set(count.get());
+            runs.set(runs.get() + 1);
+        }
+    });
+
+    assert_eq!(observed.get(), 1);
+    assert_eq!(runs.get(), 1);
+    assert!(!handle.is_cancelled());
+
+    handle.cancel();
+    assert!(handle.is_cancelled());
+
+    count.set(2);
+
+    assert_eq!(observed.get(), 1);
+    assert_eq!(runs.get(), 1);
+}
+
+#[test]
+fn cancelling_effects_is_idempotent() {
+    let count = create_state(1);
+    let runs = Rc::new(Cell::new(0));
+
+    let handle = effect({
+        let count = count.clone();
+        let runs = runs.clone();
+        move || {
+            count.get();
+            runs.set(runs.get() + 1);
+        }
+    });
+
+    handle.cancel();
+    handle.cancel();
+    count.set(2);
+
+    assert_eq!(runs.get(), 1);
+}
+
+#[test]
+fn dropping_effect_handles_does_not_cancel_effects() {
+    let count = create_state(1);
+    let observed = Rc::new(Cell::new(0));
+
+    {
+        let _handle = effect({
+            let count = count.clone();
+            let observed = observed.clone();
+            move || observed.set(count.get())
+        });
+    }
+
+    count.set(2);
+
+    assert_eq!(observed.get(), 2);
+}
+
+#[test]
 fn state_set_skips_equal_values_but_set_unchecked_notifies() {
     let count = create_state(1);
     let runs = Rc::new(Cell::new(0));

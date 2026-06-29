@@ -1,4 +1,9 @@
-use std::{cell::RefCell, collections::HashSet, panic::Location, rc::Rc};
+use std::{
+    cell::{Cell, RefCell},
+    collections::HashSet,
+    panic::Location,
+    rc::Rc,
+};
 
 use crate::{get_config, shared::Shared};
 
@@ -8,7 +13,12 @@ thread_local! {
 }
 
 pub(crate) fn current_effect() -> Option<Shared<Effect>> {
-    CURRENT_EFFECT.with_borrow(|effect| effect.clone())
+    CURRENT_EFFECT.with_borrow(|effect| {
+        effect
+            .as_ref()
+            .filter(|effect| !effect.is_cancelled())
+            .cloned()
+    })
 }
 
 pub(crate) fn set_current_effect(effect: Option<Shared<Effect>>) {
@@ -31,6 +41,7 @@ pub(crate) struct Effect {
     location: &'static Location<'static>,
     callback: Shared<dyn Fn()>,
     dependency_sets: RefCell<HashSet<Shared<RefCell<HashSet<Shared<Effect>>>>>>,
+    cancelled: Cell<bool>,
 }
 
 impl Effect {
@@ -39,15 +50,58 @@ impl Effect {
             location,
             callback,
             dependency_sets: RefCell::new(HashSet::new()),
+            cancelled: Cell::new(false),
         })
     }
 
     pub fn add_dependency_set(&self, dependency_set: Shared<RefCell<HashSet<Shared<Effect>>>>) {
-        self.dependency_sets.borrow_mut().insert(dependency_set);
+        if !self.is_cancelled() {
+            self.dependency_sets.borrow_mut().insert(dependency_set);
+        }
     }
 
     pub fn take_dependency_sets(&self) -> HashSet<Shared<RefCell<HashSet<Shared<Effect>>>>> {
         self.dependency_sets.take()
+    }
+
+    pub fn is_cancelled(&self) -> bool {
+        self.cancelled.get()
+    }
+
+    fn cancel(&self, effect: &Shared<Effect>) {
+        self.cancelled.set(true);
+        for dependency_set in self.take_dependency_sets() {
+            dependency_set.borrow_mut().remove(effect);
+        }
+        end_effect(effect);
+    }
+}
+
+/// A handle that can cancel a registered effect.
+///
+/// Dropping the handle does not cancel the effect. Call [`EffectHandle::cancel`]
+/// when the effect should stop rerunning and unsubscribe from its dependencies.
+#[derive(Clone)]
+pub struct EffectHandle {
+    effect: Shared<Effect>,
+}
+
+impl EffectHandle {
+    fn new(effect: Shared<Effect>) -> Self {
+        Self { effect }
+    }
+
+    /// Cancels this effect and removes it from all currently tracked
+    /// dependency sets.
+    ///
+    /// Calling `cancel` more than once is harmless.
+    pub fn cancel(&self) {
+        self.effect.cancel(&self.effect);
+    }
+
+    /// Returns whether this effect has been canceled.
+    pub fn is_cancelled(&self) -> bool {
+        self.effect.is_cancelled()
     }
 }
 
@@ -56,14 +110,19 @@ impl Effect {
 /// Signals read while `f` runs become dependencies. When any of those signals
 /// changes, the effect runs again and refreshes its dependency list.
 #[track_caller]
-pub fn effect(f: impl Fn() + 'static) {
+pub fn effect(f: impl Fn() + 'static) -> EffectHandle {
     let location = Location::caller();
     let callback = Shared::from(Rc::new(f) as Rc<dyn Fn()>);
     let effect = Effect::new(location, callback);
     run_effect(&effect, location);
+    EffectHandle::new(effect)
 }
 
 pub(crate) fn run_effect(effect: &Shared<Effect>, location: &'static Location<'static>) {
+    if effect.is_cancelled() {
+        return;
+    }
+
     #[cfg(debug_assertions)]
     {
         let config = get_config();
