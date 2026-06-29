@@ -8,6 +8,7 @@ use std::{
 };
 
 use crate::{Component, ComponentID, Shared, component_id, prop::Props};
+use nestix_signal::{EffectHandle, effect};
 
 /// A value that can mount itself into an optional parent element.
 ///
@@ -383,6 +384,20 @@ pub fn create_element<C: Component>(props: C::Props) -> Element {
             on_place_callbacks: RefCell::new(HashSet::new()),
         }),
     }
+}
+
+/// Registers a reactive side effect that is canceled when `element` unmounts.
+///
+/// The effect runs immediately and reruns when tracked signal reads change,
+/// just like [`effect`]. The returned handle can still be used to cancel the
+/// effect earlier.
+pub fn scoped_effect(element: &Element, f: impl Fn() + 'static) -> EffectHandle {
+    let handle = effect(f);
+    element.on_unmount({
+        let handle = handle.clone();
+        move || handle.cancel()
+    });
+    handle
 }
 
 /// Placement information for an element relative to host-rendered nodes.

@@ -1,6 +1,9 @@
 use std::{cell::Cell, rc::Rc};
 
-use nestix::{Element, Fragment, Layout, build_props, component, layout, mount_root, props};
+use nestix::{
+    Element, Fragment, Layout, Props, build_props, component, create_state, layout, mount_root,
+    props, scoped_effect,
+};
 
 #[props]
 struct CounterProps {
@@ -42,6 +45,23 @@ fn DefaultChildren(props: &DefaultChildrenProps) -> Element {
     }
 }
 
+struct ScopedEffectComponentProps {
+    value: nestix::State<i32>,
+    observed: Rc<Cell<i32>>,
+}
+
+impl Props for ScopedEffectComponentProps {}
+
+#[component]
+fn ScopedEffectComponent(props: &ScopedEffectComponentProps, element: &Element) {
+    scoped_effect!(
+        element,
+        [props.value, props.observed] || {
+            observed.set(value.get());
+        }
+    );
+}
+
 #[test]
 fn generated_props_and_component_can_be_mounted_directly() {
     let count = Rc::new(Cell::new(0));
@@ -73,4 +93,26 @@ fn generated_default_layout_props_start_empty() {
     };
 
     mount_root(&element);
+}
+
+#[test]
+fn scoped_effect_macro_cancels_effect_on_unmount() {
+    let value = create_state(1);
+    let observed = Rc::new(Cell::new(0));
+    let element = nestix::create_element::<ScopedEffectComponent>(ScopedEffectComponentProps {
+        value: value.clone(),
+        observed: observed.clone(),
+    });
+
+    mount_root(&element);
+
+    assert_eq!(observed.get(), 1);
+
+    value.set(2);
+    assert_eq!(observed.get(), 2);
+
+    element.unmount();
+
+    value.set(3);
+    assert_eq!(observed.get(), 2);
 }

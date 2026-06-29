@@ -5,7 +5,7 @@ use std::{
 
 use nestix::{
     Component, ComponentOutput, Element, Layout, Placement, PropValue, Props, create_element,
-    create_state, mount_root,
+    create_state, mount_root, scoped_effect,
 };
 
 struct Empty;
@@ -182,6 +182,41 @@ fn unmount_runs_callbacks_recursively_once() {
     assert_eq!(child_unmounts.get(), 1);
     assert_eq!(root_unmounts.get(), 1);
     assert!(child.parent_handle().is_none());
+}
+
+#[test]
+fn scoped_effect_is_cancelled_when_element_unmounts() {
+    let root = create_element::<Empty>(());
+    let value = create_state(1);
+    let observed = Rc::new(Cell::new(0));
+    let runs = Rc::new(Cell::new(0));
+
+    let handle = scoped_effect(&root, {
+        let value = value.clone();
+        let observed = observed.clone();
+        let runs = runs.clone();
+        move || {
+            observed.set(value.get());
+            runs.set(runs.get() + 1);
+        }
+    });
+
+    mount_root(&root);
+
+    assert_eq!(observed.get(), 1);
+    assert_eq!(runs.get(), 1);
+    assert!(!handle.is_cancelled());
+
+    value.set(2);
+    assert_eq!(observed.get(), 2);
+    assert_eq!(runs.get(), 2);
+
+    root.unmount();
+    assert!(handle.is_cancelled());
+
+    value.set(3);
+    assert_eq!(observed.get(), 2);
+    assert_eq!(runs.get(), 2);
 }
 
 #[derive(Debug, PartialEq, Eq)]
