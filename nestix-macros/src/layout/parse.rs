@@ -6,11 +6,16 @@ use syn::{
 
 use crate::clone_var::CloneVar;
 
+pub enum LayoutElementProps {
+    Build(TokenStream),
+    Direct(TokenStream),
+}
+
 pub struct LayoutItemElement {
     pub yield_token: Option<Token![yield]>,
     pub bind: Option<Ident>,
     pub ty: Type,
-    pub props_tokens: Option<TokenStream>,
+    pub props: Option<LayoutElementProps>,
     pub clone_vars: Option<Punctuated<CloneVar, Token![,]>>,
     pub args: Option<(Token![|], Punctuated<FnArg, Token![,]>, Token![|])>,
     pub children: Option<TokenStream>,
@@ -34,11 +39,17 @@ impl Parse for LayoutItemElement {
 
         let ty: Type = input.parse()?;
 
-        let props_tokens = if input.peek(token::Paren) {
+        let props = if input.peek(Token![$]) {
+            input.parse::<Token![$]>()?;
             let props_input;
             parenthesized!(props_input in input);
             let props_tokens: TokenStream = props_input.parse()?;
-            Some(props_tokens)
+            Some(LayoutElementProps::Direct(props_tokens))
+        } else if input.peek(token::Paren) {
+            let props_input;
+            parenthesized!(props_input in input);
+            let props_tokens: TokenStream = props_input.parse()?;
+            Some(LayoutElementProps::Build(props_tokens))
         } else {
             None
         };
@@ -80,7 +91,7 @@ impl Parse for LayoutItemElement {
             yield_token,
             bind,
             ty,
-            props_tokens,
+            props,
             clone_vars,
             args,
             children,

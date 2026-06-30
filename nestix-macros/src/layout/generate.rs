@@ -5,8 +5,8 @@ use syn::Ident;
 use crate::{
     clone_var::generate_clone_var,
     layout::parse::{
-        LayoutInput, LayoutItem, LayoutItemElement, LayoutItemElse, LayoutItemExpr, LayoutItemFor,
-        LayoutItemIf,
+        LayoutElementProps, LayoutInput, LayoutItem, LayoutItemElement, LayoutItemElse,
+        LayoutItemExpr, LayoutItemFor, LayoutItemIf,
     },
     util::nestix_path,
 };
@@ -119,15 +119,27 @@ fn generate_layout_item_element(
         yield_token,
         bind,
         ty,
-        props_tokens,
+        props,
         clone_vars,
         args,
         children,
     } = input;
 
-    let props_output = if props_tokens.is_some() || children.is_some() {
+    let props_output = if matches!(props, Some(LayoutElementProps::Direct(_))) {
+        if children.is_some() {
+            return Err(syn::Error::new_spanned(
+                ty,
+                "layout direct props syntax cannot add children; include children in the props value",
+            ));
+        }
+
+        match props {
+            Some(LayoutElementProps::Direct(props_tokens)) => quote! { #props_tokens },
+            _ => unreachable!(),
+        }
+    } else if props.is_some() || children.is_some() {
         let mut tokens = TokenStream::new();
-        if let Some(props_tokens) = props_tokens {
+        if let Some(LayoutElementProps::Build(props_tokens)) = props {
             props_tokens.to_tokens(&mut tokens);
 
             let last = props_tokens.clone().into_iter().last();

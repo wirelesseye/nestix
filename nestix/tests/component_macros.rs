@@ -44,7 +44,7 @@ struct ViewProps {
 
 #[props]
 struct ButtonProps {
-    #[props(nested)]
+    #[props(nested, default)]
     view_props: ViewProps,
 
     #[props(default)]
@@ -81,6 +81,11 @@ fn Wrapper(props: &WrapperProps) -> Element {
             Counter(.count = props.count.clone())
         }
     }
+}
+
+#[component]
+fn Button(props: &ButtonProps) {
+    assert_eq!(props.title.get(), "Click");
 }
 
 #[props]
@@ -137,6 +142,18 @@ fn layout_macro_mounts_nested_components_through_fragment() {
     mount_root(&element);
 
     assert_eq!(count.get(), 1);
+}
+
+#[test]
+fn layout_macro_accepts_direct_props_values() {
+    let props = build_props!(ButtonProps(
+        .title = "Click".to_string(),
+    ));
+    let element = layout! {
+        Button$(props)
+    };
+
+    mount_root(&element);
 }
 
 #[test]
