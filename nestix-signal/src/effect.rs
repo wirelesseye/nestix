@@ -5,7 +5,7 @@ use std::{
     rc::Rc,
 };
 
-use crate::{get_config, shared::Shared};
+use crate::{WeakShared, get_config, shared::Shared};
 
 thread_local! {
     static CURRENT_EFFECT: RefCell<Option<Shared<Effect>>> = RefCell::new(None);
@@ -93,9 +93,9 @@ impl Effect {
         self.batched
     }
 
-    fn cancel(&self, effect: &Shared<Effect>) {
-        self.cancelled.set(true);
-        for dependency_set in self.take_dependency_sets() {
+    fn cancel(effect: &Shared<Effect>) {
+        effect.cancelled.set(true);
+        for dependency_set in effect.take_dependency_sets() {
             dependency_set.borrow_mut().remove(effect);
         }
         end_effect(effect);
@@ -108,12 +108,14 @@ impl Effect {
 /// when the effect should stop rerunning and unsubscribe from its dependencies.
 #[derive(Clone)]
 pub struct EffectHandle {
-    effect: Shared<Effect>,
+    effect: WeakShared<Effect>,
 }
 
 impl EffectHandle {
     fn new(effect: Shared<Effect>) -> Self {
-        Self { effect }
+        Self {
+            effect: effect.downgrade(),
+        }
     }
 
     /// Cancels this effect and removes it from all currently tracked
@@ -121,12 +123,18 @@ impl EffectHandle {
     ///
     /// Calling `cancel` more than once is harmless.
     pub fn cancel(&self) {
-        self.effect.cancel(&self.effect);
+        if let Some(effect) = self.effect.upgrade() {
+            Effect::cancel(&effect);
+        }
     }
 
     /// Returns whether this effect has been canceled.
     pub fn is_cancelled(&self) -> bool {
-        self.effect.is_cancelled()
+        if let Some(effect) = self.effect.upgrade() {
+            effect.is_cancelled()
+        } else {
+            true
+        }
     }
 }
 

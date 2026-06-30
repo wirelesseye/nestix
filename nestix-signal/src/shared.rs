@@ -1,4 +1,4 @@
-use std::{any::Any, fmt::Debug, hash::Hash, ops::Deref, rc::Rc};
+use std::{any::Any, fmt::Debug, hash::Hash, ops::Deref, rc::{Rc, Weak}};
 
 /// A reference-counted pointer that compares and hashes by pointer identity.
 ///
@@ -14,6 +14,11 @@ impl<T> Shared<T> {
         Self {
             value: Rc::new(value),
         }
+    }
+
+    pub fn downgrade(&self) -> WeakShared<T> {
+        let value = Rc::downgrade(&self.value);
+        WeakShared { value }
     }
 }
 
@@ -71,5 +76,38 @@ impl<T: ?Sized> Debug for Shared<T> {
         f.debug_struct("Shared")
             .field("ptr", &Rc::as_ptr(&self.value))
             .finish()
+    }
+}
+
+/// Weak version of [`Shared`].
+pub struct WeakShared<T: ?Sized> {
+    value: Weak<T>,
+}
+
+impl<T: ?Sized> WeakShared<T> {
+    pub fn upgrade(&self) -> Option<Shared<T>> {
+        self.value.upgrade().map(|value| Shared { value })
+    }
+}
+
+impl<T: ?Sized> PartialEq for WeakShared<T> {
+    fn eq(&self, other: &Self) -> bool {
+        Weak::ptr_eq(&self.value, &other.value)
+    }
+}
+
+impl<T: ?Sized> Eq for WeakShared<T> {}
+
+impl<T: ?Sized> Hash for WeakShared<T> {
+    fn hash<H: std::hash::Hasher>(&self, state: &mut H) {
+        self.value.as_ptr().hash(state);
+    }
+}
+
+impl<T: ?Sized> Clone for WeakShared<T> {
+    fn clone(&self) -> Self {
+        Self {
+            value: self.value.clone(),
+        }
     }
 }
