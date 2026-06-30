@@ -69,6 +69,12 @@ struct PositionedButtonProps {
     view_props: PositionedViewProps,
 }
 
+#[props]
+struct OuterProps {
+    #[props(nested)]
+    button_props: ButtonProps,
+}
+
 #[props(default)]
 struct OptionalProps {
     label: Option<String>,
@@ -179,7 +185,9 @@ fn generated_props_can_set_grouped_fields() {
 
 #[test]
 fn generated_props_can_build_nested_fields() {
-    let view_props = ButtonProps::view_props_builder()
+    let button_builder = ButtonProps::builder().title(nestix::prop_value!("Click".to_string()));
+    let view_props = button_builder
+        .view_props_builder()
         .margin(nestix::prop_value!(2.0f32))
         .build();
     assert_eq!(view_props.margin.get(), 2.0);
@@ -207,7 +215,8 @@ fn generated_props_can_build_nested_fields() {
 
 #[test]
 fn generated_props_can_build_nested_fields_with_start_args() {
-    let view_props = PositionedButtonProps::view_props_builder(1, 2.0)
+    let view_props = PositionedButtonProps::builder()
+        .view_props_builder(1, 2.0)
         .margin(nestix::prop_value!(3.0f32))
         .build();
     assert_eq!(view_props.x.get(), 1);
@@ -225,6 +234,21 @@ fn generated_props_can_build_nested_fields_with_start_args() {
     assert_eq!(props.view_props.x.get(), 4);
     assert_eq!(props.view_props.y.get(), 5.0);
     assert_eq!(props.view_props.margin.get(), 6.0);
+}
+
+#[test]
+fn generated_props_can_build_nested_fields_inside_nested_fields() {
+    let props = build_props!(OuterProps(
+        .button_props(
+            .view_props(
+                .margin = 7.0f32,
+            ),
+            .title = "Nested".to_string(),
+        ),
+    ));
+
+    assert_eq!(props.button_props.view_props.margin.get(), 7.0);
+    assert_eq!(props.button_props.title.get(), "Nested");
 }
 
 #[test]

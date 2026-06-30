@@ -512,10 +512,35 @@ fn generate_builder(ctx: &Context) -> Result<TokenStream, syn::Error> {
         }
 
         if field_feature.nested {
+            let mut method_type_bounds = if generic_bounds.is_empty() {
+                TokenStream::new()
+            } else {
+                quote! {
+                    #generic_bounds,
+                }
+            };
+            let mut method_generics_params = if user_generic_args.is_empty() {
+                TokenStream::new()
+            } else {
+                quote! {
+                    #user_generic_args,
+                }
+            };
+
+            for builder_field in builder_fields.iter() {
+                let builder_field_ident = builder_field.ident.as_ref().unwrap();
+                let type_param_ident =
+                    format_ident!("{}State", builder_field_ident.to_case(Case::Pascal));
+                quote! {#type_param_ident,}.to_tokens(&mut method_type_bounds);
+                quote! {#type_param_ident,}.to_tokens(&mut method_generics_params);
+            }
+
             let mut nested_builder_params = TokenStream::new();
             let mut nested_builder_args = TokenStream::new();
+            let mut nested_builder_param_prefix = TokenStream::new();
 
             if let Some(inputs) = &field_feature.nested_inputs {
+                quote! {,}.to_tokens(&mut nested_builder_param_prefix);
                 quote! {
                     #inputs,
                 }
@@ -540,9 +565,11 @@ fn generate_builder(ctx: &Context) -> Result<TokenStream, syn::Error> {
             }
 
             quote! {
-                #[doc(hidden)]
-                pub fn #nested_builder_ident(#nested_builder_params) -> <#field_ty as #nestix_path::HasBuilder>::Builder {
-                    <#field_ty>::builder(#nested_builder_args)
+                impl<#method_type_bounds> #builder_ident<#method_generics_params> {
+                    #[doc(hidden)]
+                    pub fn #nested_builder_ident(&self #nested_builder_param_prefix #nested_builder_params) -> <#field_ty as #nestix_path::HasBuilder>::Builder {
+                        <#field_ty>::builder(#nested_builder_args)
+                    }
                 }
             }
             .to_tokens(&mut nested_builder_methods);
@@ -679,6 +706,7 @@ fn generate_builder(ctx: &Context) -> Result<TokenStream, syn::Error> {
 
             #builder_field_methods
             #builder_group_methods
+            #nested_builder_methods
 
             impl<#buildable_generic_params> #builder_ident<#builder_generic_args>
             {
@@ -695,8 +723,6 @@ fn generate_builder(ctx: &Context) -> Result<TokenStream, syn::Error> {
         #builder_use
 
         impl<#generic_bounds> #ident <#user_generic_args> {
-            #nested_builder_methods
-
             pub fn builder(#start_params) -> #builder_ident <#user_generic_args> {
                 #builder_ident::new(#start_args)
             }
