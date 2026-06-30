@@ -393,10 +393,12 @@ pub fn create_element<C: Component>(props: C::Props) -> Element {
 /// effect earlier.
 pub fn scoped_effect(element: &Element, f: impl Fn() + 'static) -> EffectHandle {
     let handle = effect(f);
-    element.on_unmount({
-        let handle = handle.clone();
-        move || handle.cancel()
-    });
+    if !handle.is_cancelled() {
+        element.on_unmount({
+            let handle = handle.clone();
+            move || handle.cancel()
+        });
+    }
     handle
 }
 
