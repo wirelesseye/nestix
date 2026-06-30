@@ -5,7 +5,7 @@ use std::{
     rc::Rc,
 };
 
-use crate::{Effect, Readonly, Shared, Signal, current_effect, run_effect, set_current_effect};
+use crate::{Effect, Readonly, Shared, Signal, current_effect, notify_effect, set_current_effect};
 
 struct ComputedData<T> {
     cached: RefCell<Option<T>>,
@@ -98,14 +98,14 @@ pub fn computed<T: 'static>(compute: impl Fn() -> T + 'static) -> Computed<T> {
     let dependents = Shared::new(RefCell::new(HashSet::new()));
     let dirty = Rc::new(Cell::new(true));
 
-    let runner = Effect::new(location, {
+    let runner = Effect::new_unbatched(location, {
         let dirty = dirty.clone();
         let dependents = dependents.clone();
         Shared::from(Rc::new(move || {
             dirty.set(true);
             let dependents = dependents.borrow().clone();
             for effect in dependents {
-                run_effect(&effect, location);
+                notify_effect(&effect, location);
             }
         }) as Rc<dyn Fn()>)
     });

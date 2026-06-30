@@ -1,6 +1,6 @@
 use std::{cell::Cell, rc::Rc};
 
-use nestix_signal::{Readonly, Signal, computed, create_state, effect, untrack};
+use nestix_signal::{Readonly, Signal, batch, computed, create_state, effect, untrack};
 
 #[test]
 fn state_notifies_effects_when_value_changes() {
@@ -133,6 +133,137 @@ fn state_update_and_mutate_notify_dependents() {
 
     values.mutate(|values| values.push(4));
     assert_eq!(total.get(), 10);
+}
+
+#[test]
+fn batch_coalesces_multiple_updates_until_it_finishes() {
+    let count = create_state(1);
+    let observed = Rc::new(Cell::new(0));
+    let runs = Rc::new(Cell::new(0));
+
+    effect({
+        let count = count.clone();
+        let observed = observed.clone();
+        let runs = runs.clone();
+        move || {
+            runs.set(runs.get() + 1);
+            observed.set(count.get());
+        }
+    });
+
+    assert_eq!(observed.get(), 1);
+    assert_eq!(runs.get(), 1);
+
+    let returned = batch(|| {
+        count.set(2);
+        count.set(3);
+
+        assert_eq!(count.get(), 3);
+        assert_eq!(observed.get(), 1);
+        assert_eq!(runs.get(), 1);
+
+        "done"
+    });
+
+    assert_eq!(returned, "done");
+    assert_eq!(observed.get(), 3);
+    assert_eq!(runs.get(), 2);
+}
+
+#[test]
+fn nested_batches_flush_only_after_the_outer_batch_finishes() {
+    let count = create_state(1);
+    let observed = Rc::new(Cell::new(0));
+    let runs = Rc::new(Cell::new(0));
+
+    effect({
+        let count = count.clone();
+        let observed = observed.clone();
+        let runs = runs.clone();
+        move || {
+            runs.set(runs.get() + 1);
+            observed.set(count.get());
+        }
+    });
+
+    batch(|| {
+        count.set(2);
+
+        batch(|| {
+            count.set(3);
+        });
+
+        assert_eq!(observed.get(), 1);
+        assert_eq!(runs.get(), 1);
+    });
+
+    assert_eq!(observed.get(), 3);
+    assert_eq!(runs.get(), 2);
+}
+
+#[test]
+fn computed_values_stay_fresh_inside_batches() {
+    let count = create_state(1);
+    let evaluations = Rc::new(Cell::new(0));
+    let doubled = computed({
+        let count = count.clone();
+        let evaluations = evaluations.clone();
+        move || {
+            evaluations.set(evaluations.get() + 1);
+            count.get() * 2
+        }
+    });
+    let observed = Rc::new(Cell::new(0));
+    let runs = Rc::new(Cell::new(0));
+
+    effect({
+        let doubled = doubled.clone();
+        let observed = observed.clone();
+        let runs = runs.clone();
+        move || {
+            runs.set(runs.get() + 1);
+            observed.set(doubled.get());
+        }
+    });
+
+    assert_eq!(observed.get(), 2);
+    assert_eq!(evaluations.get(), 1);
+    assert_eq!(runs.get(), 1);
+
+    batch(|| {
+        count.set(2);
+
+        assert_eq!(doubled.get(), 4);
+        assert_eq!(evaluations.get(), 2);
+        assert_eq!(observed.get(), 2);
+        assert_eq!(runs.get(), 1);
+    });
+
+    assert_eq!(observed.get(), 4);
+    assert_eq!(evaluations.get(), 2);
+    assert_eq!(runs.get(), 2);
+}
+
+#[test]
+fn cancelled_effects_do_not_run_when_a_batch_flushes() {
+    let count = create_state(1);
+    let runs = Rc::new(Cell::new(0));
+
+    let handle = effect({
+        let count = count.clone();
+        let runs = runs.clone();
+        move || {
+            count.get();
+            runs.set(runs.get() + 1);
+        }
+    });
+
+    batch(|| {
+        count.set(2);
+        handle.cancel();
+    });
+
+    assert_eq!(runs.get(), 1);
 }
 
 #[test]

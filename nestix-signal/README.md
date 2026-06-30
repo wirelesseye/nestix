@@ -18,6 +18,8 @@ crate.
 - `computed` derives lazily evaluated values from other signals.
 - `effect` runs side effects immediately and reruns them when tracked
   dependencies change.
+- `batch` groups multiple state updates so dependent effects rerun once after
+  the batch completes.
 - `Readonly` exposes any signal through a cloneable read-only handle.
 - `Signal` supports generic and boxed readable signal values.
 - `untrack` reads signals without subscribing the current effect or computed
@@ -88,6 +90,25 @@ assert_eq!(items.get(), vec![1, 2, 3, 4]);
 `State::set` notifies dependents only when the new value is different.
 `State::set_unchecked`, `State::update`, and `State::mutate` always notify after
 storing the new value.
+
+## Batching
+
+Use `batch` to group several writes into a single effect flush:
+
+```rust
+use nestix_signal::{batch, create_state};
+
+let count = create_state(0);
+
+batch(|| {
+    count.set(1);
+    count.set(2);
+});
+```
+
+Effects that depend on changed state rerun once after the outermost batch
+finishes. Computed values are invalidated immediately, so reads inside the batch
+still observe current derived values.
 
 ## Effects
 

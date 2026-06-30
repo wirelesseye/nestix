@@ -5,7 +5,7 @@ use std::{
     rc::Rc,
 };
 
-use crate::{Effect, Readonly, Signal, current_effect, run_effect, shared::Shared};
+use crate::{Effect, Readonly, Signal, current_effect, notify_effect, shared::Shared};
 
 #[derive(Debug)]
 struct StateData<T> {
@@ -42,7 +42,7 @@ impl<T> State<T> {
 
         let dependents = self.data.dependents.borrow().clone();
         for effect in dependents {
-            run_effect(&effect, location);
+            notify_effect(&effect, location);
         }
     }
 
@@ -60,7 +60,7 @@ impl<T> State<T> {
 
         let dependents = self.data.dependents.borrow().clone();
         for effect in dependents {
-            run_effect(&effect, location);
+            notify_effect(&effect, location);
         }
     }
 
@@ -74,7 +74,7 @@ impl<T> State<T> {
         }
         let dependents = self.data.dependents.borrow().clone();
         for effect in dependents {
-            run_effect(&effect, location);
+            notify_effect(&effect, location);
         }
     }
 }
