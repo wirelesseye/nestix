@@ -4,12 +4,12 @@ use convert_case::{Case, Casing};
 use proc_macro2::{Span, TokenStream};
 use quote::{ToTokens, format_ident, quote};
 use syn::{
-    Expr, FnArg, GenericParam, Ident, Index, ItemStruct, Meta, Token, Type, TypePath, Visibility,
+    Expr, FnArg, GenericParam, Ident, ItemStruct, Meta, Token, Type, TypePath, Visibility,
     parse_quote, punctuated::Punctuated, spanned::Spanned,
 };
 
 use crate::{
-    props::parse::{Extends, Extensible, Group, PropsAttr, PropsFieldAttr},
+    props::parse::{Group, PropsAttr, PropsFieldAttr},
     util::{IdentExt, nestix_path},
 };
 
@@ -18,16 +18,17 @@ struct Context {
     field_features: Vec<FieldFeature>,
     generic_bounds: Punctuated<GenericParam, Token![,]>,
     user_generic_args: Punctuated<GenericParam, Token![,]>,
-    extensible: Option<Extensible>,
     groups: Vec<Group>,
     debug: bool,
+    default: bool,
 }
 
 struct FieldFeature {
     default: bool,
     default_value: Option<Expr>,
     start: bool,
-    extends: Option<Extends>,
+    nested: bool,
+    nested_inputs: Option<Punctuated<FnArg, Token![,]>>,
 }
 
 fn is_option_ty(ty: &Type) -> bool {
@@ -100,42 +101,40 @@ fn preprocess(input: ItemStruct, attr: PropsAttr) -> Result<Context, syn::Error>
         let field_attr = field_attrs.into_iter().reduce(PropsFieldAttr::merge);
 
         let field_feature = if let Some(field_attr) = &field_attr {
-            let extends = field_attr.extends.clone();
             let start = field_attr.start.is_some();
             let default = field_attr.default.is_some();
             let default_value = field_attr.default_value.clone();
+            let nested = field_attr.nested.is_some();
+            let nested_inputs = field_attr
+                .nested
+                .as_ref()
+                .and_then(|nested| nested.inputs.clone());
 
-            if extends.is_some() {
-                if let Some(start) = &field_attr.start {
-                    return Err(syn::Error::new(
-                        start.span(),
-                        "extends field cannot be start field",
-                    ));
-                }
-                if let Some(default) = &field_attr.default {
-                    return Err(syn::Error::new(
-                        default.span(),
-                        "extends field cannot be default field",
-                    ));
-                }
+            if nested && start {
+                return Err(syn::Error::new(
+                    field_attr.nested.as_ref().unwrap().ident.span(),
+                    "nested field cannot be start field",
+                ));
             }
 
             FieldFeature {
                 start,
-                extends,
                 default,
                 default_value,
+                nested,
+                nested_inputs,
             }
         } else {
             FieldFeature {
                 start: false,
-                extends: None,
                 default: option,
                 default_value: None,
+                nested: false,
+                nested_inputs: None,
             }
         };
 
-        if field_feature.extends.is_none() {
+        if !field_feature.nested {
             let ty = &field.ty;
             let path = parse_quote!(#nestix_path::PropValue<#ty>);
             field.ty = Type::Path(TypePath {
@@ -216,13 +215,12 @@ fn preprocess(input: ItemStruct, attr: PropsAttr) -> Result<Context, syn::Error>
                     "props group fields cannot be start fields",
                 ));
             }
-            if field_feature.extends.is_some() {
+            if field_feature.nested {
                 return Err(syn::Error::new(
                     group_field.span(),
-                    "props group fields cannot be extends fields",
+                    "props group fields cannot be nested fields",
                 ));
             }
-
             if let Some(group_ty) = group_ty {
                 if group_ty.to_token_stream().to_string() != field.ty.to_token_stream().to_string()
                 {
@@ -237,14 +235,27 @@ fn preprocess(input: ItemStruct, attr: PropsAttr) -> Result<Context, syn::Error>
         }
     }
 
+    if attr.default.is_some() {
+        for (i, field_feature) in field_features.iter().enumerate() {
+            if field_feature.start || !field_feature.default {
+                let field = item_struct.fields.iter().nth(i).unwrap();
+                let field_ident = field.ident.as_ref().unwrap();
+                return Err(syn::Error::new(
+                    field_ident.span(),
+                    "props default requires every field to have a default or be Option",
+                ));
+            }
+        }
+    }
+
     Ok(Context {
         item_struct,
         field_features,
         generic_bounds: attr.generic_bounds,
         user_generic_args,
-        extensible: attr.extensible,
         groups: attr.groups,
         debug: attr.debug,
+        default: attr.default.is_some(),
     })
 }
 
@@ -255,7 +266,6 @@ fn generate_builder(ctx: &Context) -> Result<TokenStream, syn::Error> {
         field_features,
         generic_bounds,
         user_generic_args,
-        extensible,
         groups,
         ..
     } = ctx;
@@ -269,26 +279,13 @@ fn generate_builder(ctx: &Context) -> Result<TokenStream, syn::Error> {
 
     let builder_ident = format_ident!("{}Builder", ident);
     let builder_mod_ident = builder_ident.to_case(Case::Snake);
-    let builder_ext_ident = format_ident!("{}BuilderExt", ident);
-    let builder_wrapper_ident = extensible
-        .as_ref()
-        .map(|extensible| extensible.wrapper_ident.clone())
-        .unwrap_or_else(|| format_ident!("{}Wrapper", builder_ident));
 
     let mut builder_fields = fields.clone();
     for (i, field) in builder_fields.iter_mut().enumerate() {
-        let field_ident = field.ident.as_ref().unwrap();
         let field_ty = &field.ty;
         let field_feature = &field_features[i];
 
-        if field_feature.extends.is_some() {
-            let ident_pascal_string = field_ident.to_string().to_case(Case::Pascal);
-            let path = syn::parse_str(&format!("{}State", ident_pascal_string))?;
-            field.ty = Type::Path(TypePath {
-                qself: None,
-                path: path,
-            });
-        } else if !field_feature.start && !field_feature.default {
+        if !field_feature.start && !field_feature.default {
             let path = parse_quote!(Option<#field_ty>);
             field.ty = Type::Path(TypePath {
                 qself: None,
@@ -323,9 +320,7 @@ fn generate_builder(ctx: &Context) -> Result<TokenStream, syn::Error> {
     let mut builder_build_fields = TokenStream::new();
     let mut builder_field_methods = TokenStream::new();
     let mut builder_group_methods = TokenStream::new();
-    let mut builder_ext_traits = TokenStream::new();
-    let mut builder_ext_impls = TokenStream::new();
-    let mut builder_impl_wrappers = TokenStream::new();
+    let mut nested_builder_methods = TokenStream::new();
 
     for (i, field) in fields.iter().enumerate() {
         let field_ident = field.ident.as_ref().unwrap();
@@ -338,67 +333,31 @@ fn generate_builder(ctx: &Context) -> Result<TokenStream, syn::Error> {
         let is_set_ident = Ident::new(&format!("{}IsSet", ident_pascal_string), Span::call_site());
         let can_set_ident =
             Ident::new(&format!("{}CanSet", ident_pascal_string), Span::call_site());
-        let mut extended_start_args = TokenStream::new();
+        let nested_builder_ident = format_ident!("{}_builder", field_ident);
 
-        if let Some(extends) = &field_feature.extends {
-            quote! {
-                #state_ident=<#field_ty as #nestix_path::HasBuilder>::Builder,
-            }
-            .to_tokens(&mut builder_generic_params);
-            quote! {
-                #state_ident: Buildable<Output = #field_ty>,
-            }
-            .to_tokens(&mut buildable_generic_params);
+        quote! {
+            pub trait #is_set_ident {}
 
-            if let Some(inputs) = &extends.inputs {
-                quote! {
-                    #inputs,
-                }
-                .to_tokens(&mut start_params);
+            impl #is_set_ident for Set {}
 
-                let super_start_args = inputs
-                    .iter()
-                    .map(|fn_arg| match fn_arg {
-                        FnArg::Receiver(_) => {
-                            return Err(syn::Error::new(fn_arg.span(), "unexpected self argument"));
-                        }
-                        FnArg::Typed(pat_type) => Ok(&pat_type.pat),
-                    })
-                    .collect::<Result<Punctuated<_, Token![,]>, _>>()?;
-                quote! {
-                    #super_start_args,
-                }
-                .to_tokens(&mut start_args);
-                quote! {
-                    #super_start_args,
-                }
-                .to_tokens(&mut extended_start_args);
-            }
-        } else {
-            quote! {
-                pub trait #is_set_ident {}
+            impl #is_set_ident for Defaulted {}
 
-                impl #is_set_ident for Set {}
+            pub trait #can_set_ident {}
 
-                impl #is_set_ident for Defaulted {}
+            impl #can_set_ident for Unset {}
 
-                pub trait #can_set_ident {}
-
-                impl #can_set_ident for Unset {}
-
-                impl #can_set_ident for Defaulted {}
-            }
-            .to_tokens(&mut marker_traits);
-
-            if field_feature.start {
-                quote! {#state_ident=Set,}.to_tokens(&mut builder_generic_params);
-            } else if field_feature.default {
-                quote! {#state_ident=Defaulted,}.to_tokens(&mut builder_generic_params);
-            } else {
-                quote! {#state_ident=Unset,}.to_tokens(&mut builder_generic_params);
-            }
-            quote! {#state_ident: #is_set_ident,}.to_tokens(&mut buildable_generic_params);
+            impl #can_set_ident for Defaulted {}
         }
+        .to_tokens(&mut marker_traits);
+
+        if field_feature.start {
+            quote! {#state_ident=Set,}.to_tokens(&mut builder_generic_params);
+        } else if field_feature.default {
+            quote! {#state_ident=Defaulted,}.to_tokens(&mut builder_generic_params);
+        } else {
+            quote! {#state_ident=Unset,}.to_tokens(&mut builder_generic_params);
+        }
+        quote! {#state_ident: #is_set_ident,}.to_tokens(&mut buildable_generic_params);
 
         quote! {#state_ident,}.to_tokens(&mut generated_generic_args);
 
@@ -429,23 +388,20 @@ fn generate_builder(ctx: &Context) -> Result<TokenStream, syn::Error> {
                 quote! {std::default::Default::default()}
             };
 
-            quote! {
-                #field_ident: #nestix_path::PropValue::from_plain(#default_value),
+            if field_feature.nested {
+                quote! {
+                    #field_ident: #default_value,
+                }
+                .to_tokens(&mut builder_default_fields);
+            } else {
+                quote! {
+                    #field_ident: #nestix_path::PropValue::from_plain(#default_value),
+                }
+                .to_tokens(&mut builder_default_fields);
             }
-            .to_tokens(&mut builder_default_fields);
 
             quote! {
                 #field_ident: self.#field_ident,
-            }
-            .to_tokens(&mut builder_build_fields);
-        } else if field_feature.extends.is_some() {
-            quote! {
-                #field_ident: <#field_ty as #nestix_path::HasBuilder>::Builder::new(#extended_start_args),
-            }
-            .to_tokens(&mut builder_default_fields);
-
-            quote! {
-                #field_ident: self.#field_ident.build(),
             }
             .to_tokens(&mut builder_build_fields);
         } else {
@@ -482,22 +438,39 @@ fn generate_builder(ctx: &Context) -> Result<TokenStream, syn::Error> {
                     #user_generic_args,
                 }
             };
-            let mut state_params_without_self = TokenStream::new();
-
-            let mut with_new_inner_params = TokenStream::new();
-            let mut remainder_types = TokenStream::new();
-            let mut remainder_idents = Vec::<&Ident>::new();
-
             let mut method_fields = TokenStream::new();
+            let convert_value = if field_feature.nested {
+                quote! {
+                    let value = <Value as #nestix_path::NestedValue<#field_ty>>::into_nested_value(value);
+                }
+            } else {
+                quote! {}
+            };
+            let method_value_generic = if field_feature.nested {
+                quote! {<Value>}
+            } else {
+                quote! {}
+            };
+            let method_value_ty = if field_feature.nested {
+                quote! {Value}
+            } else {
+                quote! {#field_ty}
+            };
+            let method_where_clause = if field_feature.nested {
+                quote! {
+                    where
+                        Value: #nestix_path::NestedValue<#field_ty>,
+                }
+            } else {
+                quote! {}
+            };
             for (j, builder_field) in builder_fields.iter().enumerate() {
                 let builder_field_ident = builder_field.ident.as_ref().unwrap();
-                let builder_field_ty = &builder_field.ty;
 
                 if i == j {
                     quote! {#state_ident: #can_set_ident,}.to_tokens(&mut method_type_bounds);
                     quote! {#state_ident,}.to_tokens(&mut method_generics_params);
                     quote! {Set,}.to_tokens(&mut method_result_type_args);
-                    quote! {NewInner,}.to_tokens(&mut with_new_inner_params);
                     if field_feature.default {
                         quote! {
                             #builder_field_ident: value,
@@ -513,12 +486,8 @@ fn generate_builder(ctx: &Context) -> Result<TokenStream, syn::Error> {
                     let type_param_ident =
                         format_ident!("{}State", builder_field_ident.to_case(Case::Pascal));
                     quote! {#type_param_ident,}.to_tokens(&mut method_type_bounds);
-                    quote! {#type_param_ident,}.to_tokens(&mut state_params_without_self);
                     quote! {#type_param_ident,}.to_tokens(&mut method_generics_params);
                     quote! {#type_param_ident,}.to_tokens(&mut method_result_type_args);
-                    quote! {#type_param_ident,}.to_tokens(&mut with_new_inner_params);
-                    quote! {#builder_field_ty,}.to_tokens(&mut remainder_types);
-                    remainder_idents.push(builder_field_ident);
                     quote! {
                         #builder_field_ident: self.#builder_field_ident,
                     }
@@ -526,94 +495,57 @@ fn generate_builder(ctx: &Context) -> Result<TokenStream, syn::Error> {
                 }
             }
 
-            if field_feature.extends.is_none() {
-                quote! {
-                    impl<#method_type_bounds> #builder_ident<#method_generics_params> {
-                        pub fn #field_ident(self, value: #field_ty) -> #builder_ident<#method_result_type_args> {
-                            #builder_ident {
-                                #method_fields
-                                _phantom: std::marker::PhantomData,
-                            }
+            quote! {
+                impl<#method_type_bounds> #builder_ident<#method_generics_params> {
+                    pub fn #field_ident #method_value_generic (self, value: #method_value_ty) -> #builder_ident<#method_result_type_args>
+                    #method_where_clause
+                    {
+                        #convert_value
+                        #builder_ident {
+                            #method_fields
+                            _phantom: std::marker::PhantomData,
                         }
                     }
                 }
-                .to_tokens(&mut builder_field_methods);
             }
+            .to_tokens(&mut builder_field_methods);
+        }
 
-            if extensible.is_some() {
-                let ext_trait_ident = Ident::new(
-                    &format!("{}{}", builder_ext_ident, ident_pascal_string),
-                    field_ident.span(),
-                );
+        if field_feature.nested {
+            let mut nested_builder_params = TokenStream::new();
+            let mut nested_builder_args = TokenStream::new();
 
+            if let Some(inputs) = &field_feature.nested_inputs {
                 quote! {
-                    pub trait #ext_trait_ident {
-                        fn #field_ident<#method_type_bounds>(
-                            self,
-                            value: #field_ty,
-                        ) -> <Self as #builder_wrapper_ident>::With<#builder_ident<#method_result_type_args>>
-                        where
-                            Self: #builder_wrapper_ident<Inner = #builder_ident<#method_generics_params>>;
-                    }
-                }.to_tokens(&mut builder_ext_traits);
-
-                quote! {
-                    impl<W> #ext_trait_ident for W {
-                        fn #field_ident<#method_type_bounds>(
-                            self,
-                            value: #field_ty,
-                        ) -> <Self as #builder_wrapper_ident>::With<#builder_ident<#method_result_type_args>>
-                        where
-                            Self: #builder_wrapper_ident<Inner = #builder_ident<#method_generics_params>>,
-                        {
-                            let (inner, remainder) = <W as #builder_wrapper_ident>::into_parts(self);
-                            let new_inner = inner.#field_ident(value);
-                            <W as #builder_wrapper_ident>::from_parts(new_inner, remainder)
-                        }
-                    }
-                }.to_tokens(&mut builder_ext_impls);
-            }
-
-            if field_feature.extends.is_some() {
-                let mut remainder_fields = TokenStream::new();
-                let mut remainder_values = TokenStream::new();
-                let wrapper_trait = &field_feature.extends.as_ref().unwrap().wrapper_path;
-
-                for (i, ident) in remainder_idents.iter().enumerate() {
-                    let index = Index::from(i);
-
-                    quote! {self.#ident,}.to_tokens(&mut remainder_fields);
-                    quote! {#ident: remainder.#index,}.to_tokens(&mut remainder_values);
+                    #inputs,
                 }
+                .to_tokens(&mut nested_builder_params);
+
+                let builder_args = inputs
+                    .iter()
+                    .map(|fn_arg| match fn_arg {
+                        FnArg::Receiver(_) => {
+                            Err(syn::Error::new(fn_arg.span(), "unexpected self argument"))
+                        }
+                        FnArg::Typed(pat_type) => Ok(&pat_type.pat),
+                    })
+                    .collect::<Result<Vec<_>, _>>()?;
 
                 quote! {
-                    impl<#method_generics_params> #wrapper_trait for #builder_ident<#method_generics_params> {
-                        type Inner = #state_ident;
-
-                        type With<NewInner> = #builder_ident<#with_new_inner_params>;
-
-                        type Remainder = (#remainder_types);
-
-                        fn into_parts(self) -> (Self::Inner, Self::Remainder) {
-                            (
-                                self.#field_ident,
-                                (#remainder_fields),
-                            )
-                        }
-
-                        fn from_parts<NewInner>(
-                            inner: NewInner,
-                            remainder: Self::Remainder,
-                        ) -> Self::With<NewInner> {
-                            #builder_ident {
-                                #field_ident: inner,
-                                #remainder_values
-                                _phantom: std::marker::PhantomData,
-                            }
-                        }
-                    }
-                }.to_tokens(&mut builder_impl_wrappers);
+                    #(
+                        #nestix_path::prop_value!(#builder_args),
+                    )*
+                }
+                .to_tokens(&mut nested_builder_args);
             }
+
+            quote! {
+                #[doc(hidden)]
+                pub fn #nested_builder_ident(#nested_builder_params) -> <#field_ty as #nestix_path::HasBuilder>::Builder {
+                    <#field_ty>::builder(#nested_builder_args)
+                }
+            }
+            .to_tokens(&mut nested_builder_methods);
         }
     }
 
@@ -700,43 +632,6 @@ fn generate_builder(ctx: &Context) -> Result<TokenStream, syn::Error> {
             }
         }
         .to_tokens(&mut builder_group_methods);
-
-        if extensible.is_some() {
-            let group_pascal_string = group_ident.to_string().to_case(Case::Pascal);
-            let ext_trait_ident = Ident::new(
-                &format!("{}{}", builder_ext_ident, group_pascal_string),
-                group_ident.span(),
-            );
-
-            quote! {
-                pub trait #ext_trait_ident {
-                    fn #group_ident<#method_type_bounds>(
-                        self,
-                        value: #group_value_ty,
-                    ) -> <Self as #builder_wrapper_ident>::With<#builder_ident<#method_result_type_args>>
-                    where
-                        Self: #builder_wrapper_ident<Inner = #builder_ident<#method_generics_params>>;
-                }
-            }
-            .to_tokens(&mut builder_ext_traits);
-
-            quote! {
-                impl<W> #ext_trait_ident for W {
-                    fn #group_ident<#method_type_bounds>(
-                        self,
-                        value: #group_value_ty,
-                    ) -> <Self as #builder_wrapper_ident>::With<#builder_ident<#method_result_type_args>>
-                    where
-                        Self: #builder_wrapper_ident<Inner = #builder_ident<#method_generics_params>>,
-                    {
-                        let (inner, remainder) = <W as #builder_wrapper_ident>::into_parts(self);
-                        let new_inner = inner.#group_ident(value);
-                        <W as #builder_wrapper_ident>::from_parts(new_inner, remainder)
-                    }
-                }
-            }
-            .to_tokens(&mut builder_ext_impls);
-        }
     }
 
     match &mut builder_fields {
@@ -757,39 +652,17 @@ fn generate_builder(ctx: &Context) -> Result<TokenStream, syn::Error> {
         }
     };
 
-    let builder_wrapper_trait = if extensible.is_some() {
-        quote! {
-            pub trait #builder_wrapper_ident {
-                type Inner;
-                type With<NewInner>;
-                type Remainder;
-
-                fn into_parts(self) -> (Self::Inner, Self::Remainder);
-
-                fn from_parts<NewInner>(
-                    inner: NewInner,
-                    remainder: Self::Remainder,
-                ) -> Self::With<NewInner>;
-            }
-        }
-    } else {
-        quote! {}
-    };
-
-    let builder_use = if extensible.is_some() {
-        quote! {
-            #vis use #builder_mod_ident::{#builder_ident, #builder_wrapper_ident};
-        }
-    } else {
-        quote! {
-            #vis use #builder_mod_ident::#builder_ident;
-        }
+    let builder_use = quote! {
+        #vis use #builder_mod_ident::#builder_ident;
     };
 
     Ok(quote! {
         #vis mod #builder_mod_ident {
             use super::*;
-            use #nestix_path::__builder_internal::*;
+
+            pub struct Set;
+            pub struct Unset;
+            pub struct Defaulted;
 
             #marker_traits
 
@@ -817,27 +690,13 @@ fn generate_builder(ctx: &Context) -> Result<TokenStream, syn::Error> {
                 }
             }
 
-            impl<#buildable_generic_params> Buildable for #builder_ident<#builder_generic_args>
-            {
-                type Output = #ident <#user_generic_args>;
-
-                fn build(self) -> #ident <#user_generic_args> {
-                    self.build()
-                }
-            }
-
-            #builder_impl_wrappers
-
-            #builder_wrapper_trait
-
-            #builder_ext_traits
-
-            #builder_ext_impls
         }
 
         #builder_use
 
         impl<#generic_bounds> #ident <#user_generic_args> {
+            #nested_builder_methods
+
             pub fn builder(#start_params) -> #builder_ident <#user_generic_args> {
                 #builder_ident::new(#start_args)
             }
@@ -854,45 +713,13 @@ pub fn generate_props(input: ItemStruct, attr: PropsAttr) -> Result<TokenStream,
     let ctx = preprocess(input, attr)?;
     let Context {
         item_struct,
-        field_features,
         generic_bounds,
         user_generic_args,
-        extensible,
         debug,
+        default,
         ..
     } = &ctx;
-    let ItemStruct {
-        vis, ident, fields, ..
-    } = &item_struct;
-
-    let mut extends_trait_methods = TokenStream::new();
-    let mut impl_super_traits_output = TokenStream::new();
-
-    let ident_snake = ident.to_case(Case::Snake);
-    for (i, field) in fields.iter().enumerate() {
-        let field_ident = field.ident.as_ref().unwrap();
-        let field_ty = &field.ty;
-        let field_feature = &field_features[i];
-
-        if let Some(extends) = &field_feature.extends {
-            let extends_trait = &extends.trait_path;
-            quote! {
-                impl<#generic_bounds> #extends_trait for #ident <#user_generic_args> {
-                    fn #field_ident(&self) -> &#field_ty {
-                        &self.#field_ident
-                    }
-                }
-            }
-            .to_tokens(&mut impl_super_traits_output);
-        }
-
-        quote! {
-            fn #field_ident(&self) -> &#field_ty {
-                &self.#ident_snake().#field_ident
-            }
-        }
-        .to_tokens(&mut extends_trait_methods);
-    }
+    let ItemStruct { ident, .. } = &item_struct;
 
     let impl_debug_output = if *debug {
         quote! {
@@ -904,27 +731,18 @@ pub fn generate_props(input: ItemStruct, attr: PropsAttr) -> Result<TokenStream,
         quote! {}
     };
 
-    let extends_trait_output = if let Some(extensible) = extensible {
-        let extends_trait_ident = &extensible.trait_ident;
-        let ident_snake = ident.to_case(Case::Snake);
+    let builder_output = generate_builder(&ctx)?;
+    let default_output = if *default {
         quote! {
-            #vis trait #extends_trait_ident <#generic_bounds> {
-                fn #ident_snake(&self) -> &#ident <#user_generic_args>;
-
-                #extends_trait_methods
-            }
-
-            impl<#generic_bounds> #extends_trait_ident <#user_generic_args> for #ident <#user_generic_args> {
-                fn #ident_snake(&self) -> &#ident <#user_generic_args> {
-                    self
+            impl<#generic_bounds> std::default::Default for #ident <#user_generic_args> {
+                fn default() -> Self {
+                    Self::builder().build()
                 }
             }
         }
     } else {
         quote! {}
     };
-
-    let builder_output = generate_builder(&ctx)?;
 
     Ok(quote! {
         #item_struct
@@ -933,9 +751,7 @@ pub fn generate_props(input: ItemStruct, attr: PropsAttr) -> Result<TokenStream,
             #impl_debug_output
         }
 
-        #impl_super_traits_output
-
-        #extends_trait_output
+        #default_output
 
         #builder_output
     })

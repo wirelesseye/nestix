@@ -1,19 +1,14 @@
 use syn::{
-    Expr, FnArg, GenericParam, Ident, Path, Token, bracketed, parenthesized, parse::Parse,
-    punctuated::Punctuated, token::Paren,
+    Expr, FnArg, GenericParam, Ident, Token, bracketed, parenthesized, parse::Parse,
+    punctuated::Punctuated,
 };
 
 #[derive(Default)]
 pub struct PropsAttr {
     pub debug: bool,
+    pub default: Option<Ident>,
     pub generic_bounds: Punctuated<GenericParam, Token![,]>,
-    pub extensible: Option<Extensible>,
     pub groups: Vec<Group>,
-}
-
-pub struct Extensible {
-    pub trait_ident: Ident,
-    pub wrapper_ident: Ident,
 }
 
 pub struct Group {
@@ -46,22 +41,12 @@ impl Parse for PropsAttr {
             let ident: Ident = input.parse()?;
             match ident.to_string().as_str() {
                 "debug" => attr.debug = true,
+                "default" => attr.default = Some(ident),
                 "bounds" => {
                     let inner;
                     parenthesized!(inner in input);
                     attr.generic_bounds =
                         Punctuated::<GenericParam, Token![,]>::parse_terminated(&inner)?;
-                }
-                "extensible" => {
-                    let inner;
-                    parenthesized!(inner in input);
-                    let trait_ident: Ident = inner.parse()?;
-                    inner.parse::<Token![,]>()?;
-                    let wrapper_ident: Ident = inner.parse()?;
-                    attr.extensible = Some(Extensible {
-                        trait_ident,
-                        wrapper_ident,
-                    });
                 }
                 "group" => {
                     let inner;
@@ -85,41 +70,17 @@ impl Parse for PropsAttr {
     }
 }
 
-#[derive(Clone)]
-pub struct Extends {
-    pub trait_path: Path,
-    pub wrapper_path: Path,
-    pub inputs: Option<Punctuated<FnArg, Token![,]>>,
-}
-
-impl Parse for Extends {
-    fn parse(input: syn::parse::ParseStream) -> syn::Result<Self> {
-        let trait_path: Path = input.parse()?;
-        input.parse::<Token![,]>()?;
-        let wrapper_path: Path = input.parse()?;
-
-        let inputs = if input.peek(Paren) {
-            let inner;
-            parenthesized!(inner in input);
-            let inputs = Punctuated::<FnArg, Token![,]>::parse_terminated(&inner)?;
-            Some(inputs)
-        } else {
-            None
-        };
-
-        Ok(Self {
-            trait_path,
-            wrapper_path,
-            inputs,
-        })
-    }
-}
-
 pub struct PropsFieldAttr {
     pub default: Option<Ident>,
     pub default_value: Option<Expr>,
     pub start: Option<Ident>,
-    pub extends: Option<Extends>,
+    pub nested: Option<Nested>,
+}
+
+#[derive(Clone)]
+pub struct Nested {
+    pub ident: Ident,
+    pub inputs: Option<Punctuated<FnArg, Token![,]>>,
 }
 
 impl Default for PropsFieldAttr {
@@ -128,7 +89,7 @@ impl Default for PropsFieldAttr {
             default: None,
             default_value: None,
             start: None,
-            extends: None,
+            nested: None,
         }
     }
 }
@@ -148,7 +109,12 @@ impl PropsFieldAttr {
             (Some(start), None) => Some(start),
             (Some(_), Some(start)) => Some(start),
         };
-        self.extends = other.extends;
+        self.nested = match (self.nested, other.nested) {
+            (None, None) => None,
+            (None, Some(nested)) => Some(nested),
+            (Some(nested), None) => Some(nested),
+            (Some(_), Some(nested)) => Some(nested),
+        };
         self
     }
 }
@@ -176,11 +142,16 @@ impl Parse for PropsFieldAttr {
                 "start" => {
                     attr.start = Some(ident);
                 }
-                "extends" => {
-                    let inner;
-                    parenthesized!(inner in input);
-                    let extends: Extends = inner.parse()?;
-                    attr.extends = Some(extends);
+                "nested" => {
+                    let inputs = if input.peek(syn::token::Paren) {
+                        let inner;
+                        parenthesized!(inner in input);
+                        Some(Punctuated::<FnArg, Token![,]>::parse_terminated(&inner)?)
+                    } else {
+                        None
+                    };
+
+                    attr.nested = Some(Nested { ident, inputs });
                 }
                 _ => {
                     return Err(syn::Error::new(

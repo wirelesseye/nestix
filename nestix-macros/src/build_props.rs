@@ -1,6 +1,6 @@
 use proc_macro::TokenStream;
 use proc_macro2::{TokenStream as TokenStream2, TokenTree};
-use quote::{ToTokens, quote};
+use quote::{ToTokens, format_ident, quote};
 use syn::{
     Ident, Token, Type, parenthesized, parse::Parse, parse_macro_input, punctuated::Punctuated,
 };
@@ -17,7 +17,17 @@ pub fn build_props(input: TokenStream) -> TokenStream {
 struct NamedField {
     dot: Token![.],
     ident: Option<Ident>,
-    expr_tokens: Option<TokenStream2>,
+    value: Option<NamedFieldValue>,
+}
+
+struct PropsBody {
+    start: Punctuated<TokenStream2, Token![,]>,
+    named: Vec<NamedField>,
+}
+
+enum NamedFieldValue {
+    Expr(TokenStream2),
+    Nested(PropsBody),
 }
 
 impl Parse for NamedField {
@@ -27,17 +37,27 @@ impl Parse for NamedField {
             return Ok(Self {
                 dot,
                 ident: None,
-                expr_tokens: None,
+                value: None,
             });
         }
 
         let ident: Ident = input.parse()?;
 
+        if input.peek(syn::token::Paren) {
+            let inner;
+            parenthesized!(inner in input);
+            return Ok(Self {
+                dot,
+                ident: Some(ident),
+                value: Some(NamedFieldValue::Nested(parse_props_body(&inner)?)),
+            });
+        }
+
         if !input.peek(Token![=]) {
             return Ok(Self {
                 dot,
                 ident: Some(ident),
-                expr_tokens: None,
+                value: None,
             });
         }
         input.parse::<Token![=]>()?;
@@ -67,24 +87,52 @@ impl Parse for NamedField {
         Ok(Self {
             dot,
             ident: Some(ident),
-            expr_tokens: Some(expr_tokens),
+            value: Some(NamedFieldValue::Expr(expr_tokens)),
         })
     }
 }
 
-fn generate_named_field(input: &NamedField) -> Result<TokenStream2, syn::Error> {
+fn generate_named_field(
+    input: &NamedField,
+    props_ty: &TokenStream2,
+) -> Result<TokenStream2, syn::Error> {
     let nestix_path = nestix_path();
 
-    let NamedField {
-        dot,
-        ident,
-        expr_tokens,
-    } = input;
-    let prop_value = expr_tokens.as_ref().map(|tokens| {
-        quote! {
+    let NamedField { dot, ident, value } = input;
+    let Some(ident) = ident else {
+        return Ok(quote! {
+            #dot
+        });
+    };
+
+    let prop_value = match value {
+        Some(NamedFieldValue::Expr(tokens)) => Some(quote! {
             #nestix_path::prop_value!(#tokens)
+        }),
+        Some(NamedFieldValue::Nested(body)) => {
+            let builder_method = format_ident!("{}_builder", ident);
+            let mut start_output = TokenStream2::new();
+            for field in &body.start {
+                quote! {
+                    #field,
+                }
+                .to_tokens(&mut start_output);
+            }
+
+            let mut named_output = TokenStream2::new();
+            for field in &body.named {
+                generate_named_field(field, &quote! {#props_ty::#ident})?
+                    .to_tokens(&mut named_output);
+            }
+
+            Some(quote! {
+                #props_ty::#builder_method(#start_output)
+                    #named_output
+                    .build()
+            })
         }
-    });
+        None => None,
+    };
 
     Ok(quote! {
         #dot #ident(#prop_value)
@@ -116,8 +164,7 @@ fn parse_start_arg(input: syn::parse::ParseStream) -> syn::Result<TokenStream2> 
 
 struct PropsInput {
     ty: Type,
-    start: Punctuated<TokenStream2, Token![,]>,
-    named: Vec<NamedField>,
+    body: PropsBody,
 }
 
 impl Parse for PropsInput {
@@ -126,40 +173,48 @@ impl Parse for PropsInput {
         let inner;
         parenthesized!(inner in input);
 
-        let start = if !inner.peek(Token![.]) {
-            let mut items = Punctuated::<TokenStream2, Token![,]>::new();
-            while !inner.is_empty() && !inner.peek(Token![.]) {
-                items.push_value(parse_start_arg(&inner)?);
-                if inner.peek(Token![,]) {
-                    items.push_punct(inner.parse()?);
-                } else {
-                    break;
-                }
-            }
+        Ok(Self {
+            ty,
+            body: parse_props_body(&inner)?,
+        })
+    }
+}
 
-            items
-        } else {
-            Punctuated::new()
-        };
-
-        let mut named = Vec::new();
-        while !inner.is_empty() {
-            let field: NamedField = inner.parse()?;
-            named.push(field);
-
-            if inner.peek(Token![,]) {
-                inner.parse::<Token![,]>()?;
+fn parse_props_body(input: syn::parse::ParseStream) -> syn::Result<PropsBody> {
+    let start = if !input.peek(Token![.]) {
+        let mut items = Punctuated::<TokenStream2, Token![,]>::new();
+        while !input.is_empty() && !input.peek(Token![.]) {
+            items.push_value(parse_start_arg(input)?);
+            if input.peek(Token![,]) {
+                items.push_punct(input.parse()?);
+            } else {
+                break;
             }
         }
 
-        Ok(Self { ty, start, named })
+        items
+    } else {
+        Punctuated::new()
+    };
+
+    let mut named = Vec::new();
+    while !input.is_empty() {
+        let field: NamedField = input.parse()?;
+        named.push(field);
+
+        if input.peek(Token![,]) {
+            input.parse::<Token![,]>()?;
+        }
     }
+
+    Ok(PropsBody { start, named })
 }
 
 fn generate_build_props(input: &PropsInput) -> Result<TokenStream2, syn::Error> {
     let nestix_path = nestix_path();
 
-    let PropsInput { ty, start, named } = input;
+    let PropsInput { ty, body } = input;
+    let PropsBody { start, named } = body;
 
     let mut start_output = TokenStream2::new();
     for field in start {
@@ -170,8 +225,9 @@ fn generate_build_props(input: &PropsInput) -> Result<TokenStream2, syn::Error> 
     }
 
     let mut named_output = TokenStream2::new();
+    let ty_tokens = quote! {#ty};
     for field in named {
-        generate_named_field(field)?.to_tokens(&mut named_output);
+        generate_named_field(field, &ty_tokens)?.to_tokens(&mut named_output);
     }
 
     Ok(quote! {

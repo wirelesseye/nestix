@@ -3,50 +3,24 @@ use std::{any::Any, fmt::Debug, marker::PhantomData, rc::Rc};
 use nestix_macros::callback;
 use nestix_signal::{Shared, Signal};
 
-#[doc(hidden)]
-pub mod __builder_internal {
-    /// Marker for a builder field that has been explicitly set.
-    pub struct Set;
-    /// Marker for a required builder field that has not been set.
-    pub struct Unset;
-    /// Marker for a builder field that will use its default value.
-    pub struct Defaulted;
-
-    /// Internal trait used by generated nested prop builders.
-    pub trait BuilderWrapper {
-        /// Wrapped builder type.
-        type Inner;
-        /// Wrapper type after replacing the inner builder.
-        type With<NewInner>; // The type of Self after swapping the inner builder
-        /// Fields held by the wrapper outside the inner builder.
-        type Remainder; // Holds the Child's fields (required_field, optional_field)
-
-        // Deconstructs the wrapper into the specific inner builder and the wrapper's own fields
-        /// Splits the wrapper into its inner builder and remaining fields.
-        fn into_parts(self) -> (Self::Inner, Self::Remainder);
-
-        // Reconstructs the wrapper with a NEW inner builder (possibly different type)
-        /// Rebuilds the wrapper from a new inner builder and previous remainder.
-        fn from_parts<NewInner>(
-            inner: NewInner,
-            remainder: Self::Remainder,
-        ) -> Self::With<NewInner>;
-    }
-
-    /// Internal trait for generated builders that can produce a final value.
-    pub trait Buildable {
-        /// Final builder output type.
-        type Output;
-
-        #[doc(hidden)]
-        fn build(self) -> Self::Output;
-    }
-}
-
 /// Trait implemented by prop types that have a generated builder.
 pub trait HasBuilder {
     /// The generated builder type.
     type Builder;
+}
+
+#[doc(hidden)]
+/// Helper trait used by generated prop builders for nested prop values.
+pub trait NestedValue<T> {
+    #[doc(hidden)]
+    fn into_nested_value(self) -> T;
+}
+
+impl<T> NestedValue<T> for T {
+    #[inline]
+    fn into_nested_value(self) -> T {
+        self
+    }
 }
 
 #[allow(private_bounds)]
@@ -119,6 +93,23 @@ impl<T> PropValue<T> {
         Self {
             inner: PropValueInner::Signal(callback!(move || { signal.get().into() })),
         }
+    }
+}
+
+impl<T> PropValue<T> {
+    fn into_plain(self) -> Option<T> {
+        match self.inner {
+            PropValueInner::Plain(value) => Rc::try_unwrap(value).ok(),
+            PropValueInner::Signal(_) => None,
+        }
+    }
+}
+
+impl<T> NestedValue<T> for PropValue<T> {
+    #[inline]
+    fn into_nested_value(self) -> T {
+        self.into_plain()
+            .expect("nested props cannot be built from a shared or signal-backed PropValue")
     }
 }
 

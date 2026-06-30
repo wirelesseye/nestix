@@ -1,4 +1,10 @@
-use std::{any::Any, fmt::Debug, hash::Hash, ops::Deref, rc::{Rc, Weak}};
+use std::{
+    any::Any,
+    fmt::Debug,
+    hash::Hash,
+    ops::Deref,
+    rc::{Rc, Weak},
+};
 
 /// A reference-counted pointer that compares and hashes by pointer identity.
 ///

@@ -21,31 +21,7 @@ struct WrapperProps {
     count: Rc<Cell<usize>>,
 }
 
-#[props(extensible(FirstPropsExt, FirstPropsWrapper))]
-struct FirstProps {
-    #[props(default)]
-    first: usize,
-}
-
-#[props(extensible(SecondPropsExt, SecondPropsWrapper))]
-struct SecondProps {
-    #[props(default)]
-    second: usize,
-}
-
-#[props]
-struct MultiExtendsProps {
-    #[props(extends(FirstPropsExt, FirstPropsWrapper))]
-    first_props: FirstProps,
-
-    #[props(extends(SecondPropsExt, SecondPropsWrapper))]
-    second_props: SecondProps,
-
-    own: usize,
-}
-
 #[props(
-    extensible(SpacingPropsExt, SpacingPropsWrapper),
     group(inset => [left, right, top, bottom]),
     group(vertical => [top, bottom]),
 )]
@@ -60,10 +36,42 @@ struct SpacingProps {
     bottom: usize,
 }
 
+#[props(default)]
+struct ViewProps {
+    #[props(default)]
+    margin: f32,
+}
+
 #[props]
-struct SpacingExtendsProps {
-    #[props(extends(SpacingPropsExt, SpacingPropsWrapper))]
-    spacing_props: SpacingProps,
+struct ButtonProps {
+    #[props(nested)]
+    view_props: ViewProps,
+
+    #[props(default)]
+    title: String,
+}
+
+#[props]
+struct PositionedViewProps {
+    #[props(start)]
+    x: i32,
+
+    #[props(start)]
+    y: f32,
+
+    #[props(default)]
+    margin: f32,
+}
+
+#[props]
+struct PositionedButtonProps {
+    #[props(nested(x: i32, y: f32))]
+    view_props: PositionedViewProps,
+}
+
+#[props(default)]
+struct OptionalProps {
+    label: Option<String>,
 }
 
 #[component]
@@ -141,22 +149,6 @@ fn generated_default_layout_props_start_empty() {
 }
 
 #[test]
-fn generated_props_can_extend_multiple_prop_groups() {
-    use first_props_builder::FirstPropsBuilderExtFirst;
-    use second_props_builder::SecondPropsBuilderExtSecond;
-
-    let props = build_props!(MultiExtendsProps(
-        .first = 1usize,
-        .second = 2usize,
-        .own = 3usize,
-    ));
-
-    assert_eq!(props.first_props.first.get(), 1);
-    assert_eq!(props.second_props.second.get(), 2);
-    assert_eq!(props.own.get(), 3);
-}
-
-#[test]
 fn generated_props_can_set_grouped_fields() {
     let props = build_props!(SpacingProps(
         .vertical = 8usize,
@@ -169,17 +161,62 @@ fn generated_props_can_set_grouped_fields() {
 }
 
 #[test]
-fn generated_props_can_set_grouped_fields_through_extends() {
-    use spacing_props_builder::SpacingPropsBuilderExtInset;
+fn generated_props_can_build_nested_fields() {
+    let view_props = ButtonProps::view_props_builder()
+        .margin(nestix::prop_value!(2.0f32))
+        .build();
+    assert_eq!(view_props.margin.get(), 2.0);
 
-    let props = build_props!(SpacingExtendsProps(
-        .inset = 6usize,
+    let props = build_props!(ButtonProps(
+        .view_props(
+            .margin = 3.0f32,
+        ),
+        .title = "Click".to_string(),
     ));
 
-    assert_eq!(props.spacing_props.left.get(), 6);
-    assert_eq!(props.spacing_props.right.get(), 6);
-    assert_eq!(props.spacing_props.top.get(), 6);
-    assert_eq!(props.spacing_props.bottom.get(), 6);
+    assert_eq!(props.view_props.margin.get(), 3.0);
+    assert_eq!(props.title.get(), "Click");
+
+    let explicit_nested = build_props!(ViewProps(
+        .margin = 5.0f32,
+    ));
+    let props = build_props!(ButtonProps(
+        .view_props = explicit_nested,
+    ));
+
+    assert_eq!(props.view_props.margin.get(), 5.0);
+    assert_eq!(props.title.get(), "");
+}
+
+#[test]
+fn generated_props_can_build_nested_fields_with_start_args() {
+    let view_props = PositionedButtonProps::view_props_builder(1, 2.0)
+        .margin(nestix::prop_value!(3.0f32))
+        .build();
+    assert_eq!(view_props.x.get(), 1);
+    assert_eq!(view_props.y.get(), 2.0);
+    assert_eq!(view_props.margin.get(), 3.0);
+
+    let props = build_props!(PositionedButtonProps(
+        .view_props(
+            4,
+            5.0f32,
+            .margin = 6.0f32,
+        ),
+    ));
+
+    assert_eq!(props.view_props.x.get(), 4);
+    assert_eq!(props.view_props.y.get(), 5.0);
+    assert_eq!(props.view_props.margin.get(), 6.0);
+}
+
+#[test]
+fn generated_props_can_derive_default_when_all_fields_default() {
+    let view_props = ViewProps::default();
+    assert_eq!(view_props.margin.get(), 0.0);
+
+    let optional_props = OptionalProps::default();
+    assert_eq!(optional_props.label.get(), None);
 }
 
 #[test]
