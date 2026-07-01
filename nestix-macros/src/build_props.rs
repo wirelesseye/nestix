@@ -94,6 +94,56 @@ impl Parse for NamedField {
 
 fn generate_named_field(
     input: &NamedField,
+    owner_builder: &TokenStream2,
+) -> Result<TokenStream2, syn::Error> {
+    let nestix_path = nestix_path();
+
+    let NamedField { dot, ident, value } = input;
+    let Some(ident) = ident else {
+        return Ok(quote! {
+            #dot
+        });
+    };
+
+    let prop_value = match value {
+        Some(NamedFieldValue::Expr(tokens)) => Some(quote! {
+            #nestix_path::prop_value!(#tokens)
+        }),
+        Some(NamedFieldValue::Nested(body)) => {
+            let builder_method = format_ident!("{}_builder", ident);
+            let nested_ident =
+                Ident::new(&format!("__nestix_{}_builder", ident), Span::call_site());
+            let mut start_output = TokenStream2::new();
+            for field in &body.start {
+                quote! {
+                    #field,
+                }
+                .to_tokens(&mut start_output);
+            }
+
+            let mut named_output = TokenStream2::new();
+            for field in &body.named {
+                generate_named_field_statement(field, &nested_ident)?.to_tokens(&mut named_output);
+            }
+
+            Some(quote! {
+                {
+                    let #nested_ident = #owner_builder.#builder_method(#start_output);
+                    #named_output
+                    #nested_ident.build()
+                }
+            })
+        }
+        None => None,
+    };
+
+    Ok(quote! {
+        #dot #ident(#prop_value)
+    })
+}
+
+fn generate_named_field_statement(
+    input: &NamedField,
     builder_ident: &Ident,
 ) -> Result<TokenStream2, syn::Error> {
     let nestix_path = nestix_path();
@@ -124,7 +174,7 @@ fn generate_named_field(
 
             let mut named_output = TokenStream2::new();
             for field in &body.named {
-                generate_named_field(field, &nested_ident)?.to_tokens(&mut named_output);
+                generate_named_field_statement(field, &nested_ident)?.to_tokens(&mut named_output);
             }
 
             Some(quote! {
@@ -229,17 +279,15 @@ fn generate_build_props(input: &PropsInput) -> Result<TokenStream2, syn::Error> 
         .to_tokens(&mut start_output);
     }
 
-    let builder_ident = Ident::new("__nestix_props_builder", Span::call_site());
+    let owner_builder = quote! {#ty::builder(#start_output)};
     let mut named_output = TokenStream2::new();
     for field in named {
-        generate_named_field(field, &builder_ident)?.to_tokens(&mut named_output);
+        generate_named_field(field, &owner_builder)?.to_tokens(&mut named_output);
     }
 
     Ok(quote! {
-        {
-            let #builder_ident = #ty::builder(#start_output);
+        #owner_builder
             #named_output
-            #builder_ident.build()
-        }
+            .build()
     })
 }
