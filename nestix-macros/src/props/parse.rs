@@ -75,6 +75,7 @@ pub struct PropsFieldAttr {
     pub default_value: Option<Expr>,
     pub start: Option<Ident>,
     pub nested: Option<Nested>,
+    pub raw: Option<Ident>,
 }
 
 #[derive(Clone)]
@@ -90,6 +91,7 @@ impl Default for PropsFieldAttr {
             default_value: None,
             start: None,
             nested: None,
+            raw: None,
         }
     }
 }
@@ -114,6 +116,12 @@ impl PropsFieldAttr {
             (None, Some(nested)) => Some(nested),
             (Some(nested), None) => Some(nested),
             (Some(_), Some(nested)) => Some(nested),
+        };
+        self.raw = match (self.raw, other.raw) {
+            (None, None) => None,
+            (None, Some(raw)) => Some(raw),
+            (Some(raw), None) => Some(raw),
+            (Some(_), Some(raw)) => Some(raw),
         };
         self
     }
@@ -152,6 +160,9 @@ impl Parse for PropsFieldAttr {
                     };
 
                     attr.nested = Some(Nested { ident, inputs });
+                }
+                "raw" => {
+                    attr.raw = Some(ident);
                 }
                 _ => {
                     return Err(syn::Error::new(

@@ -29,6 +29,7 @@ struct FieldFeature {
     start: bool,
     nested: bool,
     nested_inputs: Option<Punctuated<FnArg, Token![,]>>,
+    raw: bool,
 }
 
 fn is_option_ty(ty: &Type) -> bool {
@@ -109,11 +110,19 @@ fn preprocess(input: ItemStruct, attr: PropsAttr) -> Result<Context, syn::Error>
                 .nested
                 .as_ref()
                 .and_then(|nested| nested.inputs.clone());
+            let raw = field_attr.raw.is_some();
 
             if nested && start {
                 return Err(syn::Error::new(
                     field_attr.nested.as_ref().unwrap().ident.span(),
                     "nested field cannot be start field",
+                ));
+            }
+
+            if nested && raw {
+                return Err(syn::Error::new(
+                    field_attr.raw.as_ref().unwrap().span(),
+                    "raw field cannot also be nested field",
                 ));
             }
 
@@ -123,6 +132,7 @@ fn preprocess(input: ItemStruct, attr: PropsAttr) -> Result<Context, syn::Error>
                 default_value,
                 nested,
                 nested_inputs,
+                raw,
             }
         } else {
             FieldFeature {
@@ -131,10 +141,11 @@ fn preprocess(input: ItemStruct, attr: PropsAttr) -> Result<Context, syn::Error>
                 default_value: None,
                 nested: false,
                 nested_inputs: None,
+                raw: false,
             }
         };
 
-        if !field_feature.nested {
+        if !field_feature.nested && !field_feature.raw {
             let ty = &field.ty;
             let path = parse_quote!(#nestix_path::PropValue<#ty>);
             field.ty = Type::Path(TypePath {
@@ -388,7 +399,7 @@ fn generate_builder(ctx: &Context) -> Result<TokenStream, syn::Error> {
                 quote! {std::default::Default::default()}
             };
 
-            if field_feature.nested {
+            if field_feature.nested || field_feature.raw {
                 quote! {
                     #field_ident: #default_value,
                 }
@@ -439,27 +450,27 @@ fn generate_builder(ctx: &Context) -> Result<TokenStream, syn::Error> {
                 }
             };
             let mut method_fields = TokenStream::new();
-            let convert_value = if field_feature.nested {
+            let convert_value = if field_feature.nested || field_feature.raw {
                 quote! {
-                    let value = <Value as #nestix_path::NestedValue<#field_ty>>::into_nested_value(value);
+                    let value = <Value as #nestix_path::RawValue<#field_ty>>::into_raw_value(value);
                 }
             } else {
                 quote! {}
             };
-            let method_value_generic = if field_feature.nested {
+            let method_value_generic = if field_feature.nested || field_feature.raw {
                 quote! {<Value>}
             } else {
                 quote! {}
             };
-            let method_value_ty = if field_feature.nested {
+            let method_value_ty = if field_feature.nested || field_feature.raw {
                 quote! {Value}
             } else {
                 quote! {#field_ty}
             };
-            let method_where_clause = if field_feature.nested {
+            let method_where_clause = if field_feature.nested || field_feature.raw {
                 quote! {
                     where
-                        Value: #nestix_path::NestedValue<#field_ty>,
+                        Value: #nestix_path::RawValue<#field_ty>,
                 }
             } else {
                 quote! {}
@@ -588,6 +599,14 @@ fn generate_builder(ctx: &Context) -> Result<TokenStream, syn::Error> {
             .find(|field| field.ident.as_ref() == Some(group_fields[0]))
             .map(|field| &field.ty)
             .unwrap();
+        let group_raw = group_fields.iter().any(|group_field| {
+            fields
+                .iter()
+                .enumerate()
+                .find(|(_, field)| field.ident.as_ref() == Some(*group_field))
+                .map(|(field_index, _)| field_features[field_index].raw)
+                .unwrap_or(false)
+        });
 
         let mut method_type_bounds = if generic_bounds.is_empty() {
             TokenStream::new()
@@ -612,13 +631,14 @@ fn generate_builder(ctx: &Context) -> Result<TokenStream, syn::Error> {
         };
         let mut method_fields = TokenStream::new();
 
-        for builder_field in builder_fields.iter() {
+        for (field_index, builder_field) in builder_fields.iter().enumerate() {
             let builder_field_ident = builder_field.ident.as_ref().unwrap();
             let ident_pascal_string = builder_field_ident.to_string().to_case(Case::Pascal);
             let state_ident = Ident::new(
                 &format!("{}State", ident_pascal_string),
                 builder_field_ident.span(),
             );
+            let field_feature = &field_features[field_index];
 
             if group_field_names.contains(&builder_field_ident.to_string()) {
                 let can_set_ident =
@@ -626,14 +646,19 @@ fn generate_builder(ctx: &Context) -> Result<TokenStream, syn::Error> {
                 quote! {#state_ident: #can_set_ident,}.to_tokens(&mut method_type_bounds);
                 quote! {#state_ident,}.to_tokens(&mut method_generics_params);
                 quote! {Set,}.to_tokens(&mut method_result_type_args);
-                if Some(builder_field_ident) == group_fields.last().copied() {
+                let value_tokens = if Some(builder_field_ident) == group_fields.last().copied() {
+                    quote! {value}
+                } else {
+                    quote! {value.clone()}
+                };
+                if field_feature.default {
                     quote! {
-                        #builder_field_ident: value,
+                        #builder_field_ident: #value_tokens,
                     }
                     .to_tokens(&mut method_fields);
                 } else {
                     quote! {
-                        #builder_field_ident: value.clone(),
+                        #builder_field_ident: Some(#value_tokens),
                     }
                     .to_tokens(&mut method_fields);
                 }
@@ -648,9 +673,38 @@ fn generate_builder(ctx: &Context) -> Result<TokenStream, syn::Error> {
             }
         }
 
+        let method_value_generic = if group_raw {
+            quote! {<Value>}
+        } else {
+            quote! {}
+        };
+        let method_value_ty = if group_raw {
+            quote! {Value}
+        } else {
+            quote! {#group_value_ty}
+        };
+        let method_where_clause = if group_raw {
+            quote! {
+                where
+                    Value: #nestix_path::RawValue<#group_value_ty>,
+            }
+        } else {
+            quote! {}
+        };
+        let convert_value = if group_raw {
+            quote! {
+                let value = <Value as #nestix_path::RawValue<#group_value_ty>>::into_raw_value(value);
+            }
+        } else {
+            quote! {}
+        };
+
         quote! {
             impl<#method_type_bounds> #builder_ident<#method_generics_params> {
-                pub fn #group_ident(self, value: #group_value_ty) -> #builder_ident<#method_result_type_args> {
+                pub fn #group_ident #method_value_generic (self, value: #method_value_ty) -> #builder_ident<#method_result_type_args>
+                #method_where_clause
+                {
+                    #convert_value
                     #builder_ident {
                         #method_fields
                         _phantom: std::marker::PhantomData,

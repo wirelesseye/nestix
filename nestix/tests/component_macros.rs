@@ -80,6 +80,27 @@ struct OptionalProps {
     label: Option<String>,
 }
 
+#[props]
+struct RawProps {
+    #[props(raw)]
+    label: String,
+}
+
+#[props(default)]
+struct DefaultRawProps {
+    #[props(raw, default = "ready".to_string())]
+    label: String,
+}
+
+#[props(group(labels => [primary, secondary]))]
+struct RawGroupProps {
+    #[props(raw)]
+    primary: String,
+
+    #[props(raw)]
+    secondary: String,
+}
+
 #[component]
 fn Wrapper(props: &WrapperProps) -> Element {
     layout! {
@@ -258,6 +279,26 @@ fn generated_props_can_derive_default_when_all_fields_default() {
 
     let optional_props = OptionalProps::default();
     assert_eq!(optional_props.label.get(), None);
+
+    let raw_props = DefaultRawProps::default();
+    assert_eq!(raw_props.label, "ready");
+}
+
+#[test]
+fn generated_props_can_keep_raw_fields_unwrapped() {
+    let props = RawProps::builder().label("plain".to_string()).build();
+    assert_eq!(props.label, "plain");
+
+    let props = build_props!(RawProps(
+        .label = "from macro".to_string(),
+    ));
+    assert_eq!(props.label, "from macro");
+
+    let props = build_props!(RawGroupProps(
+        .labels = "shared".to_string(),
+    ));
+    assert_eq!(props.primary, "shared");
+    assert_eq!(props.secondary, "shared");
 }
 
 #[test]

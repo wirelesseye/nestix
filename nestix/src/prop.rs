@@ -11,14 +11,14 @@ pub trait HasBuilder {
 
 #[doc(hidden)]
 /// Helper trait used by generated prop builders for nested prop values.
-pub trait NestedValue<T> {
+pub trait RawValue<T> {
     #[doc(hidden)]
-    fn into_nested_value(self) -> T;
+    fn into_raw_value(self) -> T;
 }
 
-impl<T> NestedValue<T> for T {
+impl<T> RawValue<T> for T {
     #[inline]
-    fn into_nested_value(self) -> T {
+    fn into_raw_value(self) -> T {
         self
     }
 }
@@ -105,11 +105,11 @@ impl<T> PropValue<T> {
     }
 }
 
-impl<T> NestedValue<T> for PropValue<T> {
+impl<T> RawValue<T> for PropValue<T> {
     #[inline]
-    fn into_nested_value(self) -> T {
+    fn into_raw_value(self) -> T {
         self.into_plain()
-            .expect("nested props cannot be built from a shared or signal-backed PropValue")
+            .expect("raw props cannot be built from a shared or signal-backed PropValue")
     }
 }
 
