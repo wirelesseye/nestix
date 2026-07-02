@@ -452,7 +452,7 @@ fn generate_builder(ctx: &Context) -> Result<TokenStream, syn::Error> {
             let mut method_fields = TokenStream::new();
             let convert_value = if field_feature.nested || field_feature.raw {
                 quote! {
-                    let value = <Value as #nestix_path::RawValue<#field_ty>>::into_raw_value(value);
+                    let value = <Value as #nestix_path::IntoRawValue<#field_ty>>::into_raw_value(value);
                 }
             } else {
                 quote! {}
@@ -470,7 +470,7 @@ fn generate_builder(ctx: &Context) -> Result<TokenStream, syn::Error> {
             let method_where_clause = if field_feature.nested || field_feature.raw {
                 quote! {
                     where
-                        Value: #nestix_path::RawValue<#field_ty>,
+                        Value: #nestix_path::IntoRawValue<#field_ty>,
                 }
             } else {
                 quote! {}
@@ -686,14 +686,14 @@ fn generate_builder(ctx: &Context) -> Result<TokenStream, syn::Error> {
         let method_where_clause = if group_raw {
             quote! {
                 where
-                    Value: #nestix_path::RawValue<#group_value_ty>,
+                    Value: #nestix_path::IntoRawValue<#group_value_ty>,
             }
         } else {
             quote! {}
         };
         let convert_value = if group_raw {
             quote! {
-                let value = <Value as #nestix_path::RawValue<#group_value_ty>>::into_raw_value(value);
+                let value = <Value as #nestix_path::IntoRawValue<#group_value_ty>>::into_raw_value(value);
             }
         } else {
             quote! {}

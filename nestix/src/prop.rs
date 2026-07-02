@@ -11,12 +11,12 @@ pub trait HasBuilder {
 
 #[doc(hidden)]
 /// Helper trait used by generated prop builders for nested prop values.
-pub trait RawValue<T> {
+pub trait IntoRawValue<T> {
     #[doc(hidden)]
     fn into_raw_value(self) -> T;
 }
 
-impl<T> RawValue<T> for T {
+impl<T> IntoRawValue<T> for T {
     #[inline]
     fn into_raw_value(self) -> T {
         self
@@ -105,7 +105,7 @@ impl<T> PropValue<T> {
     }
 }
 
-impl<T> RawValue<T> for PropValue<T> {
+impl<T> IntoRawValue<T> for PropValue<T> {
     #[inline]
     fn into_raw_value(self) -> T {
         self.into_plain()
