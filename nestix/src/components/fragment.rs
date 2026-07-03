@@ -31,6 +31,7 @@ pub fn Fragment(props: &FragmentProps, element: &Element) {
                 prev_children[prev_i].unmount();
             }
 
+            let mut previous_siblings_changed = false;
             for (i, prev_i) in mapping.iter().enumerate() {
                 let child = &next_children[i];
 
@@ -48,7 +49,7 @@ pub fn Fragment(props: &FragmentProps, element: &Element) {
                         None
                     };
 
-                    if pred != prev_pred {
+                    if pred != prev_pred || previous_siblings_changed {
                         child.notify_place(true);
                     }
                 } else {
@@ -56,6 +57,10 @@ pub fn Fragment(props: &FragmentProps, element: &Element) {
                         child.set_in_list(true);
                         child.mount(Some(&element));
                     });
+                }
+
+                if *prev_i != Some(i) {
+                    previous_siblings_changed = true;
                 }
             }
         }

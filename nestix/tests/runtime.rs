@@ -4,8 +4,8 @@ use std::{
 };
 
 use nestix::{
-    Component, ComponentOutput, Element, Layout, Placement, PropValue, Props, create_element,
-    create_state, mount_root, scoped_effect,
+    Component, ComponentOutput, Element, Fragment, FragmentProps, Layout, Placement, PropValue,
+    Props, create_element, create_state, mount_root, scoped_effect,
 };
 
 struct Empty;
@@ -267,4 +267,74 @@ fn previous_siblings_come_from_nearest_list() {
     transparent_child.mount(Some(&third));
 
     assert_eq!(transparent_child.previous_siblings(), vec![second, first]);
+}
+
+#[test]
+fn fragment_notifies_later_siblings_when_previous_sibling_set_changes() {
+    let first = create_element::<Empty>(());
+    let second = create_element::<Empty>(());
+    let third = create_element::<Empty>(());
+    let third_places = Rc::new(Cell::new(0));
+
+    third.on_place({
+        let third_places = third_places.clone();
+        move |_| third_places.set(third_places.get() + 1)
+    });
+
+    let children = create_state(Layout::from(vec![
+        first.clone(),
+        second.clone(),
+        third.clone(),
+    ]));
+    let fragment = create_element::<Fragment>(FragmentProps {
+        children: PropValue::from_signal(children.clone()),
+    });
+
+    mount_root(&fragment);
+
+    assert_eq!(third.previous_siblings(), vec![second.clone(), first]);
+    assert_eq!(third_places.get(), 1);
+
+    children.set_unchecked(Layout::from(vec![second.clone(), third.clone()]));
+
+    assert_eq!(third.previous_siblings(), vec![second]);
+    assert_eq!(third_places.get(), 2);
+}
+
+#[test]
+fn for_notifies_later_siblings_when_previous_sibling_set_changes() {
+    let first = create_element::<Empty>(());
+    let second = create_element::<Empty>(());
+    let third = create_element::<Empty>(());
+    let third_places = Rc::new(Cell::new(0));
+
+    third.on_place({
+        let third_places = third_places.clone();
+        move |_| third_places.set(third_places.get() + 1)
+    });
+
+    let data = create_state(vec![1, 2, 3]);
+    let list = nestix::create_for_identity_from_signal(data.clone(), {
+        let first = first.clone();
+        let second = second.clone();
+        let third = third.clone();
+        move |item| {
+            PropValue::from_plain(match item.get() {
+                1 => first.clone(),
+                2 => second.clone(),
+                3 => third.clone(),
+                _ => unreachable!("test data only contains three items"),
+            })
+        }
+    });
+
+    mount_root(&list);
+
+    assert_eq!(third.previous_siblings(), vec![second.clone(), first]);
+    assert_eq!(third_places.get(), 1);
+
+    data.set(vec![2, 3]);
+
+    assert_eq!(third.previous_siblings(), vec![second]);
+    assert_eq!(third_places.get(), 2);
 }

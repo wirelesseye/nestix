@@ -92,6 +92,7 @@ pub fn For<I: IntoIterator + Clone + 'static, K: Eq + Hash + 'static>(
 
             let mut next_children: Vec<Element> = Vec::new();
             let mut next_signals: Vec<State<<I as IntoIterator>::Item>> = Vec::new();
+            let mut previous_siblings_changed = false;
             for (i, prev_i) in mapping.iter().enumerate() {
                 let (signal, child) = if let Some(prev_i) = prev_i {
                     let signal = prev_signals[*prev_i].clone();
@@ -118,7 +119,7 @@ pub fn For<I: IntoIterator + Clone + 'static, K: Eq + Hash + 'static>(
                         None
                     };
 
-                    if pred != prev_pred {
+                    if pred != prev_pred || previous_siblings_changed {
                         child.notify_place(true);
                     }
                 } else {
@@ -126,6 +127,10 @@ pub fn For<I: IntoIterator + Clone + 'static, K: Eq + Hash + 'static>(
                         child.set_in_list(true);
                         child.mount(Some(&element));
                     });
+                }
+
+                if *prev_i != Some(i) {
+                    previous_siblings_changed = true;
                 }
 
                 next_signals.push(signal);
