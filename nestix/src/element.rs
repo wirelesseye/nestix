@@ -209,6 +209,24 @@ impl Element {
         Some(index)
     }
 
+    /// Returns preceding siblings from the nearest list, closest sibling first.
+    pub fn previous_siblings(&self) -> Vec<Element> {
+        let Some(parent) = self.parent() else {
+            return Vec::new();
+        };
+
+        if !self.is_in_list() {
+            return parent.previous_siblings();
+        }
+
+        let children = parent.data.children.borrow();
+        let Some(index) = children.iter().position(|child| child == self) else {
+            return Vec::new();
+        };
+
+        children[..index].iter().rev().cloned().collect()
+    }
+
     /// Returns this element's host handle, if one has been provided.
     pub fn handle(&self) -> Option<Shared<dyn Any>> {
         self.data.handle.borrow().clone()
@@ -217,6 +235,11 @@ impl Element {
     /// Returns this element's parent if it is still mounted and owned.
     pub fn parent(&self) -> Option<Element> {
         self.data.parent.borrow().as_ref()?.upgrade()
+    }
+
+    /// Returns a snapshot of this element's mounted children.
+    pub fn children(&self) -> Vec<Element> {
+        self.data.children.borrow().clone()
     }
 
     /// Stores a host-renderer handle on this element.
@@ -295,11 +318,11 @@ impl Element {
         self.data.children.borrow_mut().retain(|x| x != child);
     }
 
-    pub(crate) fn is_in_list(&self) -> bool {
+    pub fn is_in_list(&self) -> bool {
         self.data.in_list.get()
     }
 
-    pub(crate) fn set_in_list(&self, in_list: bool) {
+    pub fn set_in_list(&self, in_list: bool) {
         self.data.in_list.set(in_list);
     }
 

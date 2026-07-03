@@ -240,3 +240,31 @@ fn handle_name(handle: nestix::Shared<dyn std::any::Any>) -> Option<String> {
         .ok()
         .map(|value| (*value).clone())
 }
+
+#[test]
+fn previous_siblings_come_from_nearest_list() {
+    let parent = create_element::<Empty>(());
+    let first = create_element::<Empty>(());
+    let second = create_element::<Empty>(());
+    let third = create_element::<Empty>(());
+
+    mount_root(&parent);
+    first.set_in_list(true);
+    first.mount(Some(&parent));
+    second.set_in_list(true);
+    second.mount(Some(&parent));
+    third.set_in_list(true);
+    third.mount(Some(&parent));
+
+    assert_eq!(first.previous_siblings(), Vec::<Element>::new());
+    assert_eq!(second.previous_siblings(), vec![first.clone()]);
+    assert_eq!(
+        third.previous_siblings(),
+        vec![second.clone(), first.clone()]
+    );
+
+    let transparent_child = create_element::<Empty>(());
+    transparent_child.mount(Some(&third));
+
+    assert_eq!(transparent_child.previous_siblings(), vec![second, first]);
+}
