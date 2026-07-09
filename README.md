@@ -17,6 +17,20 @@ Rust. This repository contains the core, renderer-agnostic Nestix workspace:
 
 > [!NOTE]  
 > Just like you need `react-dom` or `react-native` to build an actual application, Nestix itself does not handle platform-specific rendering. It manages component trees, reactive state, props, layout, and lifecycle; a renderer or UI component library supplies host components for the DOM, native views, terminal widgets, or another target.
+>
+> For building actual applications, see [`nestix-native`](https://github.com/wirelesseye/nestix-native).
+
+## Key Features
+
+- React-like component model for building declarative Rust UI trees.
+- Fine-grained reactive state with signals, computed values, effects, and
+  shared callbacks.
+- Renderer-agnostic core that can target native views, DOM-like renderers,
+  terminal UIs, or custom hosts.
+- Procedural macros for ergonomic components, props, layouts, callbacks, and
+  derived state.
+- Built-in structural components and layout primitives for composing reusable
+  interfaces.
 
 ## Documentation
 
