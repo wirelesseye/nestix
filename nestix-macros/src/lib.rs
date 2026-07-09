@@ -6,8 +6,8 @@
 //!
 //! - `#[component]` turns a function into a Nestix component type.
 //! - `#[props]` turns a named-field struct into a prop container and builder.
-//! - `layout!`, `callback!`, `computed!`, and friends keep component bodies
-//!   compact while still expanding to normal runtime APIs.
+//! - `layout!`, `callback!`, `computed!`, `destructure!`, and friends keep
+//!   component bodies compact while still expanding to normal runtime APIs.
 //!
 //! ```ignore
 //! use nestix::{Element, callback, component, create_state, layout};
@@ -33,6 +33,7 @@ mod callback;
 mod clone_var;
 mod closure;
 mod component;
+mod destructure;
 mod layout;
 mod prop_value;
 mod props;
@@ -170,6 +171,22 @@ pub fn layout(input: TokenStream) -> TokenStream {
 #[proc_macro_attribute]
 pub fn component(attr: TokenStream, input: TokenStream) -> TokenStream {
     component::component(attr, input)
+}
+
+/// Creates computed signals by destructuring a signal or `PropValue`.
+///
+/// Each identifier bound by the pattern becomes a separate computed signal.
+/// The value on the right side of `<-` is cloned once and captured by each
+/// generated computation.
+///
+/// ```ignore
+/// destructure!((key, value) <- props.data);
+/// destructure!(User { id, name } <- props.user);
+/// destructure!(Point(x, y) <- props.point);
+/// ```
+#[proc_macro]
+pub fn destructure(input: TokenStream) -> TokenStream {
+    destructure::destructure(input)
 }
 
 /// Creates a reactive computed signal from closure syntax.

@@ -1,8 +1,8 @@
 use std::{cell::Cell, rc::Rc};
 
 use nestix::{
-    Element, Fragment, Layout, Props, build_props, component, create_state, layout, mount_root,
-    props, scoped_effect,
+    Element, Fragment, Layout, Props, build_props, component, create_state, destructure, layout,
+    mount_root, props, scoped_effect,
 };
 
 #[props]
@@ -99,6 +99,22 @@ struct RawGroupProps {
 
     #[props(raw)]
     secondary: String,
+}
+
+#[derive(Clone, PartialEq)]
+struct DestructureUser {
+    id: usize,
+    name: String,
+}
+
+#[derive(Clone, PartialEq)]
+struct DestructurePoint(i32, i32);
+
+#[props]
+struct DestructureProps {
+    data: (String, String),
+    user: DestructureUser,
+    point: DestructurePoint,
 }
 
 #[component]
@@ -321,4 +337,68 @@ fn scoped_effect_macro_cancels_effect_on_unmount() {
 
     value.set(3);
     assert_eq!(observed.get(), 2);
+}
+
+#[test]
+fn destructure_macro_derives_computed_signals_from_tuple_struct_and_named_struct_props() {
+    let data = create_state(("key".to_string(), "value".to_string()));
+    let user = create_state(DestructureUser {
+        id: 7,
+        name: "Ada".to_string(),
+    });
+    let point = create_state(DestructurePoint(3, 4));
+    let nested = create_state(((1, 2), DestructurePoint(3, 4)));
+    let props = build_props!(DestructureProps(
+        .data = data.clone(),
+        .user = user.clone(),
+        .point = point.clone(),
+    ));
+
+    destructure!((key, value) <- props.data);
+    destructure!(DestructureUser { id, name: display_name } <- props.user);
+    destructure!(DestructurePoint(x, y) <- props.point);
+    destructure!(((nested_first, _), DestructurePoint(nested_x, nested_y)) <- nested);
+
+    assert_eq!(key.get(), "key");
+    assert_eq!(value.get(), "value");
+    assert_eq!(id.get(), 7);
+    assert_eq!(display_name.get(), "Ada");
+    assert_eq!(x.get(), 3);
+    assert_eq!(y.get(), 4);
+    assert_eq!(nested_first.get(), 1);
+    assert_eq!(nested_x.get(), 3);
+    assert_eq!(nested_y.get(), 4);
+
+    data.set(("next".to_string(), "item".to_string()));
+    user.set(DestructureUser {
+        id: 8,
+        name: "Grace".to_string(),
+    });
+    point.set(DestructurePoint(5, 6));
+    nested.set(((5, 6), DestructurePoint(7, 8)));
+
+    assert_eq!(key.get(), "next");
+    assert_eq!(value.get(), "item");
+    assert_eq!(id.get(), 8);
+    assert_eq!(display_name.get(), "Grace");
+    assert_eq!(x.get(), 5);
+    assert_eq!(y.get(), 6);
+    assert_eq!(nested_first.get(), 5);
+    assert_eq!(nested_x.get(), 7);
+    assert_eq!(nested_y.get(), 8);
+}
+
+#[test]
+fn destructure_macro_ignores_wildcards_and_struct_rest_patterns() {
+    let user = create_state(DestructureUser {
+        id: 7,
+        name: "Ada".to_string(),
+    });
+    let pair = create_state((1, 2));
+
+    destructure!(DestructureUser { id, .. } <- user);
+    destructure!((first, _) <- pair);
+
+    assert_eq!(id.get(), 7);
+    assert_eq!(first.get(), 1);
 }

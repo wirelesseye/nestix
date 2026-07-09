@@ -6,7 +6,8 @@ use components::*;
 use indexmap::IndexMap;
 use nanoid_wasm::nanoid;
 use nestix::{
-    Element, Shared, callback, component, computed, create_state, layout, mount_root, props,
+    Element, Shared, callback, component, computed, create_state, destructure, layout, mount_root,
+    props,
 };
 use wasm_bindgen::prelude::wasm_bindgen;
 
@@ -182,8 +183,7 @@ fn TodoListItem(props: &TodoListItemProps) -> Element {
         }
     );
 
-    let key = computed!([props.data] || data.get().0);
-    let value = computed!([props.data] || data.get().1);
+    destructure!((key, value) <- props.data);
 
     layout! {
         Div(.class = "todo-list-item".to_string()) {
