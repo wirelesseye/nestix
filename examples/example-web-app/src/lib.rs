@@ -167,9 +167,15 @@ fn TodoList() -> Element {
 #[props]
 struct TodoListItemProps {
     data: (String, String),
+
+    // Use `raw` because we know these props will never be reactive
+    #[props(raw)]
     remove: Shared<dyn Fn(&str)>,
+    #[props(raw)]
     move_up: Shared<dyn Fn(&str)>,
+    #[props(raw)]
     move_down: Shared<dyn Fn(&str)>,
+    #[props(raw)]
     set_content: Shared<dyn Fn(&str, String)>,
 }
 
@@ -188,17 +194,17 @@ fn TodoListItem(props: &TodoListItemProps) -> Element {
     layout! {
         Div(.class = "todo-list-item".to_string()) {
             Button(
-                .on_click = callback!([key, props.remove] || (remove.get())(&key.get()))
+                .on_click = callback!([key, props.remove] || remove(&key.get()))
             ) {
                 Text("✕")
             }
             Button(
-                .on_click = callback!([key, props.move_up] || (move_up.get())(&key.get()))
+                .on_click = callback!([key, props.move_up] || move_up(&key.get()))
             ) {
                 Text("↑")
             }
             Button(
-                .on_click = callback!([key, props.move_down] || (move_down.get())(&key.get()))
+                .on_click = callback!([key, props.move_down] || move_down(&key.get()))
             ) {
                 Text("↓")
             }
@@ -212,7 +218,7 @@ fn TodoListItem(props: &TodoListItemProps) -> Element {
                 Input(
                     .value = value.clone(),
                     .on_value_change = callback!([key, props.set_content] |value: String| {
-                        (set_content.get())(&key.get(), value);
+                        set_content(&key.get(), value);
                     }),
                 )
             } else {
