@@ -1,6 +1,6 @@
 use std::{any::Any, fmt::Debug, marker::PhantomData, rc::Rc};
 
-use nestix_macros::callback;
+use nestix_macros::{callback, computed};
 use nestix_signal::{Shared, Signal};
 
 /// Trait implemented by prop types that have a generated builder.
@@ -94,13 +94,20 @@ impl<T> PropValue<T> {
             inner: PropValueInner::Signal(callback!(move || { signal.get().into() })),
         }
     }
-}
 
-impl<T> PropValue<T> {
-    fn into_plain(self) -> Option<T> {
+    pub fn into_plain(self) -> Option<T> {
         match self.inner {
             PropValueInner::Plain(value) => Rc::try_unwrap(value).ok(),
             PropValueInner::Signal(_) => None,
+        }
+    }
+}
+
+impl<T: 'static> PropValue<T> {
+    pub fn map<U: Clone + 'static>(self, f: impl Fn(&T) -> U + 'static) -> PropValue<U> {
+        match self.inner {
+            PropValueInner::Plain(plain) => PropValue::from_plain(f(&plain)),
+            PropValueInner::Signal(shared) => PropValue::from_signal(computed!([] || f(&shared()))),
         }
     }
 }
