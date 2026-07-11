@@ -414,6 +414,7 @@ pub fn create_element<C: Component>(props: C::Props) -> Element {
 /// The effect runs immediately and reruns when tracked signal reads change,
 /// just like [`effect`]. The returned handle can still be used to cancel the
 /// effect earlier.
+#[track_caller]
 pub fn scoped_effect(element: &Element, f: impl Fn() + 'static) -> EffectHandle {
     let handle = effect(f);
     if !handle.is_cancelled() {
