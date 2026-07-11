@@ -114,7 +114,7 @@ pub struct EffectHandle {
 impl EffectHandle {
     fn new(effect: Shared<Effect>) -> Self {
         Self {
-            effect: effect.downgrade(),
+            effect: Shared::downgrade(&effect),
         }
     }
 

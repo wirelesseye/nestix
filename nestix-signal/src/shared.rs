@@ -22,8 +22,8 @@ impl<T> Shared<T> {
         }
     }
 
-    pub fn downgrade(&self) -> WeakShared<T> {
-        let value = Rc::downgrade(&self.value);
+    pub fn downgrade(this: &Self) -> WeakShared<T> {
+        let value = Rc::downgrade(&this.value);
         WeakShared { value }
     }
 }
