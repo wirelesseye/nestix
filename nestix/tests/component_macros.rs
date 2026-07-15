@@ -151,6 +151,27 @@ struct ScopedEffectComponentProps {
     observed: Rc<Cell<i32>>,
 }
 
+struct HandleHost;
+
+impl nestix::Component for HandleHost {
+    type Props = ();
+
+    fn on_mount(element: &Element) {
+        element.provide_handle(String::from("host"));
+    }
+}
+
+struct TransparentHost;
+
+impl nestix::Component for TransparentHost {
+    type Props = ();
+
+    fn on_mount(element: &Element) {
+        let child = nestix::create_element::<HandleHost>(());
+        nestix::ComponentOutput::mount(&child, Some(element));
+    }
+}
+
 impl Props for ScopedEffectComponentProps {}
 
 #[component]
@@ -185,6 +206,22 @@ fn layout_macro_mounts_nested_components_through_fragment() {
     mount_root(&element);
 
     assert_eq!(count.get(), 1);
+}
+
+#[test]
+fn layout_macro_binds_host_handle_when_it_is_provided() {
+    let stale_handle =
+        nestix::Shared::from(Rc::new(String::from("stale")) as Rc<dyn std::any::Any>);
+    let host_handle = create_state(Some(stale_handle));
+    let element = layout! {
+        host_handle @ TransparentHost
+    };
+
+    assert!(host_handle.get().is_none());
+    mount_root(&element);
+
+    let handle = host_handle.get().expect("host handle should be bound");
+    assert_eq!(handle.downcast::<String>().unwrap().as_str(), "host");
 }
 
 #[test]

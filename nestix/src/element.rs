@@ -44,6 +44,9 @@ impl ComponentOutput for Element {
         (self.component_id().mount_fn)(self);
         self.notify_after_mount();
         self.notify_place(false);
+        if let Some(parent) = parent {
+            parent.notify_last_handle_change();
+        }
     }
 }
 
@@ -74,6 +77,8 @@ struct ElementData {
     parent: RefCell<Option<WeakElement>>,
     children: RefCell<Vec<Element>>,
     in_list: Cell<bool>,
+    last_handle_snapshot: RefCell<Option<Shared<dyn Any>>>,
+    on_last_handle_change_callbacks: RefCell<HashSet<Shared<dyn Fn(Option<Shared<dyn Any>>)>>>,
     on_unmount_callbacks: RefCell<HashSet<Shared<dyn Fn()>>>,
     after_mount_callbacks: RefCell<HashSet<Shared<dyn Fn()>>>,
     on_place_callbacks: RefCell<HashSet<Shared<dyn Fn(&Placement)>>>,
@@ -148,10 +153,13 @@ impl Element {
         let parent = self.parent();
         self.data.parent.take();
         if let Some(parent) = parent {
-            parent.remove_child(self);
+            if parent.remove_child(self) {
+                parent.notify_last_handle_change();
+            }
         }
 
         self.data.after_mount_callbacks.take();
+        self.data.on_last_handle_change_callbacks.take();
         self.data.on_place_callbacks.take();
     }
 
@@ -246,11 +254,26 @@ impl Element {
     pub fn provide_handle<T: 'static>(&self, handle: T) {
         let handle = Shared::from(Rc::new(handle) as Rc<dyn Any>);
         self.data.handle.replace(Some(handle));
+        self.notify_last_handle_change();
 
         // let children = self.data.children.borrow().clone();
         // for child in children {
         //     child.notify_place();
         // }
+    }
+
+    /// Runs a callback now and whenever the last host handle in this element's
+    /// subtree changes.
+    pub fn on_last_handle_change(&self, f: impl Fn(Option<Shared<dyn Any>>) + 'static) {
+        let last_handle = self.last_handle();
+        self.data.last_handle_snapshot.replace(last_handle.clone());
+
+        let callback = Shared::from(Rc::new(f) as Rc<dyn Fn(Option<Shared<dyn Any>>)>);
+        self.data
+            .on_last_handle_change_callbacks
+            .borrow_mut()
+            .insert(callback.clone());
+        callback(last_handle);
     }
 
     /// Registers a callback to run when this element is unmounted.
@@ -314,8 +337,11 @@ impl Element {
         self.data.children.borrow_mut().push(child);
     }
 
-    pub(crate) fn remove_child(&self, child: &Element) {
-        self.data.children.borrow_mut().retain(|x| x != child);
+    pub(crate) fn remove_child(&self, child: &Element) -> bool {
+        let mut children = self.data.children.borrow_mut();
+        let previous_len = children.len();
+        children.retain(|x| x != child);
+        children.len() != previous_len
     }
 
     pub fn is_in_list(&self) -> bool {
@@ -343,6 +369,23 @@ impl Element {
             for child in children {
                 child.notify_place(recursive);
             }
+        }
+    }
+
+    pub(crate) fn notify_last_handle_change(&self) {
+        let last_handle = self.last_handle();
+        if *self.data.last_handle_snapshot.borrow() == last_handle {
+            return;
+        }
+        self.data.last_handle_snapshot.replace(last_handle.clone());
+
+        let callbacks = self.data.on_last_handle_change_callbacks.borrow().clone();
+        for callback in callbacks {
+            callback(last_handle.clone());
+        }
+
+        if let Some(parent) = self.parent() {
+            parent.notify_last_handle_change();
         }
     }
 }
@@ -402,6 +445,8 @@ pub fn create_element<C: Component>(props: C::Props) -> Element {
             parent: RefCell::new(None),
             children: RefCell::new(Vec::new()),
             in_list: Cell::new(false),
+            last_handle_snapshot: RefCell::new(None),
+            on_last_handle_change_callbacks: RefCell::new(HashSet::new()),
             on_unmount_callbacks: RefCell::new(HashSet::new()),
             after_mount_callbacks: RefCell::new(HashSet::new()),
             on_place_callbacks: RefCell::new(HashSet::new()),

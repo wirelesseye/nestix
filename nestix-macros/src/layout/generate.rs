@@ -210,9 +210,9 @@ fn generate_layout_item_element(
     let output = if let Some(bind) = bind {
         quote! {{
             let element = #create_element;
-            #nestix_path::effect!([#bind, element] || {
-                #bind.set(element.handle());
-            });
+            element.on_last_handle_change(#nestix_path::closure!([#bind] |handle| {
+                #bind.set(handle);
+            }));
             element
         }}
     } else {

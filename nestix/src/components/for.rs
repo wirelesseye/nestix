@@ -139,6 +139,7 @@ pub fn For<I: IntoIterator + Clone + 'static, K: Eq + Hash + 'static>(
 
             *prev_keys = next_keys;
             *prev_signals = next_signals;
+            element.notify_last_handle_change();
         }
     );
 }

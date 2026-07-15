@@ -63,6 +63,8 @@ pub fn Fragment(props: &FragmentProps, element: &Element) {
                     previous_siblings_changed = true;
                 }
             }
+
+            element.notify_last_handle_change();
         }
     );
 }

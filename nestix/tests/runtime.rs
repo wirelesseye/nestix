@@ -151,6 +151,36 @@ fn mounting_an_element_runs_lifecycle_callbacks_and_resolves_parent_handle() {
 }
 
 #[test]
+fn last_handle_change_callbacks_run_initially_and_follow_descendants() {
+    let element = create_element::<Empty>(());
+    let child = create_element::<Empty>(());
+    let observed = Rc::new(RefCell::new(Vec::new()));
+
+    element.on_last_handle_change({
+        let observed = observed.clone();
+        move |handle| {
+            observed.borrow_mut().push(handle.and_then(handle_name));
+        }
+    });
+
+    mount_root(&element);
+    child.mount(Some(&element));
+    child.provide_handle(String::from("first"));
+    child.provide_handle(String::from("second"));
+    child.unmount();
+
+    assert_eq!(
+        &*observed.borrow(),
+        &[
+            None,
+            Some(String::from("first")),
+            Some(String::from("second")),
+            None,
+        ]
+    );
+}
+
+#[test]
 fn unmount_runs_callbacks_recursively_once() {
     let child_slot = Rc::new(RefCell::new(None));
     let root = create_element::<ParentWithChild>(ParentWithChildProps {
