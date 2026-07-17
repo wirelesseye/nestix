@@ -249,6 +249,55 @@ fn scoped_effect_is_cancelled_when_element_unmounts() {
     assert_eq!(runs.get(), 2);
 }
 
+#[test]
+fn subtree_effects_are_cancelled_before_any_unmount_callback() {
+    let child_slot = Rc::new(RefCell::new(None));
+    let root = create_element::<ParentWithChild>(ParentWithChildProps {
+        child_slot: child_slot.clone(),
+    });
+    mount_root(&root);
+    let child = child_slot
+        .borrow()
+        .clone()
+        .expect("parent should mount a child");
+
+    let value = create_state(1);
+    let root_runs = Rc::new(Cell::new(0));
+    let child_runs = Rc::new(Cell::new(0));
+    let root_handle = scoped_effect(&root, {
+        let value = value.clone();
+        let root_runs = root_runs.clone();
+        move || {
+            value.get();
+            root_runs.set(root_runs.get() + 1);
+        }
+    });
+    let child_handle = scoped_effect(&child, {
+        let value = value.clone();
+        let child_runs = child_runs.clone();
+        move || {
+            value.get();
+            child_runs.set(child_runs.get() + 1);
+        }
+    });
+
+    child.on_unmount({
+        let value = value.clone();
+        let root_handle = root_handle.clone();
+        let child_handle = child_handle.clone();
+        move || {
+            assert!(root_handle.is_cancelled());
+            assert!(child_handle.is_cancelled());
+            value.set(2);
+        }
+    });
+
+    root.unmount();
+
+    assert_eq!(root_runs.get(), 1);
+    assert_eq!(child_runs.get(), 1);
+}
+
 #[derive(Debug, PartialEq, Eq)]
 struct CapturedPlacement {
     pred: Option<String>,

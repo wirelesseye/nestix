@@ -79,6 +79,7 @@ struct ElementData {
     in_list: Cell<bool>,
     last_handle_snapshot: RefCell<Option<Shared<dyn Any>>>,
     on_last_handle_change_callbacks: RefCell<HashSet<Shared<dyn Fn(Option<Shared<dyn Any>>)>>>,
+    scoped_effect_cleanup_callbacks: RefCell<HashSet<Shared<dyn Fn()>>>,
     on_unmount_callbacks: RefCell<HashSet<Shared<dyn Fn()>>>,
     after_mount_callbacks: RefCell<HashSet<Shared<dyn Fn()>>>,
     on_place_callbacks: RefCell<HashSet<Shared<dyn Fn(&Placement)>>>,
@@ -140,9 +141,30 @@ impl Element {
     /// Registered unmount callbacks are called once, and the element is removed
     /// from its parent.
     pub fn unmount(&self) {
+        // Cancel effects across the entire subtree before any native resources
+        // or other lifecycle state are torn down. Child cleanup can update
+        // signals observed by ancestor effects, so cancelling one element at a
+        // time is not sufficient.
+        self.cancel_scoped_effects_recursively();
+        self.finish_unmount();
+    }
+
+    fn cancel_scoped_effects_recursively(&self) {
+        let scoped_effect_cleanup_callbacks = self.data.scoped_effect_cleanup_callbacks.take();
+        for callback in scoped_effect_cleanup_callbacks {
+            callback();
+        }
+
+        let children = self.data.children.borrow().clone();
+        for child in children {
+            child.cancel_scoped_effects_recursively();
+        }
+    }
+
+    fn finish_unmount(&self) {
         let children = self.data.children.take();
         for child in children {
-            child.unmount();
+            child.finish_unmount();
         }
 
         let on_unmount_callbacks = self.data.on_unmount_callbacks.take();
@@ -281,6 +303,14 @@ impl Element {
         let callback = Shared::from(Rc::new(f) as Rc<dyn Fn()>);
         let mut on_unmount_callbacks = self.data.on_unmount_callbacks.borrow_mut();
         on_unmount_callbacks.insert(callback);
+    }
+
+    fn on_scoped_effect_cleanup(&self, f: impl Fn() + 'static) {
+        let callback = Shared::from(Rc::new(f) as Rc<dyn Fn()>);
+        self.data
+            .scoped_effect_cleanup_callbacks
+            .borrow_mut()
+            .insert(callback);
     }
 
     /// Registers a callback to run when this element's placement changes.
@@ -447,6 +477,7 @@ pub fn create_element<C: Component>(props: C::Props) -> Element {
             in_list: Cell::new(false),
             last_handle_snapshot: RefCell::new(None),
             on_last_handle_change_callbacks: RefCell::new(HashSet::new()),
+            scoped_effect_cleanup_callbacks: RefCell::new(HashSet::new()),
             on_unmount_callbacks: RefCell::new(HashSet::new()),
             after_mount_callbacks: RefCell::new(HashSet::new()),
             on_place_callbacks: RefCell::new(HashSet::new()),
@@ -463,7 +494,7 @@ pub fn create_element<C: Component>(props: C::Props) -> Element {
 pub fn scoped_effect(element: &Element, f: impl Fn() + 'static) -> EffectHandle {
     let handle = effect(f);
     if !handle.is_cancelled() {
-        element.on_unmount({
+        element.on_scoped_effect_cleanup({
             let handle = handle.clone();
             move || handle.cancel()
         });
