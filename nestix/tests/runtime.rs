@@ -16,6 +16,27 @@ impl Component for Empty {
     fn on_mount(_: &Element) {}
 }
 
+struct CountMounts;
+
+struct CountMountsProps {
+    count: Rc<Cell<usize>>,
+}
+
+impl Props for CountMountsProps {}
+
+impl Component for CountMounts {
+    type Props = CountMountsProps;
+
+    fn on_mount(element: &Element) {
+        let count = &element
+            .props()
+            .downcast_ref::<CountMountsProps>()
+            .unwrap()
+            .count;
+        count.set(count.get() + 1);
+    }
+}
+
 struct Host;
 
 impl Component for Host {
@@ -25,6 +46,7 @@ impl Component for Host {
         element.provide_handle(String::from("host"));
     }
 }
+
 
 struct ParentWithChild;
 
@@ -380,6 +402,32 @@ fn fragment_notifies_later_siblings_when_previous_sibling_set_changes() {
     assert_eq!(third_places.get(), 2);
 }
 
+
+#[test]
+fn fragment_lifecycle_signal_reads_do_not_reenter_reconciliation() {
+    let incidental = create_state(0);
+    let first = create_element::<Empty>(());
+    first.on_unmount({
+        let incidental = incidental.clone();
+        move || incidental.set(incidental.get() + 1)
+    });
+
+    let survivor_mounts = Rc::new(Cell::new(0));
+    let survivor = create_element::<CountMounts>(CountMountsProps {
+        count: survivor_mounts.clone(),
+    });
+    let children = create_state(Layout::from(vec![first, survivor.clone()]));
+    let fragment = create_element::<Fragment>(FragmentProps {
+        children: PropValue::from_signal(children.clone()),
+    });
+    mount_root(&fragment);
+
+    children.set_unchecked(Layout::from(survivor));
+
+    assert_eq!(incidental.get(), 1);
+    assert_eq!(survivor_mounts.get(), 1);
+}
+
 #[test]
 fn for_notifies_later_siblings_when_previous_sibling_set_changes() {
     let first = create_element::<Empty>(());
@@ -416,4 +464,37 @@ fn for_notifies_later_siblings_when_previous_sibling_set_changes() {
 
     assert_eq!(third.previous_siblings(), vec![second]);
     assert_eq!(third_places.get(), 2);
+}
+
+#[test]
+fn for_lifecycle_signal_reads_do_not_reenter_reconciliation() {
+    let incidental = create_state(0);
+    let first = create_element::<Empty>(());
+    first.on_unmount({
+        let incidental = incidental.clone();
+        move || incidental.set(incidental.get() + 1)
+    });
+
+    let survivor_mounts = Rc::new(Cell::new(0));
+    let survivor = create_element::<CountMounts>(CountMountsProps {
+        count: survivor_mounts.clone(),
+    });
+    let data = create_state(vec![1, 2]);
+    let list = nestix::create_for_identity_from_signal(data.clone(), {
+        let first = first.clone();
+        let survivor = survivor.clone();
+        move |item| {
+            PropValue::from_plain(match item.get() {
+                1 => first.clone(),
+                2 => survivor.clone(),
+                _ => unreachable!("test data only contains two items"),
+            })
+        }
+    });
+    mount_root(&list);
+
+    data.set(vec![2]);
+
+    assert_eq!(incidental.get(), 1);
+    assert_eq!(survivor_mounts.get(), 1);
 }

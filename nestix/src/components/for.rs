@@ -73,73 +73,75 @@ pub fn For<I: IntoIterator + Clone + 'static, K: Eq + Hash + 'static>(
 
     effect!(
         [element, props.data, props.key, props.children] || {
-            let prev_children = element.take_children();
-            let mut prev_signals = prev_signals.borrow_mut();
-            let mut prev_keys = prev_keys.borrow_mut();
             let key_fn = key.get();
+            let children_fn = children.get();
             let next_data = data.get().into_iter().collect::<Vec<_>>();
             let next_keys = next_data
                 .iter()
                 .map(|item| key_fn(item))
                 .collect::<Vec<_>>();
+            // Lifecycle and placement callbacks may access unrelated signals;
+            // they must not become dependencies of this reconciliation effect.
+            untrack(|| {
+                let prev_children = element.take_children();
+                let mut prev_signals = prev_signals.borrow_mut();
+                let mut prev_keys = prev_keys.borrow_mut();
+                let result = reconcile(&*prev_keys, &next_keys);
+                let ReconcileResult { removed, mapping } = result;
 
-            let result = reconcile(&*prev_keys, &next_keys);
-            let ReconcileResult { removed, mapping } = result;
+                for prev_i in removed {
+                    prev_children[prev_i].unmount();
+                }
 
-            for prev_i in removed {
-                prev_children[prev_i].unmount();
-            }
-
-            let mut next_children: Vec<Element> = Vec::new();
-            let mut next_signals: Vec<State<<I as IntoIterator>::Item>> = Vec::new();
-            let mut previous_siblings_changed = false;
-            for (i, prev_i) in mapping.iter().enumerate() {
-                let (signal, child) = if let Some(prev_i) = prev_i {
-                    let signal = prev_signals[*prev_i].clone();
-                    let child = prev_children[*prev_i].clone();
-                    signal.set(next_data[i].clone());
-                    (signal, child)
-                } else {
-                    let signal = create_state(next_data[i].clone());
-                    let child = (children.get())(signal.clone().into_readonly()).get();
-                    (signal, child)
-                };
-
-                if let Some(prev_i) = *prev_i {
-                    element.add_child(child.clone());
-
-                    let pred = if i > 0 {
-                        Some(&next_children[i - 1])
+                let mut next_children: Vec<Element> = Vec::new();
+                let mut next_signals: Vec<State<<I as IntoIterator>::Item>> = Vec::new();
+                let mut previous_siblings_changed = false;
+                for (i, prev_i) in mapping.iter().enumerate() {
+                    let (signal, child) = if let Some(prev_i) = prev_i {
+                        let signal = prev_signals[*prev_i].clone();
+                        let child = prev_children[*prev_i].clone();
+                        signal.set(next_data[i].clone());
+                        (signal, child)
                     } else {
-                        None
-                    };
-                    let prev_pred = if prev_i > 0 {
-                        Some(&prev_children[prev_i - 1])
-                    } else {
-                        None
+                        let signal = create_state(next_data[i].clone());
+                        let child = children_fn(signal.clone().into_readonly()).get();
+                        (signal, child)
                     };
 
-                    if pred != prev_pred || previous_siblings_changed {
-                        child.notify_place(true);
-                    }
-                } else {
-                    untrack(|| {
+                    if let Some(prev_i) = *prev_i {
+                        element.add_child(child.clone());
+
+                        let pred = if i > 0 {
+                            Some(&next_children[i - 1])
+                        } else {
+                            None
+                        };
+                        let prev_pred = if prev_i > 0 {
+                            Some(&prev_children[prev_i - 1])
+                        } else {
+                            None
+                        };
+
+                        if pred != prev_pred || previous_siblings_changed {
+                            child.notify_place(true);
+                        }
+                    } else {
                         child.set_in_list(true);
                         child.mount(Some(&element));
-                    });
+                    }
+
+                    if *prev_i != Some(i) {
+                        previous_siblings_changed = true;
+                    }
+
+                    next_signals.push(signal);
+                    next_children.push(child);
                 }
 
-                if *prev_i != Some(i) {
-                    previous_siblings_changed = true;
-                }
-
-                next_signals.push(signal);
-                next_children.push(child);
-            }
-
-            *prev_keys = next_keys;
-            *prev_signals = next_signals;
-            element.notify_last_handle_change();
+                *prev_keys = next_keys;
+                *prev_signals = next_signals;
+                element.notify_last_handle_change();
+            });
         }
     );
 }
