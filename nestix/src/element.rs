@@ -185,25 +185,13 @@ impl Element {
         self.data.on_place_callbacks.take();
     }
 
-    /// Returns the handle of the preceding element in the nearest list.
+    /// Returns the nearest preceding host handle in the nearest list.
+    ///
+    /// Logical siblings that do not render a host object are skipped.
     pub fn pred_handle(&self) -> Option<Shared<dyn Any>> {
-        let parent = self.parent()?;
-
-        if !self.is_in_list() {
-            return parent.pred_handle();
-        }
-
-        let children = parent.data.children.borrow();
-        let index = children.iter().position(|child| child == self)?;
-
-        if index == 0 {
-            return None;
-        }
-
-        let pred_node = children[index - 1].clone();
-        drop(children);
-
-        pred_node.last_handle()
+        self.previous_siblings()
+            .into_iter()
+            .find_map(|sibling| sibling.last_handle())
     }
 
     /// Returns the last host handle in this element's subtree.

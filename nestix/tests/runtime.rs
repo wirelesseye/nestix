@@ -371,6 +371,40 @@ fn previous_siblings_come_from_nearest_list() {
 }
 
 #[test]
+fn predecessor_handle_skips_logical_siblings_without_host_handles() {
+    let parent = create_element::<Host>(());
+    let first = create_element::<Host>(());
+    let transparent = create_element::<Empty>(());
+    let third = create_element::<Empty>(());
+    let placements = Rc::new(RefCell::new(Vec::new()));
+
+    third.on_place({
+        let placements = placements.clone();
+        move |placement| placements.borrow_mut().push(capture_placement(placement))
+    });
+
+    let fragment = create_element::<Fragment>(FragmentProps {
+        children: PropValue::from_plain(Layout::from(vec![first, transparent, third.clone()])),
+    });
+
+    mount_root(&parent);
+    fragment.mount(Some(&parent));
+
+    assert_eq!(
+        third.pred_handle().and_then(handle_name),
+        Some(String::from("host"))
+    );
+    assert_eq!(
+        placements.borrow().as_slice(),
+        &[CapturedPlacement {
+            pred: Some(String::from("host")),
+            parent: Some(String::from("host")),
+            index: Some(2),
+        }]
+    );
+}
+
+#[test]
 fn fragment_notifies_later_siblings_when_previous_sibling_set_changes() {
     let first = create_element::<Empty>(());
     let second = create_element::<Empty>(());
