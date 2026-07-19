@@ -14,7 +14,7 @@ use wasm_bindgen::prelude::wasm_bindgen;
 #[wasm_bindgen(start)]
 fn init() {
     wasm_logger::init(wasm_logger::Config::default());
-    let app = layout! {App};
+    let app = layout! { App };
     mount_root(&app);
     mem::forget(app);
 }
@@ -33,17 +33,21 @@ fn App() -> Element {
         Root {
             Div(.class = "nav".to_string()) {
                 Button(
-                    .on_click = callback!([page] || {
-                        page.set(AppPage::Counter);
-                    }),
+                    .on_click = callback!(
+                        [page] || {
+                            page.set(AppPage::Counter);
+                        }
+                    ),
                     .disabled = computed!([page] || page.get() == AppPage::Counter),
                 ) {
                     Text("Counter")
                 }
                 Button(
-                    .on_click = callback!([page] || {
-                        page.set(AppPage::TodoList);
-                    }),
+                    .on_click = callback!(
+                        [page] || {
+                            page.set(AppPage::TodoList);
+                        }
+                    ),
                     .disabled = computed!([page] || page.get() == AppPage::TodoList),
                 ) {
                     Text("Todo List")
@@ -67,11 +71,8 @@ fn Counter() -> Element {
     layout! {
         Div(.class = "counter".to_string()) {
             Div {
-                Text(computed!(
-                    [count] || format!("Count: {}", count.get())
-                ))
+                Text(computed!([count] || format!("Count: {}", count.get())))
             }
-
             Button(
                 .on_click = callback!(
                     [count] || {
@@ -81,7 +82,6 @@ fn Counter() -> Element {
             ) {
                 Text("Click")
             }
-
             if count.get() % 2 == 0 {
                 Div {
                     Text("Is even!")
@@ -142,13 +142,12 @@ fn TodoList() -> Element {
             Div(.class = "todo-input".to_string()) {
                 Input(
                     .value = input_value.clone(),
-                    .on_value_change = callback!(move |value| input_value.set(value))
+                    .on_value_change = callback!(move |value| input_value.set(value)),
                 )
                 Button(.on_click = add) {
                     Text("Add")
                 }
             }
-
             Div(.class = "todo-list".to_string()) {
                 for item in items.clone() where key = |item| item.0.clone() {
                     TodoListItem(
@@ -193,33 +192,26 @@ fn TodoListItem(props: &TodoListItemProps) -> Element {
 
     layout! {
         Div(.class = "todo-list-item".to_string()) {
-            Button(
-                .on_click = callback!([key, props.remove] || remove(&key.get()))
-            ) {
+            Button(.on_click = callback!([key, props.remove] || remove(&key.get()))) {
                 Text("✕")
             }
-            Button(
-                .on_click = callback!([key, props.move_up] || move_up(&key.get()))
-            ) {
+            Button(.on_click = callback!([key, props.move_up] || move_up(&key.get()))) {
                 Text("↑")
             }
-            Button(
-                .on_click = callback!([key, props.move_down] || move_down(&key.get()))
-            ) {
+            Button(.on_click = callback!([key, props.move_down] || move_down(&key.get()))) {
                 Text("↓")
             }
-            Button(
-                .on_click = toggle_edit
-            ) {
+            Button(.on_click = toggle_edit) {
                 Text("Edit")
             }
-
             if is_edit.get() {
                 Input(
                     .value = value.clone(),
-                    .on_value_change = callback!([key, props.set_content] |value: String| {
-                        set_content(&key.get(), value);
-                    }),
+                    .on_value_change = callback!(
+                        [key, props.set_content] |value: String| {
+                            set_content(&key.get(), value);
+                        }
+                    ),
                 )
             } else {
                 Text(value.clone())
