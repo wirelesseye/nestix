@@ -200,14 +200,40 @@ fn parse_props_body(input: syn::parse::ParseStream) -> syn::Result<PropsBody> {
     let mut named = Vec::new();
     while !input.is_empty() {
         let field: NamedField = input.parse()?;
-        named.push(field);
 
         if input.peek(Token![,]) {
             input.parse::<Token![,]>()?;
+        } else if field.value.is_some() && !input.is_empty() {
+            return Err(input.error("expected `,` between properties"));
         }
+
+        named.push(field);
     }
 
     Ok(PropsBody { start, named })
+}
+
+#[cfg(test)]
+mod tests {
+    use super::PropsInput;
+
+    #[test]
+    fn nested_property_must_be_followed_by_a_comma() {
+        let result = syn::parse_str::<PropsInput>(
+            "FlexViewProps(.view(.width = 120, .height = 6) .bg_color = Color::RED)",
+        );
+
+        let error = result.err().expect("missing comma should be rejected");
+        assert_eq!(error.to_string(), "expected `,` between properties");
+    }
+
+    #[test]
+    fn nested_property_followed_by_a_comma_is_accepted() {
+        syn::parse_str::<PropsInput>(
+            "FlexViewProps(.view(.width = 120, .height = 6), .bg_color = Color::RED)",
+        )
+        .expect("comma-separated properties should be accepted");
+    }
 }
 
 fn generate_build_props(input: &PropsInput) -> Result<TokenStream2, syn::Error> {

@@ -47,7 +47,6 @@ impl Component for Host {
     }
 }
 
-
 struct ParentWithChild;
 
 struct ParentWithChildProps {
@@ -435,7 +434,6 @@ fn fragment_notifies_later_siblings_when_previous_sibling_set_changes() {
     assert_eq!(third.previous_siblings(), vec![second]);
     assert_eq!(third_places.get(), 2);
 }
-
 
 #[test]
 fn fragment_lifecycle_signal_reads_do_not_reenter_reconciliation() {
