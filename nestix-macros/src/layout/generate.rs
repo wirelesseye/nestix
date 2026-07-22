@@ -309,12 +309,23 @@ fn generate_layout_item_if(ctx: &mut Context, input: &LayoutItemIf) -> Result<()
         }
     }
     .to_tokens(&mut ctx.push_output);
-    quote! {
-        if #cond {
-            #then_direct_output
+    if else_branch.is_some() {
+        quote! {
+            if #cond {
+                #then_direct_output
+            }
         }
+        .to_tokens(&mut ctx.direct_output);
+    } else {
+        quote! {
+            if #cond {
+                Some(#then_direct_output)
+            } else {
+                None
+            }
+        }
+        .to_tokens(&mut ctx.direct_output);
     }
-    .to_tokens(&mut ctx.direct_output);
 
     if let Some(else_branch) = else_branch {
         match &**else_branch {

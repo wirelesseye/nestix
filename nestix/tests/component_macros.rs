@@ -209,6 +209,33 @@ fn layout_macro_mounts_nested_components_through_fragment() {
 }
 
 #[test]
+fn layout_macro_accepts_if_without_else() {
+    let shown_count = Rc::new(Cell::new(0));
+    let hidden_count = Rc::new(Cell::new(0));
+
+    let shown = layout! {
+        Fragment {
+            if true {
+                Counter(.count = shown_count.clone())
+            }
+        }
+    };
+    let hidden = layout! {
+        Fragment {
+            if false {
+                Counter(.count = hidden_count.clone())
+            }
+        }
+    };
+
+    mount_root(&shown);
+    mount_root(&hidden);
+
+    assert_eq!(shown_count.get(), 1);
+    assert_eq!(hidden_count.get(), 0);
+}
+
+#[test]
 fn layout_macro_binds_host_handle_when_it_is_provided() {
     let stale_handle =
         nestix::Shared::from(Rc::new(String::from("stale")) as Rc<dyn std::any::Any>);
