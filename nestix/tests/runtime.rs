@@ -5,7 +5,7 @@ use std::{
 
 use nestix::{
     Component, ComponentOutput, Element, Fragment, FragmentProps, Layout, Placement, PropValue,
-    Props, create_element, create_state, mount_root, scoped_effect,
+    Props, create_element, create_state, mount_root, scoped_effect, unmount_root,
 };
 
 struct Empty;
@@ -67,6 +67,31 @@ impl Component for ParentWithChild {
         props.child_slot.replace(Some(child.clone()));
         child.mount(Some(element));
     }
+}
+
+#[test]
+fn unmount_root_unmounts_the_mounted_root() {
+    let unmounts = Rc::new(Cell::new(0));
+    let root = create_element::<Empty>(());
+    root.on_unmount({
+        let unmounts = unmounts.clone();
+        move || unmounts.set(unmounts.get() + 1)
+    });
+
+    mount_root(&root);
+
+    assert_eq!(unmount_root(), Ok(()));
+    assert_eq!(unmounts.get(), 1);
+    assert!(unmount_root().is_err());
+}
+
+#[test]
+fn unmount_root_errors_after_direct_root_unmount() {
+    let root = create_element::<Empty>(());
+    mount_root(&root);
+    root.unmount();
+
+    assert!(unmount_root().is_err());
 }
 
 #[test]

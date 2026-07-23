@@ -10,6 +10,10 @@ use std::{
 use crate::{Component, ComponentID, Shared, component_id, prop::Props};
 use nestix_signal::{EffectHandle, effect};
 
+thread_local! {
+    static MOUNTED_ROOT: RefCell<Option<Element>> = const { RefCell::new(None) };
+}
+
 /// A value that can mount itself into an optional parent element.
 ///
 /// Component functions use this trait for return values that may produce no
@@ -39,6 +43,19 @@ impl ComponentOutput for Element {
         if let Some(parent) = parent {
             self.extend_contexts(parent.contexts());
             parent.add_child(self.clone());
+        } else {
+            MOUNTED_ROOT.with(|root| root.replace(Some(self.clone())));
+            self.on_unmount({
+                let element = self.downgrade();
+                move || {
+                    MOUNTED_ROOT.with(|root| {
+                        let mounted_element = root.borrow().as_ref().map(Element::downgrade);
+                        if mounted_element == Some(element.clone()) {
+                            root.take();
+                        }
+                    });
+                }
+            });
         }
         self.data.parent.replace(parent.map(Element::downgrade));
         (self.component_id().mount_fn)(self);
@@ -450,6 +467,16 @@ impl WeakElement {
 /// Mounts an element as the root of a tree.
 pub fn mount_root(element: &Element) {
     element.mount(None);
+}
+
+/// Unmounts the currently mounted root.
+///
+/// Returns an error if no root is currently mounted.
+pub fn unmount_root() -> Result<(), &'static str> {
+    let root = MOUNTED_ROOT.with(|root| root.take());
+    let root = root.ok_or("no root has been mounted")?;
+    root.unmount();
+    Ok(())
 }
 
 /// Creates an element for component `C` with `props`.
