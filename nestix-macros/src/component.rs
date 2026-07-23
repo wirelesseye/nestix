@@ -65,7 +65,10 @@ fn generate_component(
 ) -> Result<TokenStream2, syn::Error> {
     let nestix_path = nestix_path();
     let PropsAttr { generic_params } = attr;
-    let ItemFn { vis, sig, .. } = item;
+    let ItemFn {
+        attrs, vis, sig, ..
+    } = item;
+    let docs = attrs.iter().filter(|attr| attr.path().is_ident("doc"));
     let impl_generics = &sig.generics;
 
     let mut generic_args = generic_params.clone();
@@ -118,6 +121,7 @@ fn generate_component(
     let where_clause = &impl_generics.where_clause;
 
     Ok(quote! {
+        #(#docs)*
         #vis struct #ident<#generic_params> #struct_fields;
 
         impl #impl_generics #nestix_path::Component for #ident<#generic_args> #where_clause {
