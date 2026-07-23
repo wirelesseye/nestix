@@ -337,6 +337,10 @@ fn generate_builder(ctx: &Context) -> Result<TokenStream, syn::Error> {
         let field_ident = field.ident.as_ref().unwrap();
         let field_ty = &field.ty;
         let field_feature = &field_features[i];
+        let field_docs = field
+            .attrs
+            .iter()
+            .filter(|attr| attr.path().is_ident("doc"));
 
         let ident_pascal_string = field_ident.to_string().to_case(Case::Pascal);
 
@@ -508,6 +512,7 @@ fn generate_builder(ctx: &Context) -> Result<TokenStream, syn::Error> {
 
             quote! {
                 impl<#method_type_bounds> #builder_ident<#method_generics_params> {
+                    #(#field_docs)*
                     pub fn #field_ident #method_value_generic (self, value: #method_value_ty) -> #builder_ident<#method_result_type_args>
                     #method_where_clause
                     {
