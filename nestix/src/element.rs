@@ -43,19 +43,6 @@ impl ComponentOutput for Element {
         if let Some(parent) = parent {
             self.extend_contexts(parent.contexts());
             parent.add_child(self.clone());
-        } else {
-            MOUNTED_ROOT.with(|root| root.replace(Some(self.clone())));
-            self.on_unmount({
-                let element = self.downgrade();
-                move || {
-                    MOUNTED_ROOT.with(|root| {
-                        let mounted_element = root.borrow().as_ref().map(Element::downgrade);
-                        if mounted_element == Some(element.clone()) {
-                            root.take();
-                        }
-                    });
-                }
-            });
         }
         self.data.parent.replace(parent.map(Element::downgrade));
         (self.component_id().mount_fn)(self);
@@ -466,6 +453,18 @@ impl WeakElement {
 
 /// Mounts an element as the root of a tree.
 pub fn mount_root(element: &Element) {
+    MOUNTED_ROOT.with(|root| root.replace(Some(element.clone())));
+    element.on_unmount({
+        let element = element.downgrade();
+        move || {
+            MOUNTED_ROOT.with(|root| {
+                let mounted_element = root.borrow().as_ref().map(Element::downgrade);
+                if mounted_element == Some(element.clone()) {
+                    root.take();
+                }
+            });
+        }
+    });
     element.mount(None);
 }
 
