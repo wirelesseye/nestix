@@ -5,7 +5,7 @@ use std::{
 
 use nestix::{
     Component, ComponentOutput, Element, Fragment, FragmentProps, Layout, Placement, PropValue,
-    Props, create_element, create_state, mount_root, scoped_effect, unmount_root,
+    Props, create_element, create_state, mount_root, unmount_root,
 };
 
 struct Empty;
@@ -267,7 +267,7 @@ fn scoped_effect_is_cancelled_when_element_unmounts() {
     let observed = Rc::new(Cell::new(0));
     let runs = Rc::new(Cell::new(0));
 
-    let handle = scoped_effect(&root, {
+    let handle = root.scoped_effect({
         let value = value.clone();
         let observed = observed.clone();
         let runs = runs.clone();
@@ -296,6 +296,12 @@ fn scoped_effect_is_cancelled_when_element_unmounts() {
 }
 
 #[test]
+#[should_panic(expected = "scoped_effect must be called inside a component function")]
+fn scoped_effect_requires_a_current_component_element() {
+    nestix::scoped_effect(|| {});
+}
+
+#[test]
 fn subtree_effects_are_cancelled_before_any_unmount_callback() {
     let child_slot = Rc::new(RefCell::new(None));
     let root = create_element::<ParentWithChild>(ParentWithChildProps {
@@ -310,7 +316,7 @@ fn subtree_effects_are_cancelled_before_any_unmount_callback() {
     let value = create_state(1);
     let root_runs = Rc::new(Cell::new(0));
     let child_runs = Rc::new(Cell::new(0));
-    let root_handle = scoped_effect(&root, {
+    let root_handle = root.scoped_effect({
         let value = value.clone();
         let root_runs = root_runs.clone();
         move || {
@@ -318,7 +324,7 @@ fn subtree_effects_are_cancelled_before_any_unmount_callback() {
             root_runs.set(root_runs.get() + 1);
         }
     });
-    let child_handle = scoped_effect(&child, {
+    let child_handle = child.scoped_effect({
         let value = value.clone();
         let child_runs = child_runs.clone();
         move || {

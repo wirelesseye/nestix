@@ -175,9 +175,8 @@ impl nestix::Component for TransparentHost {
 impl Props for ScopedEffectComponentProps {}
 
 #[component]
-fn ScopedEffectComponent(props: &ScopedEffectComponentProps, element: &Element) {
+fn ScopedEffectComponent(props: &ScopedEffectComponentProps) {
     scoped_effect!(
-        element,
         [props.value, props.observed] || {
             observed.set(value.get());
         }

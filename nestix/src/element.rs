@@ -12,6 +12,21 @@ use nestix_signal::{EffectHandle, effect};
 
 thread_local! {
     static MOUNTED_ROOT: RefCell<Option<Element>> = const { RefCell::new(None) };
+    static CURRENT_ELEMENT: RefCell<Option<Element>> = const { RefCell::new(None) };
+}
+
+struct CurrentElementGuard(Option<Element>);
+
+impl Drop for CurrentElementGuard {
+    fn drop(&mut self) {
+        CURRENT_ELEMENT.with(|current| current.replace(self.0.take()));
+    }
+}
+
+fn with_current_element<T>(element: &Element, f: impl FnOnce() -> T) -> T {
+    let previous = CURRENT_ELEMENT.with(|current| current.replace(Some(element.clone())));
+    let _guard = CurrentElementGuard(previous);
+    f()
 }
 
 /// A value that can mount itself into an optional parent element.
@@ -45,7 +60,7 @@ impl ComponentOutput for Element {
             parent.add_child(self.clone());
         }
         self.data.parent.replace(parent.map(Element::downgrade));
-        (self.component_id().mount_fn)(self);
+        with_current_element(self, || (self.component_id().mount_fn)(self));
         self.notify_after_mount();
         self.notify_place(false);
         if let Some(parent) = parent {
@@ -305,6 +320,24 @@ impl Element {
             .insert(callback);
     }
 
+    /// Registers a reactive side effect that is canceled when this element
+    /// unmounts.
+    ///
+    /// The effect runs immediately and reruns when tracked signal reads change,
+    /// just like [`effect`]. The returned handle can still be used to cancel the
+    /// effect earlier.
+    #[track_caller]
+    pub fn scoped_effect(&self, f: impl Fn() + 'static) -> EffectHandle {
+        let handle = effect(f);
+        if !handle.is_cancelled() {
+            self.on_scoped_effect_cleanup({
+                let handle = handle.clone();
+                move || handle.cancel()
+            });
+        }
+        handle
+    }
+
     /// Registers a callback to run when this element's placement changes.
     pub fn on_place(&self, f: impl Fn(&Placement) + 'static) {
         let callback = Shared::from(Rc::new(f) as Rc<dyn Fn(&Placement)>);
@@ -499,21 +532,23 @@ pub fn create_element<C: Component>(props: C::Props) -> Element {
     }
 }
 
-/// Registers a reactive side effect that is canceled when `element` unmounts.
+/// Registers a reactive side effect scoped to the current component element.
 ///
 /// The effect runs immediately and reruns when tracked signal reads change,
-/// just like [`effect`]. The returned handle can still be used to cancel the
-/// effect earlier.
+/// just like [`effect`], and is automatically canceled when the current element
+/// unmounts. This function must be called while a component function is
+/// executing. Use [`Element::scoped_effect`] when the element is available
+/// explicitly.
+///
+/// # Panics
+///
+/// Panics when called outside a component function.
 #[track_caller]
-pub fn scoped_effect(element: &Element, f: impl Fn() + 'static) -> EffectHandle {
-    let handle = effect(f);
-    if !handle.is_cancelled() {
-        element.on_scoped_effect_cleanup({
-            let handle = handle.clone();
-            move || handle.cancel()
-        });
-    }
-    handle
+pub fn scoped_effect(f: impl Fn() + 'static) -> EffectHandle {
+    let element = CURRENT_ELEMENT.with(|current| current.borrow().clone());
+    element
+        .expect("scoped_effect must be called inside a component function")
+        .scoped_effect(f)
 }
 
 /// Placement information for an element relative to host-rendered nodes.

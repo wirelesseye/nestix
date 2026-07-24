@@ -219,10 +219,10 @@ pub fn effect(input: TokenStream) -> TokenStream {
 ///
 /// This wraps the runtime `nestix::scoped_effect` function after applying
 /// [`closure!`] capture handling. The effect is automatically canceled when the
-/// provided element unmounts.
+/// current component element unmounts.
 ///
 /// ```ignore
-/// scoped_effect!(element, [props.value] || sync_host(value.get()));
+/// scoped_effect!([props.value] || sync_host(value.get()));
 /// ```
 #[proc_macro]
 pub fn scoped_effect(input: TokenStream) -> TokenStream {
