@@ -236,6 +236,37 @@ fn layout_macro_accepts_if_without_else() {
 }
 
 #[test]
+fn layout_macro_accepts_reactive_if_directive() {
+    let show = create_state(false);
+    let show_in_layout = show.clone();
+    let count = Rc::new(Cell::new(0));
+    let element = layout! {
+        Fragment {
+            DefaultChildren($if = show_in_layout.get()) {
+                Counter(.count = count.clone())
+            }
+        }
+    };
+
+    mount_root(&element);
+    assert_eq!(count.get(), 0);
+
+    show.set(true);
+    assert_eq!(count.get(), 1);
+}
+
+#[test]
+fn layout_if_directive_supports_components_without_props() {
+    let element = layout! {
+        Fragment {
+            TransparentHost($if = true)
+        }
+    };
+
+    mount_root(&element);
+}
+
+#[test]
 fn layout_macro_binds_host_handle_when_it_is_provided() {
     let stale_handle =
         nestix::Shared::from(Rc::new(String::from("stale")) as Rc<dyn std::any::Any>);

@@ -136,8 +136,8 @@ pub fn build_props(input: TokenStream) -> TokenStream {
 
 /// Creates Nestix elements with component-oriented layout syntax.
 ///
-/// The macro accepts elements, expression splices, `if`/`else` branches, and
-/// signal-backed `for` loops.
+/// The macro accepts elements, expression splices, `if`/`else` branches,
+/// signal-backed `for` loops, and layout-only directives such as `$if`.
 ///
 /// ```ignore
 /// layout! {
