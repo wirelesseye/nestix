@@ -54,10 +54,13 @@ fn App() -> Element {
                 }
             }
             Div(.class = "content".to_string()) {
-                if page.get() == AppPage::Counter {
-                    Counter
-                } else {
-                    TodoList
+                match page.get() {
+                    AppPage::Counter => {
+                        Counter
+                    },
+                    AppPage::TodoList => {
+                        TodoList
+                    },
                 }
             }
         }

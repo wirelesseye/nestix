@@ -1,6 +1,6 @@
 use proc_macro2::{TokenStream, TokenTree};
 use syn::{
-    Expr, FnArg, Ident, Token, Type, braced, bracketed, parenthesized, parse::Parse,
+    Expr, FnArg, Ident, Pat, Token, Type, braced, bracketed, parenthesized, parse::Parse,
     punctuated::Punctuated, token,
 };
 
@@ -451,11 +451,58 @@ impl Parse for LayoutItemFor {
     }
 }
 
+pub struct LayoutItemMatchArm {
+    pub pat: Pat,
+    pub guard: Option<Expr>,
+    pub body: TokenStream,
+}
+
+pub struct LayoutItemMatch {
+    pub expr: Expr,
+    pub arms: Vec<LayoutItemMatchArm>,
+}
+
+impl Parse for LayoutItemMatch {
+    fn parse(input: syn::parse::ParseStream) -> syn::Result<Self> {
+        input.parse::<Token![match]>()?;
+        let expr = Expr::parse_without_eager_brace(input)?;
+
+        let inner;
+        braced!(inner in input);
+        let mut arms = Vec::new();
+        while !inner.is_empty() {
+            let pat = Pat::parse_multi_with_leading_vert(&inner)?;
+            let guard = if inner.peek(Token![if]) {
+                inner.parse::<Token![if]>()?;
+                Some(Expr::parse_without_eager_brace(&inner)?)
+            } else {
+                None
+            };
+            inner.parse::<Token![=>]>()?;
+
+            let body;
+            braced!(body in inner);
+            arms.push(LayoutItemMatchArm {
+                pat,
+                guard,
+                body: body.parse()?,
+            });
+
+            if inner.peek(Token![,]) {
+                inner.parse::<Token![,]>()?;
+            }
+        }
+
+        Ok(Self { expr, arms })
+    }
+}
+
 pub enum LayoutItem {
     Element(LayoutItemElement),
     Expr(LayoutItemExpr),
     If(LayoutItemIf),
     For(LayoutItemFor),
+    Match(LayoutItemMatch),
 }
 
 impl LayoutItem {
@@ -465,6 +512,7 @@ impl LayoutItem {
             LayoutItem::Expr(item) => item.yield_token.is_some(),
             LayoutItem::If(_) => true,
             LayoutItem::For(_) => false,
+            LayoutItem::Match(_) => true,
         }
     }
 }
@@ -484,6 +532,8 @@ impl Parse for LayoutItem {
                 Ok(Self::If(input.parse()?))
             } else if input.peek(Token![for]) {
                 Ok(Self::For(input.parse()?))
+            } else if input.peek(Token![match]) {
+                Ok(Self::Match(input.parse()?))
             } else {
                 Ok(input.parse::<LayoutItemElementInput>()?.into_layout_item())
             }
@@ -614,5 +664,50 @@ mod tests {
         .expect("unknown directive should fail");
 
         assert_eq!(error.to_string(), "unknown layout directive `$visible`");
+    }
+
+    #[test]
+    fn match_arms_accept_patterns_guards_and_preserve_child_tokens() {
+        let input = syn::parse2::<LayoutInput>(quote! {
+            match value {
+                Some(item) if item.is_ready() => {
+                    Widget {
+                        Child(.value = item)
+                    }
+                },
+                None | Some(_) => {
+                    Empty
+                }
+            }
+        })
+        .expect("layout match should parse");
+
+        let LayoutItem::Match(item_match) = &input.items[0] else {
+            panic!("expected a match item");
+        };
+        assert_eq!(item_match.arms.len(), 2);
+        assert_eq!(
+            item_match.arms[0].pat.to_token_stream().to_string(),
+            quote!(Some(item)).to_string()
+        );
+        assert_eq!(
+            item_match.arms[0]
+                .guard
+                .as_ref()
+                .expect("expected guard")
+                .to_token_stream()
+                .to_string(),
+            quote!(item.is_ready()).to_string()
+        );
+
+        assert_eq!(
+            item_match.arms[0].body.to_string(),
+            quote! {
+                Widget {
+                    Child(.value = item)
+                }
+            }
+            .to_string()
+        );
     }
 }

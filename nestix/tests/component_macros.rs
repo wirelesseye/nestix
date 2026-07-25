@@ -273,6 +273,72 @@ fn layout_macro_accepts_if_without_else() {
 }
 
 #[test]
+fn layout_macro_accepts_reactive_match_arms_with_dsl_bodies() {
+    let selected = create_state(0);
+    let selected_in_layout = selected.clone();
+    let first_count = Rc::new(Cell::new(0));
+    let second_count = Rc::new(Cell::new(0));
+    let third_count = Rc::new(Cell::new(0));
+    let first_count_in_layout = first_count.clone();
+    let second_count_in_layout = second_count.clone();
+    let third_count_in_layout = third_count.clone();
+
+    let element = layout! {
+        Fragment {
+            match selected_in_layout.get() {
+                value @ (0 | 1) if value == 0 => {
+                    Counter(
+                        .count = if value == 0 {
+                            first_count_in_layout.clone()
+                        } else {
+                            unreachable!()
+                        },
+                    )
+                },
+                1 => {
+                    Counter(.count = second_count_in_layout.clone())
+                    Counter(.count = third_count_in_layout.clone())
+                },
+                _ => {},
+            }
+        }
+    };
+
+    mount_root(&element);
+    assert_eq!(first_count.get(), 1);
+    assert_eq!(second_count.get(), 0);
+    assert_eq!(third_count.get(), 0);
+
+    selected.set(1);
+    assert_eq!(first_count.get(), 1);
+    assert_eq!(second_count.get(), 1);
+    assert_eq!(third_count.get(), 1);
+
+    selected.set(2);
+    assert_eq!(first_count.get(), 1);
+    assert_eq!(second_count.get(), 1);
+    assert_eq!(third_count.get(), 1);
+}
+
+#[test]
+fn layout_macro_match_with_one_item_per_arm_produces_a_child_layout() {
+    let element = layout! {
+        Fragment {
+            match true {
+                true => {
+                    TransparentHost
+                },
+                false => {
+                    TransparentHost
+                },
+            }
+        }
+    };
+
+    mount_root(&element);
+}
+
+#[test]
 fn layout_macro_accepts_reactive_if_directive() {
     let show = create_state(false);
     let show_in_layout = show.clone();

@@ -6,7 +6,7 @@ use crate::{
     clone_var::generate_clone_var,
     layout::parse::{
         LayoutElementChildren, LayoutElementProps, LayoutInput, LayoutItem, LayoutItemElement,
-        LayoutItemElse, LayoutItemExpr, LayoutItemFor, LayoutItemIf,
+        LayoutItemElse, LayoutItemExpr, LayoutItemFor, LayoutItemIf, LayoutItemMatch,
     },
     util::nestix_path,
 };
@@ -402,12 +402,47 @@ fn generate_layout_item_if(ctx: &mut Context, input: &LayoutItemIf) -> Result<()
     Ok(())
 }
 
+fn generate_layout_item_match(
+    ctx: &mut Context,
+    input: &LayoutItemMatch,
+) -> Result<(), syn::Error> {
+    let nestix_path = nestix_path();
+    let LayoutItemMatch { expr, arms } = input;
+    let mut arm_output = TokenStream::new();
+    for arm in arms {
+        let pat = &arm.pat;
+        let guard = arm.guard.as_ref().map(|guard| quote! { if #guard });
+        let body = &arm.body;
+        quote! {
+            #pat #guard => {
+                #nestix_path::Layout::from(#nestix_path::layout! {
+                    #body
+                })
+            },
+        }
+        .to_tokens(&mut arm_output);
+    }
+
+    let output = quote! {{
+        match #expr {
+            #arm_output
+        }
+    }};
+
+    let element_ident = ctx.next_element_ident();
+    ctx.append_output(&element_ident, true, true);
+    ctx.record_element_output(&element_ident, output, true);
+
+    Ok(())
+}
+
 fn generate_layout_item(ctx: &mut Context, input: &LayoutItem) -> Result<(), syn::Error> {
     match input {
         LayoutItem::Element(item) => generate_layout_item_element(ctx, item),
         LayoutItem::Expr(item) => generate_layout_item_expr(ctx, item),
         LayoutItem::If(item) => generate_layout_item_if(ctx, item),
         LayoutItem::For(item) => generate_layout_item_for(ctx, item),
+        LayoutItem::Match(item) => generate_layout_item_match(ctx, item),
     }
 }
 
@@ -501,8 +536,8 @@ fn generate_layout_items(items: &[LayoutItem]) -> Result<TokenStream, syn::Error
 
             Ok(quote! {{
                 #nestix_path::computed(#nestix_path::closure!(
-                    #computed_element_defs
                     move || {
+                        #computed_element_defs
                         #direct_output
                     }
                 ))
