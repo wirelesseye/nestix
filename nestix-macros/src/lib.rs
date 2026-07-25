@@ -137,7 +137,8 @@ pub fn build_props(input: TokenStream) -> TokenStream {
 /// Creates Nestix elements with component-oriented layout syntax.
 ///
 /// The macro accepts elements, expression splices, `if`/`else` branches,
-/// signal-backed `for` loops, and layout-only directives such as `$if`.
+/// signal-backed `for` loops, and layout-only directives such as `$if` and
+/// `$wrapper`.
 ///
 /// ```ignore
 /// layout! {
@@ -146,6 +147,14 @@ pub fn build_props(input: TokenStream) -> TokenStream {
 ///             TodoListItem(.data = item)
 ///         }
 ///     }
+/// }
+/// ```
+///
+/// `$wrapper` nests an element inside one or more wrapper components:
+///
+/// ```ignore
+/// layout! {
+///     Content($wrapper = [ThemeProvider(theme), StyleProvider(styles)])
 /// }
 /// ```
 #[proc_macro]

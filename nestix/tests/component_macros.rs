@@ -1,4 +1,7 @@
-use std::{cell::Cell, rc::Rc};
+use std::{
+    cell::{Cell, RefCell},
+    rc::Rc,
+};
 
 use nestix::{
     ContextProvider, Element, Fragment, Layout, Props, build_props, component, create_state,
@@ -146,6 +149,28 @@ fn DefaultChildren(props: &DefaultChildrenProps) -> Element {
     }
 }
 
+#[props]
+struct RecordingProviderProps {
+    #[props(start)]
+    name: &'static str,
+
+    #[props(start)]
+    mounts: Rc<RefCell<Vec<&'static str>>>,
+
+    #[props(default)]
+    children: Layout,
+}
+
+#[component]
+fn RecordingProvider(props: &RecordingProviderProps) -> Element {
+    props.mounts.get().borrow_mut().push(props.name.get());
+    layout! {
+        Fragment {
+            $(props.children.clone())
+        }
+    }
+}
+
 struct ScopedEffectComponentProps {
     value: nestix::State<i32>,
     observed: Rc<Cell<i32>>,
@@ -276,6 +301,43 @@ fn layout_if_directive_supports_components_without_props() {
     };
 
     mount_root(&element);
+}
+
+#[test]
+fn layout_wrapper_directive_wraps_an_element() {
+    let mounts = Rc::new(RefCell::new(Vec::new()));
+    let count = Rc::new(Cell::new(0));
+    let element = layout! {
+        DefaultChildren($wrapper = RecordingProvider("theme", mounts.clone())) {
+            Counter(.count = count.clone())
+        }
+    };
+
+    mount_root(&element);
+
+    assert_eq!(&*mounts.borrow(), &["theme"]);
+    assert_eq!(count.get(), 1);
+}
+
+#[test]
+fn layout_wrapper_directive_nests_multiple_wrappers_in_order() {
+    let mounts = Rc::new(RefCell::new(Vec::new()));
+    let count = Rc::new(Cell::new(0));
+    let element = layout! {
+        DefaultChildren(
+            $wrapper = [
+                RecordingProvider("theme", mounts.clone()),
+                RecordingProvider("style", mounts.clone()),
+            ],
+        ) {
+            Counter(.count = count.clone())
+        }
+    };
+
+    mount_root(&element);
+
+    assert_eq!(&*mounts.borrow(), &["theme", "style"]);
+    assert_eq!(count.get(), 1);
 }
 
 #[test]

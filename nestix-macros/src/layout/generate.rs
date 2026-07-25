@@ -5,8 +5,8 @@ use syn::Ident;
 use crate::{
     clone_var::generate_clone_var,
     layout::parse::{
-        LayoutElementProps, LayoutInput, LayoutItem, LayoutItemElement, LayoutItemElse,
-        LayoutItemExpr, LayoutItemFor, LayoutItemIf,
+        LayoutElementChildren, LayoutElementProps, LayoutInput, LayoutItem, LayoutItemElement,
+        LayoutItemElse, LayoutItemExpr, LayoutItemFor, LayoutItemIf,
     },
     util::nestix_path,
 };
@@ -166,7 +166,21 @@ fn generate_layout_item_element(
         };
 
         if let Some((or_1, args, or_2)) = args {
-            let children = children.as_ref().unwrap();
+            let children = match children {
+                Some(LayoutElementChildren::Raw(children)) => children,
+                Some(LayoutElementChildren::Item(_)) => {
+                    return Err(syn::Error::new_spanned(
+                        ty,
+                        "layout wrapper cannot be combined with child closure arguments",
+                    ));
+                }
+                None => {
+                    return Err(syn::Error::new_spanned(
+                        ty,
+                        "layout child closure arguments require children",
+                    ));
+                }
+            };
             quote! {
                 .children = #nestix_path::callback!(
                     [#clone_vars] #or_1 #args #or_2 #nestix_path::prop_value!(#nestix_path::layout! {
@@ -176,23 +190,34 @@ fn generate_layout_item_element(
             }
             .to_tokens(&mut tokens);
         } else if let Some(children) = children {
-            if has_clone_vars {
-                quote! {
-                    .children = {
-                        #clone_vars_output
-                        #nestix_path::layout! {
+            match children {
+                LayoutElementChildren::Raw(children) if has_clone_vars => {
+                    quote! {
+                        .children = {
+                            #clone_vars_output
+                            #nestix_path::layout! {
+                                #children
+                            }
+                        },
+                    }
+                    .to_tokens(&mut tokens);
+                }
+                LayoutElementChildren::Raw(children) => {
+                    quote! {
+                        .children = #nestix_path::layout! {
                             #children
-                        }
-                    },
+                        },
+                    }
+                    .to_tokens(&mut tokens);
                 }
-                .to_tokens(&mut tokens);
-            } else {
-                quote! {
-                    .children = #nestix_path::layout! {
-                        #children
-                    },
+                LayoutElementChildren::Item(child) => {
+                    let children_output =
+                        generate_layout_items(std::slice::from_ref(child.as_ref()))?;
+                    quote! {
+                        .children = #children_output,
+                    }
+                    .to_tokens(&mut tokens);
                 }
-                .to_tokens(&mut tokens);
             }
         }
 
@@ -386,14 +411,13 @@ fn generate_layout_item(ctx: &mut Context, input: &LayoutItem) -> Result<(), syn
     }
 }
 
-pub fn generate_layout(input: LayoutInput) -> Result<TokenStream, syn::Error> {
+fn generate_layout_items(items: &[LayoutItem]) -> Result<TokenStream, syn::Error> {
     let nestix_path = nestix_path();
-    let LayoutInput { items } = input;
 
     let computed = items.iter().any(|item| item.is_yield());
     let mut ctx = Context::new(computed);
 
-    for item in &items {
+    for item in items {
         generate_layout_item(&mut ctx, item)?;
     }
 
@@ -537,4 +561,8 @@ pub fn generate_layout(input: LayoutInput) -> Result<TokenStream, syn::Error> {
             }
         }
     }
+}
+
+pub fn generate_layout(input: LayoutInput) -> Result<TokenStream, syn::Error> {
+    generate_layout_items(&input.items)
 }

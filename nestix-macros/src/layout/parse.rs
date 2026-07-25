@@ -13,6 +13,12 @@ pub enum LayoutElementProps {
 
 enum LayoutDirective {
     If(Expr),
+    Wrapper(Vec<LayoutItemElementInput>),
+}
+
+pub enum LayoutElementChildren {
+    Raw(TokenStream),
+    Item(Box<LayoutItem>),
 }
 
 pub struct LayoutItemElement {
@@ -22,7 +28,7 @@ pub struct LayoutItemElement {
     pub props: Option<LayoutElementProps>,
     pub clone_vars: Option<Punctuated<CloneVar, Token![,]>>,
     pub args: Option<(Token![|], Punctuated<FnArg, Token![,]>, Token![|])>,
-    pub children: Option<TokenStream>,
+    pub children: Option<LayoutElementChildren>,
 }
 
 struct LayoutItemElementInput {
@@ -32,6 +38,10 @@ struct LayoutItemElementInput {
 
 struct LayoutIfDirective {
     cond: Expr,
+}
+
+struct LayoutWrapperDirective {
+    wrappers: Vec<LayoutItemElementInput>,
 }
 
 impl Parse for LayoutIfDirective {
@@ -46,6 +56,51 @@ impl Parse for LayoutIfDirective {
         }
 
         Ok(Self { cond })
+    }
+}
+
+impl Parse for LayoutWrapperDirective {
+    fn parse(input: syn::parse::ParseStream) -> syn::Result<Self> {
+        input.parse::<Token![$]>()?;
+        let name = input.parse::<Ident>()?;
+        if name != "wrapper" {
+            return Err(syn::Error::new(name.span(), "expected `$wrapper`"));
+        }
+        input.parse::<Token![=]>()?;
+
+        let wrappers = if input.peek(token::Bracket) {
+            let inner;
+            bracketed!(inner in input);
+            Punctuated::<LayoutItemElementInput, Token![,]>::parse_terminated(&inner)?
+                .into_iter()
+                .collect()
+        } else {
+            vec![input.parse()?]
+        };
+
+        if wrappers.is_empty() {
+            return Err(input.error("`$wrapper` requires at least one wrapper"));
+        }
+        if !input.is_empty() {
+            return Err(input.error("unexpected tokens after `$wrapper`"));
+        }
+
+        for wrapper in &wrappers {
+            let element = &wrapper.element;
+            if element.yield_token.is_some()
+                || element.bind.is_some()
+                || element.clone_vars.is_some()
+                || element.args.is_some()
+                || element.children.is_some()
+            {
+                return Err(syn::Error::new_spanned(
+                    &element.ty,
+                    "layout wrappers must be component expressions without bindings, captures, child arguments, or children",
+                ));
+            }
+        }
+
+        Ok(Self { wrappers })
     }
 }
 
@@ -83,6 +138,22 @@ fn append_props_segment(
 
             let directive = syn::parse2::<LayoutIfDirective>(segment)?;
             directives.push(LayoutDirective::If(directive.cond));
+            return Ok(());
+        }
+
+        if name == "wrapper" {
+            if directives
+                .iter()
+                .any(|directive| matches!(directive, LayoutDirective::Wrapper(_)))
+            {
+                return Err(syn::Error::new(
+                    name.span(),
+                    "duplicate `$wrapper` directive; use brackets for multiple wrappers",
+                ));
+            }
+
+            let directive = syn::parse2::<LayoutWrapperDirective>(segment)?;
+            directives.push(LayoutDirective::Wrapper(directive.wrappers));
             return Ok(());
         }
 
@@ -132,6 +203,14 @@ impl LayoutItemElementInput {
                     then: LayoutInput { items: vec![item] },
                     else_branch: None,
                 }),
+                LayoutDirective::Wrapper(wrappers) => {
+                    for mut wrapper in wrappers.into_iter().rev() {
+                        wrapper.element.children =
+                            Some(LayoutElementChildren::Item(Box::new(item)));
+                        item = wrapper.into_layout_item();
+                    }
+                    item
+                }
             };
         }
 
@@ -220,7 +299,7 @@ impl LayoutItemElementInput {
         let children = if input.peek(token::Brace) {
             let inner;
             braced!(inner in input);
-            Some(inner.parse()?)
+            Some(LayoutElementChildren::Raw(inner.parse()?))
         } else {
             None
         };
@@ -437,9 +516,9 @@ impl Parse for LayoutInput {
 
 #[cfg(test)]
 mod tests {
-    use quote::quote;
+    use quote::{ToTokens, quote};
 
-    use super::{LayoutElementProps, LayoutInput, LayoutItem};
+    use super::{LayoutElementChildren, LayoutElementProps, LayoutInput, LayoutItem};
 
     #[test]
     fn if_directive_is_removed_without_parsing_other_props() {
@@ -481,6 +560,49 @@ mod tests {
         .expect("duplicate directive should fail");
 
         assert_eq!(error.to_string(), "duplicate `$if` directive");
+    }
+
+    #[test]
+    fn wrapper_list_lowers_with_the_first_wrapper_outermost() {
+        let input = syn::parse2::<LayoutInput>(quote! {
+            Widget($wrapper = [ThemeProvider(theme), StyleProvider(styles)])
+        })
+        .expect("layout should parse");
+
+        let LayoutItem::Element(theme) = &input.items[0] else {
+            panic!("expected the outer wrapper");
+        };
+        assert_eq!(theme.ty.to_token_stream().to_string(), "ThemeProvider");
+
+        let Some(LayoutElementChildren::Item(style)) = &theme.children else {
+            panic!("expected the second wrapper inside the first");
+        };
+        let LayoutItem::Element(style) = style.as_ref() else {
+            panic!("expected the inner wrapper");
+        };
+        assert_eq!(style.ty.to_token_stream().to_string(), "StyleProvider");
+
+        let Some(LayoutElementChildren::Item(widget)) = &style.children else {
+            panic!("expected the wrapped element inside both wrappers");
+        };
+        let LayoutItem::Element(widget) = widget.as_ref() else {
+            panic!("expected the wrapped element");
+        };
+        assert_eq!(widget.ty.to_token_stream().to_string(), "Widget");
+    }
+
+    #[test]
+    fn duplicate_wrapper_directive_is_rejected() {
+        let error = syn::parse2::<LayoutInput>(quote! {
+            Widget($wrapper = First, $wrapper = Second)
+        })
+        .err()
+        .expect("duplicate directive should fail");
+
+        assert_eq!(
+            error.to_string(),
+            "duplicate `$wrapper` directive; use brackets for multiple wrappers"
+        );
     }
 
     #[test]
