@@ -29,6 +29,13 @@ fn with_current_element<T>(element: &Element, f: impl FnOnce() -> T) -> T {
     f()
 }
 
+#[track_caller]
+fn current_element(api: &str) -> Element {
+    CURRENT_ELEMENT
+        .with(|current| current.borrow().clone())
+        .unwrap_or_else(|| panic!("{api} must be called inside a component function"))
+}
+
 /// A value that can mount itself into an optional parent element.
 ///
 /// Component functions use this trait for return values that may produce no
@@ -545,10 +552,20 @@ pub fn create_element<C: Component>(props: C::Props) -> Element {
 /// Panics when called outside a component function.
 #[track_caller]
 pub fn scoped_effect(f: impl Fn() + 'static) -> EffectHandle {
-    let element = CURRENT_ELEMENT.with(|current| current.borrow().clone());
-    element
-        .expect("scoped_effect must be called inside a component function")
-        .scoped_effect(f)
+    current_element("scoped_effect").scoped_effect(f)
+}
+
+/// Looks up a typed context value from the current component element.
+///
+/// This function must be called while a component function is executing. Use
+/// [`Element::context`] when the element is available explicitly.
+///
+/// # Panics
+///
+/// Panics when called outside a component function.
+#[track_caller]
+pub fn use_context<T: 'static>() -> Option<Rc<T>> {
+    current_element("use_context").context()
 }
 
 /// Placement information for an element relative to host-rendered nodes.

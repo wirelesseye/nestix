@@ -302,6 +302,12 @@ fn scoped_effect_requires_a_current_component_element() {
 }
 
 #[test]
+#[should_panic(expected = "use_context must be called inside a component function")]
+fn use_context_requires_a_current_component_element() {
+    let _ = nestix::use_context::<String>();
+}
+
+#[test]
 fn subtree_effects_are_cancelled_before_any_unmount_callback() {
     let child_slot = Rc::new(RefCell::new(None));
     let root = create_element::<ParentWithChild>(ParentWithChildProps {

@@ -1,8 +1,8 @@
 use std::{cell::Cell, rc::Rc};
 
 use nestix::{
-    Element, Fragment, Layout, Props, build_props, component, create_state, destructure, layout,
-    mount_root, props, scoped_effect,
+    ContextProvider, Element, Fragment, Layout, Props, build_props, component, create_state,
+    destructure, layout, mount_root, props, scoped_effect, use_context,
 };
 
 #[props]
@@ -181,6 +181,19 @@ fn ScopedEffectComponent(props: &ScopedEffectComponentProps) {
             observed.set(value.get());
         }
     );
+}
+
+#[props]
+struct ContextConsumerProps {
+    observed: Rc<Cell<bool>>,
+}
+
+#[component]
+fn ContextConsumer(props: &ContextConsumerProps) {
+    props
+        .observed
+        .get()
+        .set(use_context::<String>().as_deref().map(String::as_str) == Some("provided"));
 }
 
 #[test]
@@ -431,6 +444,22 @@ fn scoped_effect_macro_cancels_effect_on_unmount() {
 
     value.set(3);
     assert_eq!(observed.get(), 2);
+}
+
+#[test]
+fn use_context_reads_context_from_the_current_element() {
+    let observed = Rc::new(Cell::new(false));
+    let element = layout! {
+        ContextProvider::<
+        String
+        >(Rc::new("provided".to_string())) {
+            ContextConsumer(.observed = observed.clone())
+        }
+    };
+
+    mount_root(&element);
+
+    assert!(observed.get());
 }
 
 #[test]

@@ -14,7 +14,9 @@ pub struct ContextProviderProps<T> {
 
 /// Provides a typed context value to descendant elements.
 ///
-/// Descendants can retrieve the value with [`Element::context`].
+/// Descendant component functions can retrieve the value with
+/// [`crate::use_context`], or use [`Element::context`] when they already have an
+/// element reference.
 #[component(generics(T))]
 pub fn ContextProvider<T: 'static>(props: &ContextProviderProps<T>, element: &Element) -> Element {
     effect!(
