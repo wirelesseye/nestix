@@ -339,6 +339,73 @@ fn layout_macro_match_with_one_item_per_arm_produces_a_child_layout() {
 }
 
 #[test]
+fn layout_macro_match_reuses_binding_free_non_yielded_elements() {
+    #[derive(Clone, Copy, PartialEq)]
+    enum Page {
+        Counter,
+        TodoList,
+    }
+
+    let page = create_state(Page::Counter);
+    let page_in_layout = page.clone();
+    let matched = layout! {
+        match page_in_layout.get() {
+            Page::Counter => {
+                TransparentHost
+            },
+            Page::TodoList => {
+                TransparentHost
+            },
+        }
+    };
+
+    let first_counter = matched.get().remove(0);
+    page.set(Page::TodoList);
+    let first_todo_list = matched.get().remove(0);
+    page.set(Page::Counter);
+    let second_counter = matched.get().remove(0);
+    page.set(Page::TodoList);
+    let second_todo_list = matched.get().remove(0);
+
+    assert_eq!(first_counter, second_counter);
+    assert_eq!(first_todo_list, second_todo_list);
+    assert_ne!(first_counter, first_todo_list);
+}
+
+#[test]
+fn layout_macro_match_recreates_yielded_elements() {
+    #[derive(Clone, Copy, PartialEq)]
+    enum Page {
+        Counter,
+        TodoList,
+    }
+
+    let page = create_state(Page::Counter);
+    let page_in_layout = page.clone();
+    let matched = layout! {
+        match page_in_layout.get() {
+            Page::Counter => {
+                yield TransparentHost
+            },
+            Page::TodoList => {
+                TransparentHost
+            },
+        }
+    };
+
+    let first_counter = matched.get().remove(0);
+    page.set(Page::TodoList);
+    let first_todo_list = matched.get().remove(0);
+    page.set(Page::Counter);
+    let second_counter = matched.get().remove(0);
+    page.set(Page::TodoList);
+    let second_todo_list = matched.get().remove(0);
+
+    assert_ne!(first_counter, second_counter);
+    assert_eq!(first_todo_list, second_todo_list);
+}
+
+#[test]
 fn layout_macro_accepts_reactive_if_directive() {
     let show = create_state(false);
     let show_in_layout = show.clone();

@@ -1,6 +1,6 @@
 use proc_macro2::{TokenStream, TokenTree};
 use quote::{ToTokens, format_ident, quote};
-use syn::Ident;
+use syn::{Ident, Pat};
 
 use crate::{
     clone_var::generate_clone_var,
@@ -17,6 +17,7 @@ struct Context {
     generate_output: bool,
     element_outputs: Vec<(Ident, TokenStream)>,
     computed_element_outputs: Vec<(Ident, TokenStream)>,
+    hoisted_defs: TokenStream,
     push_output: TokenStream,
     direct_output: TokenStream,
 }
@@ -29,6 +30,7 @@ impl Context {
             generate_output: true,
             element_outputs: Vec::new(),
             computed_element_outputs: Vec::new(),
+            hoisted_defs: TokenStream::new(),
             push_output: TokenStream::new(),
             direct_output: TokenStream::new(),
         }
@@ -41,6 +43,10 @@ impl Context {
 
     fn next_element_ident(&mut self) -> Ident {
         format_ident!("__element_{}", self.next_index())
+    }
+
+    fn next_match_arm_ident(&mut self) -> Ident {
+        format_ident!("__match_arm_{}", self.next_index())
     }
 
     fn current_element_ident(&self) -> Ident {
@@ -413,14 +419,85 @@ fn generate_layout_item_match(
         let pat = &arm.pat;
         let guard = arm.guard.as_ref().map(|guard| quote! { if #guard });
         let body = &arm.body;
-        quote! {
-            #pat #guard => {
-                #nestix_path::Layout::from(#nestix_path::layout! {
-                    #body
+        // Inspect a clone for the optimization, but keep and re-emit the raw
+        // body so nested `layout!` expansion continues to support completion.
+        let parsed_body = syn::parse2::<LayoutInput>(body.clone()).ok();
+        let can_precreate = !pattern_has_bindings(pat)
+            && parsed_body.as_ref().is_some_and(|body| {
+                body.items.iter().all(|item| {
+                    matches!(
+                        item,
+                        LayoutItem::Element(_) | LayoutItem::Expr(_) | LayoutItem::For(_)
+                    )
                 })
-            },
+            });
+
+        if can_precreate
+            && parsed_body
+                .as_ref()
+                .is_some_and(|body| body.items.iter().all(|item| !item.is_yield()))
+        {
+            let arm_ident = ctx.next_match_arm_ident();
+            quote! {
+                let #arm_ident = #nestix_path::Layout::from(#nestix_path::layout! {
+                    #body
+                });
+            }
+            .to_tokens(&mut ctx.hoisted_defs);
+            quote! {
+                #pat #guard => {
+                    #arm_ident.clone().into_elements()
+                },
+            }
+            .to_tokens(&mut arm_output);
+        } else if can_precreate {
+            let body = parsed_body.as_ref().unwrap();
+            let previous_generate_output = ctx.generate_output;
+            ctx.generate_output = false;
+            let generated = (|| {
+                let mut push_output = TokenStream::new();
+                for item in &body.items {
+                    generate_layout_item(ctx, item)?;
+                    let element_ident = ctx.current_element_ident();
+                    let item_output = if item.is_yield() {
+                        quote! { #element_ident }
+                    } else {
+                        quote! { #element_ident.clone() }
+                    };
+                    quote! {
+                        #nestix_path::ToElements::to_elements(
+                            #item_output,
+                            &mut __match_items,
+                        );
+                    }
+                    .to_tokens(&mut push_output);
+                }
+                Ok::<_, syn::Error>(push_output)
+            })();
+            ctx.generate_output = previous_generate_output;
+            let push_output = generated?;
+
+            quote! {
+                #pat #guard => {
+                    let mut __match_items = Vec::new();
+                    #push_output
+                    __match_items
+                },
+            }
+            .to_tokens(&mut arm_output);
+        } else {
+            // Pattern bindings only exist inside this arm, so constructing its
+            // layout earlier could either fail to compile or reuse stale props.
+            quote! {
+                #pat #guard => {
+                    #nestix_path::Layout::from(#nestix_path::layout! {
+                        #body
+                    })
+                    .into_elements()
+                },
+            }
+            .to_tokens(&mut arm_output);
         }
-        .to_tokens(&mut arm_output);
     }
 
     let output = quote! {{
@@ -434,6 +511,30 @@ fn generate_layout_item_match(
     ctx.record_element_output(&element_ident, output, true);
 
     Ok(())
+}
+
+fn pattern_has_bindings(pat: &Pat) -> bool {
+    match pat {
+        Pat::Const(_)
+        | Pat::Lit(_)
+        | Pat::Path(_)
+        | Pat::Range(_)
+        | Pat::Rest(_)
+        | Pat::Wild(_) => false,
+        Pat::Ident(_) | Pat::Macro(_) | Pat::Verbatim(_) => true,
+        Pat::Or(pat) => pat.cases.iter().any(pattern_has_bindings),
+        Pat::Paren(pat) => pattern_has_bindings(&pat.pat),
+        Pat::Reference(pat) => pattern_has_bindings(&pat.pat),
+        Pat::Slice(pat) => pat.elems.iter().any(pattern_has_bindings),
+        Pat::Struct(pat) => pat
+            .fields
+            .iter()
+            .any(|field| pattern_has_bindings(&field.pat)),
+        Pat::Tuple(pat) => pat.elems.iter().any(pattern_has_bindings),
+        Pat::TupleStruct(pat) => pat.elems.iter().any(pattern_has_bindings),
+        Pat::Type(pat) => pattern_has_bindings(&pat.pat),
+        _ => true,
+    }
 }
 
 fn generate_layout_item(ctx: &mut Context, input: &LayoutItem) -> Result<(), syn::Error> {
@@ -455,6 +556,8 @@ fn generate_layout_items(items: &[LayoutItem]) -> Result<TokenStream, syn::Error
     for item in items {
         generate_layout_item(&mut ctx, item)?;
     }
+
+    let hoisted_defs = ctx.hoisted_defs.clone();
 
     if items.len() == 1 {
         if let LayoutItem::If(item_if) = &items[0] {
@@ -479,6 +582,7 @@ fn generate_layout_items(items: &[LayoutItem]) -> Result<TokenStream, syn::Error
                 let direct_output = ctx.direct_output;
 
                 return Ok(quote! {{
+                    #hoisted_defs
                     #element_defs
                     #nestix_path::computed(#nestix_path::closure!(
                         move || {
@@ -495,7 +599,9 @@ fn generate_layout_items(items: &[LayoutItem]) -> Result<TokenStream, syn::Error
         ctx.element_outputs.len(),
         ctx.computed_element_outputs.len(),
     ) {
-        (0, 0) => Ok(quote! {()}),
+        (0, 0) => Ok(quote! {{
+            #hoisted_defs
+        }}),
         (1, 0) => {
             if computed {
                 let mut element_defs = TokenStream::new();
@@ -510,6 +616,7 @@ fn generate_layout_items(items: &[LayoutItem]) -> Result<TokenStream, syn::Error
                 let direct_output = ctx.direct_output;
 
                 Ok(quote! {{
+                    #hoisted_defs
                     #element_defs
                     #nestix_path::computed(#nestix_path::closure!(
                         move || {
@@ -519,7 +626,10 @@ fn generate_layout_items(items: &[LayoutItem]) -> Result<TokenStream, syn::Error
                 }})
             } else {
                 let (_, element_output) = ctx.element_outputs.remove(0);
-                Ok(element_output)
+                Ok(quote! {{
+                    #hoisted_defs
+                    #element_output
+                }})
             }
         }
         (0, 1) => {
@@ -535,6 +645,7 @@ fn generate_layout_items(items: &[LayoutItem]) -> Result<TokenStream, syn::Error
             let direct_output = ctx.direct_output;
 
             Ok(quote! {{
+                #hoisted_defs
                 #nestix_path::computed(#nestix_path::closure!(
                     move || {
                         #computed_element_defs
@@ -565,6 +676,7 @@ fn generate_layout_items(items: &[LayoutItem]) -> Result<TokenStream, syn::Error
                 let push_output = ctx.push_output;
 
                 Ok(quote! {{
+                    #hoisted_defs
                     #element_defs
                     #nestix_path::computed(#nestix_path::closure!(
                         move || {
@@ -588,6 +700,7 @@ fn generate_layout_items(items: &[LayoutItem]) -> Result<TokenStream, syn::Error
                 let push_output = ctx.push_output;
 
                 Ok(quote! {{
+                    #hoisted_defs
                     #element_defs
                     let mut __items = Vec::new();
                     #push_output
