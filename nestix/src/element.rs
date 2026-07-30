@@ -109,6 +109,7 @@ struct ElementData {
     on_unmount_callbacks: RefCell<HashSet<Shared<dyn Fn()>>>,
     after_mount_callbacks: RefCell<HashSet<Shared<dyn Fn()>>>,
     on_place_callbacks: RefCell<HashSet<Shared<dyn Fn(&Placement)>>>,
+    detached_host_tree: Cell<bool>,
 }
 
 /// A node in the Nestix component tree.
@@ -222,6 +223,10 @@ impl Element {
 
     /// Returns the last host handle in this element's subtree.
     pub fn last_handle(&self) -> Option<Shared<dyn Any>> {
+        if self.data.detached_host_tree.get() {
+            return None;
+        }
+
         if let Some(handle) = self.handle() {
             return Some(handle);
         }
@@ -233,6 +238,9 @@ impl Element {
     /// Returns the nearest ancestor host handle.
     pub fn parent_handle(&self) -> Option<Shared<dyn Any>> {
         let parent = self.parent()?;
+        if parent.data.detached_host_tree.get() {
+            return None;
+        }
         if let Some(handle) = parent.handle() {
             Some(handle)
         } else {
@@ -245,6 +253,9 @@ impl Element {
         let parent = self.parent()?;
 
         if !self.is_in_list() {
+            if parent.data.detached_host_tree.get() {
+                return None;
+            }
             return parent.index();
         }
 
@@ -260,6 +271,9 @@ impl Element {
         };
 
         if !self.is_in_list() {
+            if parent.data.detached_host_tree.get() {
+                return Vec::new();
+            }
             return parent.previous_siblings();
         }
 
@@ -414,6 +428,10 @@ impl Element {
         self.data.in_list.set(in_list);
     }
 
+    pub(crate) fn detach_host_tree(&self) {
+        self.data.detached_host_tree.set(true);
+    }
+
     pub(crate) fn notify_place(&self, recursive: bool) {
         let placement = Placement {
             pred: self.pred_handle(),
@@ -535,6 +553,7 @@ pub fn create_element<C: Component>(props: C::Props) -> Element {
             on_unmount_callbacks: RefCell::new(HashSet::new()),
             after_mount_callbacks: RefCell::new(HashSet::new()),
             on_place_callbacks: RefCell::new(HashSet::new()),
+            detached_host_tree: Cell::new(false),
         }),
     }
 }

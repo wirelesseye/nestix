@@ -4,8 +4,8 @@ use std::{
 };
 
 use nestix::{
-    Component, ComponentOutput, Element, Fragment, FragmentProps, Layout, Placement, PropValue,
-    Props, create_element, create_state, mount_root, unmount_root,
+    Component, ComponentOutput, DetachedTree, DetachedTreeProps, Element, Fragment, FragmentProps,
+    Layout, Placement, PropValue, Props, create_element, create_state, mount_root, unmount_root,
 };
 
 struct Empty;
@@ -66,6 +66,23 @@ impl Component for ParentWithChild {
             .unwrap();
         props.child_slot.replace(Some(child.clone()));
         child.mount(Some(element));
+    }
+}
+
+struct HostWithDetachedTree;
+
+impl Component for HostWithDetachedTree {
+    type Props = ();
+
+    fn on_mount(element: &Element) {
+        let detached_host = create_element::<Empty>(());
+        detached_host.provide_handle(String::from("detached"));
+        let detached = create_element::<DetachedTree>(DetachedTreeProps {
+            children: PropValue::from_plain(Layout::from(detached_host)),
+        });
+        detached.mount(Some(element));
+
+        create_element::<Host>(()).mount(Some(element));
     }
 }
 
@@ -437,6 +454,74 @@ fn predecessor_handle_skips_logical_siblings_without_host_handles() {
             parent: Some(String::from("host")),
             index: Some(2),
         }]
+    );
+}
+
+#[test]
+fn detached_tree_owns_descendants_without_exposing_their_handles() {
+    let outer = create_element::<Empty>(());
+    outer.provide_handle(String::from("outer"));
+    let detached_host = create_element::<Empty>(());
+    detached_host.provide_handle(String::from("inner"));
+    let detached_child = create_element::<Empty>(());
+    let detached_fragment = create_element::<Fragment>(FragmentProps {
+        children: PropValue::from_plain(Layout::from(vec![
+            detached_host.clone(),
+            detached_child.clone(),
+        ])),
+    });
+    let detached = create_element::<DetachedTree>(DetachedTreeProps {
+        children: PropValue::from_plain(Layout::from(detached_fragment)),
+    });
+    let following = create_element::<Empty>(());
+    let root = create_element::<Fragment>(FragmentProps {
+        children: PropValue::from_plain(Layout::from(vec![
+            outer.clone(),
+            detached.clone(),
+            following.clone(),
+        ])),
+    });
+
+    mount_root(&root);
+
+    assert!(detached.last_handle().is_none());
+    assert!(detached_child.parent_handle().is_none());
+    assert_eq!(detached_child.index(), Some(1));
+    assert_eq!(
+        detached_child.pred_handle().and_then(handle_name),
+        Some(String::from("inner"))
+    );
+    assert_eq!(
+        following.pred_handle().and_then(handle_name),
+        Some(String::from("outer"))
+    );
+}
+
+#[test]
+fn detached_owned_child_does_not_hide_the_visual_outputs_outer_predecessor() {
+    let preceding = create_element::<Empty>(());
+    preceding.provide_handle(String::from("preceding"));
+    let owner = create_element::<HostWithDetachedTree>(());
+    let following = create_element::<Empty>(());
+    let root = create_element::<Fragment>(FragmentProps {
+        children: PropValue::from_plain(Layout::from(vec![
+            preceding,
+            owner.clone(),
+            following.clone(),
+        ])),
+    });
+
+    mount_root(&root);
+
+    let children = owner.children();
+    assert_eq!(children.len(), 2);
+    assert_eq!(
+        children[1].pred_handle().and_then(handle_name),
+        Some(String::from("preceding"))
+    );
+    assert_eq!(
+        following.pred_handle().and_then(handle_name),
+        Some(String::from("host"))
     );
 }
 

@@ -1,11 +1,14 @@
 /// Context provider component.
 pub mod context_provider;
+/// Detached logical-tree component.
+pub mod detached_tree;
 /// List rendering component.
 pub mod r#for;
 /// Fragment component.
 pub mod fragment;
 
 pub use context_provider::*;
+pub use detached_tree::*;
 pub use r#for::*;
 pub use fragment::*;
 
