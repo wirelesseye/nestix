@@ -274,7 +274,7 @@ fn layout_macro_accepts_if_without_else() {
 
 #[test]
 fn layout_macro_accepts_reactive_match_arms_with_dsl_bodies() {
-    let selected = create_state(0);
+    let (selected, set_selected) = create_state(0);
     let selected_in_layout = selected.clone();
     let first_count = Rc::new(Cell::new(0));
     let second_count = Rc::new(Cell::new(0));
@@ -309,12 +309,12 @@ fn layout_macro_accepts_reactive_match_arms_with_dsl_bodies() {
     assert_eq!(second_count.get(), 0);
     assert_eq!(third_count.get(), 0);
 
-    selected.set(1);
+    set_selected.set(1);
     assert_eq!(first_count.get(), 1);
     assert_eq!(second_count.get(), 1);
     assert_eq!(third_count.get(), 1);
 
-    selected.set(2);
+    set_selected.set(2);
     assert_eq!(first_count.get(), 1);
     assert_eq!(second_count.get(), 1);
     assert_eq!(third_count.get(), 1);
@@ -346,7 +346,7 @@ fn layout_macro_match_reuses_binding_free_non_yielded_elements() {
         TodoList,
     }
 
-    let page = create_state(Page::Counter);
+    let (page, set_page) = create_state(Page::Counter);
     let page_in_layout = page.clone();
     let matched = layout! {
         match page_in_layout.get() {
@@ -360,11 +360,11 @@ fn layout_macro_match_reuses_binding_free_non_yielded_elements() {
     };
 
     let first_counter = matched.get().remove(0);
-    page.set(Page::TodoList);
+    set_page.set(Page::TodoList);
     let first_todo_list = matched.get().remove(0);
-    page.set(Page::Counter);
+    set_page.set(Page::Counter);
     let second_counter = matched.get().remove(0);
-    page.set(Page::TodoList);
+    set_page.set(Page::TodoList);
     let second_todo_list = matched.get().remove(0);
 
     assert_eq!(first_counter, second_counter);
@@ -380,7 +380,7 @@ fn layout_macro_match_recreates_yielded_elements() {
         TodoList,
     }
 
-    let page = create_state(Page::Counter);
+    let (page, set_page) = create_state(Page::Counter);
     let page_in_layout = page.clone();
     let matched = layout! {
         match page_in_layout.get() {
@@ -394,11 +394,11 @@ fn layout_macro_match_recreates_yielded_elements() {
     };
 
     let first_counter = matched.get().remove(0);
-    page.set(Page::TodoList);
+    set_page.set(Page::TodoList);
     let first_todo_list = matched.get().remove(0);
-    page.set(Page::Counter);
+    set_page.set(Page::Counter);
     let second_counter = matched.get().remove(0);
-    page.set(Page::TodoList);
+    set_page.set(Page::TodoList);
     let second_todo_list = matched.get().remove(0);
 
     assert_ne!(first_counter, second_counter);
@@ -407,7 +407,7 @@ fn layout_macro_match_recreates_yielded_elements() {
 
 #[test]
 fn layout_macro_accepts_reactive_if_directive() {
-    let show = create_state(false);
+    let (show, set_show) = create_state(false);
     let show_in_layout = show.clone();
     let count = Rc::new(Cell::new(0));
     let element = layout! {
@@ -421,7 +421,7 @@ fn layout_macro_accepts_reactive_if_directive() {
     mount_root(&element);
     assert_eq!(count.get(), 0);
 
-    show.set(true);
+    set_show.set(true);
     assert_eq!(count.get(), 1);
 }
 
@@ -477,9 +477,9 @@ fn layout_wrapper_directive_nests_multiple_wrappers_in_order() {
 fn layout_macro_binds_host_handle_when_it_is_provided() {
     let stale_handle =
         nestix::Shared::from(Rc::new(String::from("stale")) as Rc<dyn std::any::Any>);
-    let host_handle = create_state(Some(stale_handle));
+    let (host_handle, set_host_handle) = create_state(Some(stale_handle));
     let element = layout! {
-        host_handle @ TransparentHost
+        set_host_handle @ TransparentHost
     };
 
     assert!(host_handle.get().is_none());
@@ -621,7 +621,7 @@ fn generated_props_can_keep_raw_fields_unwrapped() {
 
 #[test]
 fn scoped_effect_macro_cancels_effect_on_unmount() {
-    let value = create_state(1);
+    let (value, set_value) = create_state(1);
     let observed = Rc::new(Cell::new(0));
     let element = nestix::create_element::<ScopedEffectComponent>(ScopedEffectComponentProps {
         value: value.clone(),
@@ -632,12 +632,12 @@ fn scoped_effect_macro_cancels_effect_on_unmount() {
 
     assert_eq!(observed.get(), 1);
 
-    value.set(2);
+    set_value.set(2);
     assert_eq!(observed.get(), 2);
 
     element.unmount();
 
-    value.set(3);
+    set_value.set(3);
     assert_eq!(observed.get(), 2);
 }
 
@@ -659,13 +659,13 @@ fn use_context_reads_context_from_the_current_element() {
 
 #[test]
 fn destructure_macro_derives_computed_signals_from_tuple_struct_and_named_struct_props() {
-    let data = create_state(("key".to_string(), "value".to_string()));
-    let user = create_state(DestructureUser {
+    let (data, set_data) = create_state(("key".to_string(), "value".to_string()));
+    let (user, set_user) = create_state(DestructureUser {
         id: 7,
         name: "Ada".to_string(),
     });
-    let point = create_state(DestructurePoint(3, 4));
-    let nested = create_state(((1, 2), DestructurePoint(3, 4)));
+    let (point, set_point) = create_state(DestructurePoint(3, 4));
+    let (nested, set_nested) = create_state(((1, 2), DestructurePoint(3, 4)));
     let props = build_props!(DestructureProps(
         .data = data.clone(),
         .user = user.clone(),
@@ -687,13 +687,13 @@ fn destructure_macro_derives_computed_signals_from_tuple_struct_and_named_struct
     assert_eq!(nested_x.get(), 3);
     assert_eq!(nested_y.get(), 4);
 
-    data.set(("next".to_string(), "item".to_string()));
-    user.set(DestructureUser {
+    set_data.set(("next".to_string(), "item".to_string()));
+    set_user.set(DestructureUser {
         id: 8,
         name: "Grace".to_string(),
     });
-    point.set(DestructurePoint(5, 6));
-    nested.set(((5, 6), DestructurePoint(7, 8)));
+    set_point.set(DestructurePoint(5, 6));
+    set_nested.set(((5, 6), DestructurePoint(7, 8)));
 
     assert_eq!(key.get(), "next");
     assert_eq!(value.get(), "item");
@@ -708,11 +708,11 @@ fn destructure_macro_derives_computed_signals_from_tuple_struct_and_named_struct
 
 #[test]
 fn destructure_macro_ignores_wildcards_and_struct_rest_patterns() {
-    let user = create_state(DestructureUser {
+    let (user, _set_user) = create_state(DestructureUser {
         id: 7,
         name: "Ada".to_string(),
     });
-    let pair = create_state((1, 2));
+    let (pair, _set_pair) = create_state((1, 2));
 
     destructure!(DestructureUser { id, .. } <- user);
     destructure!((first, _) <- pair);

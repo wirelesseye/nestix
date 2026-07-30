@@ -14,11 +14,11 @@
 //!
 //! #[component]
 //! fn Counter() -> Element {
-//!     let count = create_state(0);
+//!     let (count, set_count) = create_state(0);
 //!
 //!     layout! {
 //!         Button(
-//!             .on_click = callback!([count] || count.mutate(|value| *value += 1)),
+//!             .on_click = callback!([set_count] || set_count.mutate(|value| *value += 1)),
 //!         ) {
 //!             Text("Click")
 //!         }
@@ -47,8 +47,8 @@ mod util;
 /// by value.
 ///
 /// ```ignore
-/// let count = create_state(0);
-/// let handler = closure!([count] || count.set(count.get() + 1));
+/// let (count, set_count) = create_state(0);
+/// let handler = closure!([count, set_count] || set_count.set(count.get() + 1));
 ///
 /// let named = closure!([label: props.label] || label.get());
 /// ```
@@ -64,7 +64,7 @@ pub fn closure(input: TokenStream) -> TokenStream {
 ///
 /// ```ignore
 /// Button(
-///     .on_click = callback!([count] || count.mutate(|value| *value += 1)),
+///     .on_click = callback!([set_count] || set_count.mutate(|value| *value += 1)),
 /// )
 ///
 /// let remove = callback!([items] |key: &str| {

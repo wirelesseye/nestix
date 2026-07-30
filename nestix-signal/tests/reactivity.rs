@@ -4,7 +4,7 @@ use nestix_signal::{Readonly, Signal, batch, computed, create_state, effect, unt
 
 #[test]
 fn state_notifies_effects_when_value_changes() {
-    let count = create_state(1);
+    let (count, set_count) = create_state(1);
     let observed = Rc::new(Cell::new(0));
 
     effect({
@@ -15,14 +15,14 @@ fn state_notifies_effects_when_value_changes() {
 
     assert_eq!(observed.get(), 1);
 
-    count.set(2);
+    set_count.set(2);
 
     assert_eq!(observed.get(), 2);
 }
 
 #[test]
 fn cancelled_effects_stop_rerunning() {
-    let count = create_state(1);
+    let (count, set_count) = create_state(1);
     let observed = Rc::new(Cell::new(0));
     let runs = Rc::new(Cell::new(0));
 
@@ -43,7 +43,7 @@ fn cancelled_effects_stop_rerunning() {
     handle.cancel();
     assert!(handle.is_cancelled());
 
-    count.set(2);
+    set_count.set(2);
 
     assert_eq!(observed.get(), 1);
     assert_eq!(runs.get(), 1);
@@ -51,7 +51,7 @@ fn cancelled_effects_stop_rerunning() {
 
 #[test]
 fn cancelling_effects_is_idempotent() {
-    let count = create_state(1);
+    let (count, set_count) = create_state(1);
     let runs = Rc::new(Cell::new(0));
 
     let handle = effect({
@@ -65,14 +65,14 @@ fn cancelling_effects_is_idempotent() {
 
     handle.cancel();
     handle.cancel();
-    count.set(2);
+    set_count.set(2);
 
     assert_eq!(runs.get(), 1);
 }
 
 #[test]
 fn dropping_effect_handles_does_not_cancel_effects() {
-    let count = create_state(1);
+    let (count, set_count) = create_state(1);
     let observed = Rc::new(Cell::new(0));
 
     {
@@ -83,14 +83,14 @@ fn dropping_effect_handles_does_not_cancel_effects() {
         });
     }
 
-    count.set(2);
+    set_count.set(2);
 
     assert_eq!(observed.get(), 2);
 }
 
 #[test]
 fn state_set_skips_equal_values_but_set_unchecked_notifies() {
-    let count = create_state(1);
+    let (count, set_count) = create_state(1);
     let runs = Rc::new(Cell::new(0));
 
     effect({
@@ -104,16 +104,16 @@ fn state_set_skips_equal_values_but_set_unchecked_notifies() {
 
     assert_eq!(runs.get(), 1);
 
-    count.set(1);
+    set_count.set(1);
     assert_eq!(runs.get(), 1);
 
-    count.set_unchecked(1);
+    set_count.set_unchecked(1);
     assert_eq!(runs.get(), 2);
 }
 
 #[test]
 fn state_update_and_mutate_notify_dependents() {
-    let values = create_state(vec![1, 2]);
+    let (values, set_values) = create_state(vec![1, 2]);
     let total = Rc::new(Cell::new(0));
 
     effect({
@@ -124,20 +124,20 @@ fn state_update_and_mutate_notify_dependents() {
 
     assert_eq!(total.get(), 3);
 
-    values.update(|values| {
+    set_values.update(|values| {
         let mut next = values.clone();
         next.push(3);
         next
     });
     assert_eq!(total.get(), 6);
 
-    values.mutate(|values| values.push(4));
+    set_values.mutate(|values| values.push(4));
     assert_eq!(total.get(), 10);
 }
 
 #[test]
 fn batch_coalesces_multiple_updates_until_it_finishes() {
-    let count = create_state(1);
+    let (count, set_count) = create_state(1);
     let observed = Rc::new(Cell::new(0));
     let runs = Rc::new(Cell::new(0));
 
@@ -155,8 +155,8 @@ fn batch_coalesces_multiple_updates_until_it_finishes() {
     assert_eq!(runs.get(), 1);
 
     let returned = batch(|| {
-        count.set(2);
-        count.set(3);
+        set_count.set(2);
+        set_count.set(3);
 
         assert_eq!(count.get(), 3);
         assert_eq!(observed.get(), 1);
@@ -172,7 +172,7 @@ fn batch_coalesces_multiple_updates_until_it_finishes() {
 
 #[test]
 fn nested_batches_flush_only_after_the_outer_batch_finishes() {
-    let count = create_state(1);
+    let (count, set_count) = create_state(1);
     let observed = Rc::new(Cell::new(0));
     let runs = Rc::new(Cell::new(0));
 
@@ -187,10 +187,10 @@ fn nested_batches_flush_only_after_the_outer_batch_finishes() {
     });
 
     batch(|| {
-        count.set(2);
+        set_count.set(2);
 
         batch(|| {
-            count.set(3);
+            set_count.set(3);
         });
 
         assert_eq!(observed.get(), 1);
@@ -203,7 +203,7 @@ fn nested_batches_flush_only_after_the_outer_batch_finishes() {
 
 #[test]
 fn computed_values_stay_fresh_inside_batches() {
-    let count = create_state(1);
+    let (count, set_count) = create_state(1);
     let evaluations = Rc::new(Cell::new(0));
     let doubled = computed({
         let count = count.clone();
@@ -231,7 +231,7 @@ fn computed_values_stay_fresh_inside_batches() {
     assert_eq!(runs.get(), 1);
 
     batch(|| {
-        count.set(2);
+        set_count.set(2);
 
         assert_eq!(doubled.get(), 4);
         assert_eq!(evaluations.get(), 2);
@@ -246,7 +246,7 @@ fn computed_values_stay_fresh_inside_batches() {
 
 #[test]
 fn cancelled_effects_do_not_run_when_a_batch_flushes() {
-    let count = create_state(1);
+    let (count, set_count) = create_state(1);
     let runs = Rc::new(Cell::new(0));
 
     let handle = effect({
@@ -259,7 +259,7 @@ fn cancelled_effects_do_not_run_when_a_batch_flushes() {
     });
 
     batch(|| {
-        count.set(2);
+        set_count.set(2);
         handle.cancel();
     });
 
@@ -268,7 +268,7 @@ fn cancelled_effects_do_not_run_when_a_batch_flushes() {
 
 #[test]
 fn computed_values_are_lazy_cached_and_invalidated_by_dependencies() {
-    let count = create_state(2);
+    let (count, set_count) = create_state(2);
     let evaluations = Rc::new(Cell::new(0));
 
     let doubled = computed({
@@ -286,7 +286,7 @@ fn computed_values_are_lazy_cached_and_invalidated_by_dependencies() {
     assert_eq!(doubled.get(), 4);
     assert_eq!(evaluations.get(), 1);
 
-    count.set(3);
+    set_count.set(3);
 
     assert_eq!(evaluations.get(), 1);
     assert_eq!(doubled.get(), 6);
@@ -295,9 +295,9 @@ fn computed_values_are_lazy_cached_and_invalidated_by_dependencies() {
 
 #[test]
 fn computed_dependencies_are_refreshed_after_each_evaluation() {
-    let use_left = create_state(true);
-    let left = create_state(10);
-    let right = create_state(20);
+    let (use_left, set_use_left) = create_state(true);
+    let (left, set_left) = create_state(10);
+    let (right, set_right) = create_state(20);
 
     let selected = computed({
         let use_left = use_left.clone();
@@ -314,21 +314,21 @@ fn computed_dependencies_are_refreshed_after_each_evaluation() {
 
     assert_eq!(selected.get(), 10);
 
-    use_left.set(false);
+    set_use_left.set(false);
     assert_eq!(selected.get(), 20);
 
-    left.set(11);
+    set_left.set(11);
     assert_eq!(selected.get(), 20);
 
-    right.set(21);
+    set_right.set(21);
     assert_eq!(selected.get(), 21);
 }
 
 #[test]
 fn effects_refresh_their_dependencies_when_branches_change() {
-    let use_left = create_state(true);
-    let left = create_state(1);
-    let right = create_state(10);
+    let (use_left, set_use_left) = create_state(true);
+    let (left, set_left) = create_state(1);
+    let (right, set_right) = create_state(10);
     let observed = Rc::new(Cell::new(0));
     let runs = Rc::new(Cell::new(0));
 
@@ -351,22 +351,22 @@ fn effects_refresh_their_dependencies_when_branches_change() {
     assert_eq!(observed.get(), 1);
     assert_eq!(runs.get(), 1);
 
-    use_left.set(false);
+    set_use_left.set(false);
     assert_eq!(observed.get(), 10);
     assert_eq!(runs.get(), 2);
 
-    left.set(2);
+    set_left.set(2);
     assert_eq!(observed.get(), 10);
     assert_eq!(runs.get(), 2);
 
-    right.set(11);
+    set_right.set(11);
     assert_eq!(observed.get(), 11);
     assert_eq!(runs.get(), 3);
 }
 
 #[test]
 fn readonly_signal_tracks_wrapped_signal() {
-    let source = create_state(7);
+    let (source, set_source) = create_state(7);
     let readonly = Readonly::new(source.clone());
     let observed = Rc::new(Cell::new(0));
 
@@ -378,14 +378,14 @@ fn readonly_signal_tracks_wrapped_signal() {
 
     assert_eq!(observed.get(), 7);
 
-    source.set(8);
+    set_source.set(8);
 
     assert_eq!(observed.get(), 8);
 }
 
 #[test]
 fn boxed_signals_can_be_cloned_and_read() {
-    let source: Box<dyn Signal<Output = i32>> = Box::new(create_state(5));
+    let source: Box<dyn Signal<Output = i32>> = Box::new(create_state(5).0);
     let cloned = source.clone();
 
     assert_eq!(source.get(), 5);
@@ -394,8 +394,8 @@ fn boxed_signals_can_be_cloned_and_read() {
 
 #[test]
 fn untrack_reads_without_subscribing_the_current_effect() {
-    let tracked = create_state(1);
-    let ignored = create_state(10);
+    let (tracked, set_tracked) = create_state(1);
+    let (ignored, set_ignored) = create_state(10);
     let observed = Rc::new(Cell::new(0));
     let runs = Rc::new(Cell::new(0));
 
@@ -413,11 +413,11 @@ fn untrack_reads_without_subscribing_the_current_effect() {
     assert_eq!(observed.get(), 11);
     assert_eq!(runs.get(), 1);
 
-    ignored.set(20);
+    set_ignored.set(20);
     assert_eq!(observed.get(), 11);
     assert_eq!(runs.get(), 1);
 
-    tracked.set(2);
+    set_tracked.set(2);
     assert_eq!(observed.get(), 22);
     assert_eq!(runs.get(), 2);
 }

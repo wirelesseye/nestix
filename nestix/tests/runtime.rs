@@ -161,7 +161,7 @@ fn prop_value_reads_plain_and_signal_values() {
     assert_eq!(plain, plain_clone);
     assert_ne!(plain, PropValue::from_plain(String::from("ready")));
 
-    let state = create_state(1);
+    let (state, set_state) = create_state(1);
     let signal: PropValue<i32> = PropValue::from_signal(state.clone());
     let signal_clone = signal.clone();
 
@@ -169,7 +169,7 @@ fn prop_value_reads_plain_and_signal_values() {
     assert_eq!(signal_clone.get(), 1);
     assert_eq!(signal, signal_clone);
 
-    state.set(2);
+    set_state.set(2);
 
     assert_eq!(signal.get(), 2);
     assert_eq!(signal_clone.get(), 2);
@@ -280,7 +280,7 @@ fn unmount_runs_callbacks_recursively_once() {
 #[test]
 fn scoped_effect_is_cancelled_when_element_unmounts() {
     let root = create_element::<Empty>(());
-    let value = create_state(1);
+    let (value, set_value) = create_state(1);
     let observed = Rc::new(Cell::new(0));
     let runs = Rc::new(Cell::new(0));
 
@@ -300,14 +300,14 @@ fn scoped_effect_is_cancelled_when_element_unmounts() {
     assert_eq!(runs.get(), 1);
     assert!(!handle.is_cancelled());
 
-    value.set(2);
+    set_value.set(2);
     assert_eq!(observed.get(), 2);
     assert_eq!(runs.get(), 2);
 
     root.unmount();
     assert!(handle.is_cancelled());
 
-    value.set(3);
+    set_value.set(3);
     assert_eq!(observed.get(), 2);
     assert_eq!(runs.get(), 2);
 }
@@ -336,7 +336,7 @@ fn subtree_effects_are_cancelled_before_any_unmount_callback() {
         .clone()
         .expect("parent should mount a child");
 
-    let value = create_state(1);
+    let (value, set_value) = create_state(1);
     let root_runs = Rc::new(Cell::new(0));
     let child_runs = Rc::new(Cell::new(0));
     let root_handle = root.scoped_effect({
@@ -357,13 +357,12 @@ fn subtree_effects_are_cancelled_before_any_unmount_callback() {
     });
 
     child.on_unmount({
-        let value = value.clone();
         let root_handle = root_handle.clone();
         let child_handle = child_handle.clone();
         move || {
             assert!(root_handle.is_cancelled());
             assert!(child_handle.is_cancelled());
-            value.set(2);
+            set_value.set(2);
         }
     });
 
@@ -537,7 +536,7 @@ fn fragment_notifies_later_siblings_when_previous_sibling_set_changes() {
         move |_| third_places.set(third_places.get() + 1)
     });
 
-    let children = create_state(Layout::from(vec![
+    let (children, set_children) = create_state(Layout::from(vec![
         first.clone(),
         second.clone(),
         third.clone(),
@@ -551,7 +550,7 @@ fn fragment_notifies_later_siblings_when_previous_sibling_set_changes() {
     assert_eq!(third.previous_siblings(), vec![second.clone(), first]);
     assert_eq!(third_places.get(), 1);
 
-    children.set_unchecked(Layout::from(vec![second.clone(), third.clone()]));
+    set_children.set_unchecked(Layout::from(vec![second.clone(), third.clone()]));
 
     assert_eq!(third.previous_siblings(), vec![second]);
     assert_eq!(third_places.get(), 2);
@@ -559,24 +558,24 @@ fn fragment_notifies_later_siblings_when_previous_sibling_set_changes() {
 
 #[test]
 fn fragment_lifecycle_signal_reads_do_not_reenter_reconciliation() {
-    let incidental = create_state(0);
+    let (incidental, set_incidental) = create_state(0);
     let first = create_element::<Empty>(());
     first.on_unmount({
         let incidental = incidental.clone();
-        move || incidental.set(incidental.get() + 1)
+        move || set_incidental.set(incidental.get() + 1)
     });
 
     let survivor_mounts = Rc::new(Cell::new(0));
     let survivor = create_element::<CountMounts>(CountMountsProps {
         count: survivor_mounts.clone(),
     });
-    let children = create_state(Layout::from(vec![first, survivor.clone()]));
+    let (children, set_children) = create_state(Layout::from(vec![first, survivor.clone()]));
     let fragment = create_element::<Fragment>(FragmentProps {
         children: PropValue::from_signal(children.clone()),
     });
     mount_root(&fragment);
 
-    children.set_unchecked(Layout::from(survivor));
+    set_children.set_unchecked(Layout::from(survivor));
 
     assert_eq!(incidental.get(), 1);
     assert_eq!(survivor_mounts.get(), 1);
@@ -594,7 +593,7 @@ fn for_notifies_later_siblings_when_previous_sibling_set_changes() {
         move |_| third_places.set(third_places.get() + 1)
     });
 
-    let data = create_state(vec![1, 2, 3]);
+    let (data, set_data) = create_state(vec![1, 2, 3]);
     let list = nestix::create_for_identity_from_signal(data.clone(), {
         let first = first.clone();
         let second = second.clone();
@@ -614,7 +613,7 @@ fn for_notifies_later_siblings_when_previous_sibling_set_changes() {
     assert_eq!(third.previous_siblings(), vec![second.clone(), first]);
     assert_eq!(third_places.get(), 1);
 
-    data.set(vec![2, 3]);
+    set_data.set(vec![2, 3]);
 
     assert_eq!(third.previous_siblings(), vec![second]);
     assert_eq!(third_places.get(), 2);
@@ -622,18 +621,18 @@ fn for_notifies_later_siblings_when_previous_sibling_set_changes() {
 
 #[test]
 fn for_lifecycle_signal_reads_do_not_reenter_reconciliation() {
-    let incidental = create_state(0);
+    let (incidental, set_incidental) = create_state(0);
     let first = create_element::<Empty>(());
     first.on_unmount({
         let incidental = incidental.clone();
-        move || incidental.set(incidental.get() + 1)
+        move || set_incidental.set(incidental.get() + 1)
     });
 
     let survivor_mounts = Rc::new(Cell::new(0));
     let survivor = create_element::<CountMounts>(CountMountsProps {
         count: survivor_mounts.clone(),
     });
-    let data = create_state(vec![1, 2]);
+    let (data, set_data) = create_state(vec![1, 2]);
     let list = nestix::create_for_identity_from_signal(data.clone(), {
         let first = first.clone();
         let survivor = survivor.clone();
@@ -647,7 +646,7 @@ fn for_lifecycle_signal_reads_do_not_reenter_reconciliation() {
     });
     mount_root(&list);
 
-    data.set(vec![2]);
+    set_data.set(vec![2]);
 
     assert_eq!(incidental.get(), 1);
     assert_eq!(survivor_mounts.get(), 1);

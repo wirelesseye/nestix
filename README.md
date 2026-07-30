@@ -48,15 +48,15 @@ For more examples, see the [examples](./examples) folder.
 ```rust
 #[component]
 fn Counter() -> Element {
-    let count = create_state(0);
+    let (count, set_count) = create_state(0);
 
     layout! {
         FlexView {
             Label(.text = computed!([count] || format!("Count: {}", count.get())))
             Button(
                 .title = "Click",
-                .on_click = callback!([count] || {
-                    count.mutate(|count| *count += 1);
+                .on_click = callback!([set_count] || {
+                    set_count.mutate(|count| *count += 1);
                 })
             )
             if count.get() % 2 == 0 {

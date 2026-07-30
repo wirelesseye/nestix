@@ -13,7 +13,7 @@ struct StateData<T> {
     dependents: Shared<RefCell<HashSet<Shared<Effect>>>>,
 }
 
-/// A mutable reactive value.
+/// The readable handle for a reactive state value.
 ///
 /// Reading a `State` from inside an effect or computed value records a
 /// dependency. Updating it notifies the recorded dependents.
@@ -32,9 +32,60 @@ impl<T> State<T> {
         self.data.value.borrow()
     }
 
+    pub fn ptr_eq(this: &Self, other: &Self) -> bool {
+        Rc::ptr_eq(&this.data, &other.data)
+    }
+}
+
+impl<T: Clone> State<T> {
+    /// Clones and returns the current value, recording a dependency if tracking
+    /// is active.
+    pub fn get(&self) -> T {
+        (*self.borrow()).clone()
+    }
+}
+
+impl<T: 'static + Clone> Signal for State<T> {
+    type Output = T;
+
+    fn get(&self) -> T {
+        self.get()
+    }
+
+    fn box_clone(&self) -> Box<dyn Signal<Output = T>> {
+        Box::new(self.clone())
+    }
+}
+
+impl<T> Clone for State<T> {
+    fn clone(&self) -> Self {
+        Self {
+            data: self.data.clone(),
+        }
+    }
+}
+
+impl<T: Clone + 'static> State<T> {
+    /// Converts this state getter into a type-erased read-only signal handle.
+    pub fn into_readonly(self) -> super::Readonly<T> {
+        Readonly::new(self)
+    }
+}
+
+/// The writable handle for a reactive state value.
+///
+/// Updating a `StateSetter` notifies dependents that have read the associated
+/// [`State`].
+#[derive(Debug)]
+pub struct StateSetter<T> {
+    data: Rc<StateData<T>>,
+}
+
+impl<T> StateSetter<T> {
     /// Replaces the current value and always notifies dependents.
     ///
-    /// Unlike [`State::set`], this does not compare the old and new values.
+    /// Unlike [`StateSetter::set`], this does not compare the old and new
+    /// values.
     #[track_caller]
     pub fn set_unchecked(&self, value: T) {
         let location = Location::caller();
@@ -77,9 +128,13 @@ impl<T> State<T> {
             notify_effect(&effect, location);
         }
     }
+
+    pub fn ptr_eq(this: &Self, other: &Self) -> bool {
+        Rc::ptr_eq(&this.data, &other.data)
+    }
 }
 
-impl<T: PartialEq> State<T> {
+impl<T: PartialEq> StateSetter<T> {
     /// Replaces the current value and notifies dependents only when it changes.
     #[track_caller]
     pub fn set(&self, value: T) {
@@ -93,27 +148,7 @@ impl<T: PartialEq> State<T> {
     }
 }
 
-impl<T: Clone> State<T> {
-    /// Clones and returns the current value, recording a dependency if tracking
-    /// is active.
-    pub fn get(&self) -> T {
-        (*self.borrow()).clone()
-    }
-}
-
-impl<T: 'static + Clone> Signal for State<T> {
-    type Output = T;
-
-    fn get(&self) -> T {
-        self.get()
-    }
-
-    fn box_clone(&self) -> Box<dyn Signal<Output = T>> {
-        Box::new(self.clone())
-    }
-}
-
-impl<T> Clone for State<T> {
+impl<T> Clone for StateSetter<T> {
     fn clone(&self) -> Self {
         Self {
             data: self.data.clone(),
@@ -121,25 +156,11 @@ impl<T> Clone for State<T> {
     }
 }
 
-impl<T> PartialEq for State<T> {
-    fn eq(&self, other: &Self) -> bool {
-        Rc::ptr_eq(&self.data, &other.data)
-    }
-}
-
-impl<T: Clone + 'static> State<T> {
-    /// Converts this mutable state handle into a read-only signal handle.
-    pub fn into_readonly(self) -> super::Readonly<T> {
-        Readonly::new(self)
-    }
-}
-
-/// Creates a new reactive state value.
-pub fn create_state<T>(value: T) -> State<T> {
-    State {
-        data: Rc::new(StateData {
-            value: RefCell::new(value),
-            dependents: Shared::new(RefCell::new(HashSet::new())),
-        }),
-    }
+/// Creates readable and writable handles for a new reactive state value.
+pub fn create_state<T>(value: T) -> (State<T>, StateSetter<T>) {
+    let data = Rc::new(StateData {
+        value: RefCell::new(value),
+        dependents: Shared::new(RefCell::new(HashSet::new())),
+    });
+    (State { data: data.clone() }, StateSetter { data })
 }

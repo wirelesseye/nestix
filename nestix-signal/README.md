@@ -44,7 +44,7 @@ use std::{cell::Cell, rc::Rc};
 
 use nestix_signal::{computed, create_state, effect};
 
-let count = create_state(1);
+let (count, set_count) = create_state(1);
 let doubled = computed({
     let count = count.clone();
     move || count.get() * 2
@@ -59,7 +59,7 @@ let _handle = effect({
 
 assert_eq!(observed.get(), 2);
 
-count.set(2);
+set_count.set(2);
 
 assert_eq!(observed.get(), 4);
 ```
@@ -74,22 +74,22 @@ are read.
 ```rust
 use nestix_signal::create_state;
 
-let items = create_state(vec![1, 2]);
+let (items, set_items) = create_state(vec![1, 2]);
 
-items.update(|items| {
+set_items.update(|items| {
     let mut next = items.clone();
     next.push(3);
     next
 });
 
-items.mutate(|items| items.push(4));
+set_items.mutate(|items| items.push(4));
 
 assert_eq!(items.get(), vec![1, 2, 3, 4]);
 ```
 
-`State::set` notifies dependents only when the new value is different.
-`State::set_unchecked`, `State::update`, and `State::mutate` always notify after
-storing the new value.
+`StateSetter::set` notifies dependents only when the new value is different.
+`StateSetter::set_unchecked`, `StateSetter::update`, and `StateSetter::mutate`
+always notify after storing the new value.
 
 ## Batching
 
@@ -98,11 +98,11 @@ Use `batch` to group several writes into a single effect flush:
 ```rust
 use nestix_signal::{batch, create_state};
 
-let count = create_state(0);
+let (count, set_count) = create_state(0);
 
 batch(|| {
-    count.set(1);
-    count.set(2);
+    set_count.set(1);
+    set_count.set(2);
 });
 ```
 
@@ -117,7 +117,7 @@ use std::{cell::Cell, rc::Rc};
 
 use nestix_signal::{create_state, effect};
 
-let count = create_state(0);
+let (count, set_count) = create_state(0);
 let runs = Rc::new(Cell::new(0));
 
 let handle = effect({
@@ -129,11 +129,11 @@ let handle = effect({
     }
 });
 
-count.set(1);
+set_count.set(1);
 assert_eq!(runs.get(), 2);
 
 handle.cancel();
-count.set(2);
+set_count.set(2);
 assert_eq!(runs.get(), 2);
 ```
 
@@ -146,10 +146,12 @@ from its dependencies.
 ```rust
 use nestix_signal::{Readonly, create_state};
 
-let state = create_state("ready".to_string());
+let (state, set_state) = create_state("ready".to_string());
 let readonly: Readonly<String> = state.clone().into_readonly();
 
 assert_eq!(readonly.get(), "ready");
+set_state.set("updated".to_string());
+assert_eq!(readonly.get(), "updated");
 ```
 
 Use `Readonly` when a caller should be able to observe a value without being

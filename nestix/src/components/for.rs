@@ -1,7 +1,7 @@
 use std::{cell::RefCell, hash::Hash, marker::PhantomData, rc::Rc};
 
 use nestix_macros::{component, props};
-use nestix_signal::{Readonly, Signal, State, create_state};
+use nestix_signal::{Readonly, Signal, State, StateSetter, create_state};
 
 use crate::{
     ComponentOutput, Element, PropValue, Shared, effect, untrack,
@@ -67,8 +67,14 @@ pub fn For<I: IntoIterator + Clone + 'static, K: Eq + Hash + 'static>(
 ) where
     I::Item: Eq + Clone,
 {
-    let prev_signals: Rc<RefCell<Vec<State<<I as IntoIterator>::Item>>>> =
-        Rc::new(RefCell::new(vec![]));
+    let prev_signals: Rc<
+        RefCell<
+            Vec<(
+                State<<I as IntoIterator>::Item>,
+                StateSetter<<I as IntoIterator>::Item>,
+            )>,
+        >,
+    > = Rc::new(RefCell::new(vec![]));
     let prev_keys: Rc<RefCell<Vec<K>>> = Rc::new(RefCell::new(vec![]));
 
     effect!(
@@ -94,18 +100,21 @@ pub fn For<I: IntoIterator + Clone + 'static, K: Eq + Hash + 'static>(
                 }
 
                 let mut next_children: Vec<Element> = Vec::new();
-                let mut next_signals: Vec<State<<I as IntoIterator>::Item>> = Vec::new();
+                let mut next_signals: Vec<(
+                    State<<I as IntoIterator>::Item>,
+                    StateSetter<<I as IntoIterator>::Item>,
+                )> = Vec::new();
                 let mut previous_siblings_changed = false;
                 for (i, prev_i) in mapping.iter().enumerate() {
                     let (signal, child) = if let Some(prev_i) = prev_i {
-                        let signal = prev_signals[*prev_i].clone();
+                        let (state, set_state) = prev_signals[*prev_i].clone();
                         let child = prev_children[*prev_i].clone();
-                        signal.set(next_data[i].clone());
-                        (signal, child)
+                        set_state.set(next_data[i].clone());
+                        ((state, set_state), child)
                     } else {
-                        let signal = create_state(next_data[i].clone());
-                        let child = children_fn(signal.clone().into_readonly()).get();
-                        (signal, child)
+                        let (state, set_state) = create_state(next_data[i].clone());
+                        let child = children_fn(state.clone().into_readonly()).get();
+                        ((state, set_state), child)
                     };
 
                     if let Some(prev_i) = *prev_i {

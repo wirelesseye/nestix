@@ -27,15 +27,15 @@ enum AppPage {
 
 #[component]
 fn App() -> Element {
-    let page = create_state(AppPage::Counter);
+    let (page, set_page) = create_state(AppPage::Counter);
 
     layout! {
         Root {
             Div(.class = "nav".to_string()) {
                 Button(
                     .on_click = callback!(
-                        [page] || {
-                            page.set(AppPage::Counter);
+                        [set_page] || {
+                            set_page.set(AppPage::Counter);
                         }
                     ),
                     .disabled = computed!([page] || page.get() == AppPage::Counter),
@@ -44,8 +44,8 @@ fn App() -> Element {
                 }
                 Button(
                     .on_click = callback!(
-                        [page] || {
-                            page.set(AppPage::TodoList);
+                        [set_page] || {
+                            set_page.set(AppPage::TodoList);
                         }
                     ),
                     .disabled = computed!([page] || page.get() == AppPage::TodoList),
@@ -69,7 +69,7 @@ fn App() -> Element {
 
 #[component]
 fn Counter() -> Element {
-    let count = create_state(0);
+    let (count, set_count) = create_state(0);
 
     layout! {
         Div(.class = "counter".to_string()) {
@@ -78,8 +78,8 @@ fn Counter() -> Element {
             }
             Button(
                 .on_click = callback!(
-                    [count] || {
-                        count.mutate(|value| *value += 1);
+                    [set_count] || {
+                        set_count.mutate(|value| *value += 1);
                     }
                 ),
             ) {
@@ -96,26 +96,26 @@ fn Counter() -> Element {
 
 #[component]
 fn TodoList() -> Element {
-    let items = create_state::<IndexMap<String, String>>(IndexMap::new());
-    let input_value = create_state(String::new());
+    let (items, set_items) = create_state::<IndexMap<String, String>>(IndexMap::new());
+    let (input_value, set_input_value) = create_state(String::new());
 
     let add = callback!(
-        [input_value, items] || {
-            items.mutate(|items| {
+        [input_value, set_items, set_input_value] || {
+            set_items.mutate(|items| {
                 items.insert(nanoid!(), input_value.get());
             });
-            input_value.set(String::new());
+            set_input_value.set(String::new());
         }
     );
 
-    let remove = callback!([items] |key: &str| {
-        items.mutate(|items| {
+    let remove = callback!([set_items] |key: &str| {
+        set_items.mutate(|items| {
             items.shift_remove(key);
         });
     });
 
-    let move_up = callback!([items] |key: &str| {
-        items.mutate(|items| {
+    let move_up = callback!([set_items] |key: &str| {
+        set_items.mutate(|items| {
             if let Some(index) = items.get_index_of(key) {
                 if index > 0 {
                     items.swap_indices(index, index - 1);
@@ -124,8 +124,8 @@ fn TodoList() -> Element {
         });
     });
 
-    let move_down = callback!([items] |key: &str| {
-        items.mutate(|items| {
+    let move_down = callback!([set_items] |key: &str| {
+        set_items.mutate(|items| {
             if let Some(index) = items.get_index_of(key) {
                 if index < items.len() - 1 {
                     items.swap_indices(index, index + 1);
@@ -134,8 +134,8 @@ fn TodoList() -> Element {
         });
     });
 
-    let set_content = callback!([items] |key: &str, content: String| {
-        items.mutate(|items| {
+    let set_content = callback!([set_items] |key: &str, content: String| {
+        set_items.mutate(|items| {
             items[key] = content;
         });
     });
@@ -145,7 +145,9 @@ fn TodoList() -> Element {
             Div(.class = "todo-input".to_string()) {
                 Input(
                     .value = input_value.clone(),
-                    .on_value_change = callback!(move |value| input_value.set(value)),
+                    .on_value_change = callback!(
+                        [set_input_value] |value| set_input_value.set(value)
+                    ),
                 )
                 Button(.on_click = add) {
                     Text("Add")
@@ -183,11 +185,11 @@ struct TodoListItemProps {
 
 #[component]
 fn TodoListItem(props: &TodoListItemProps) -> Element {
-    let is_edit = create_state(false);
+    let (is_edit, set_is_edit) = create_state(false);
 
     let toggle_edit = callback!(
-        [is_edit] || {
-            is_edit.update(|is_edit| !is_edit);
+        [set_is_edit] || {
+            set_is_edit.update(|is_edit| !is_edit);
         }
     );
 
