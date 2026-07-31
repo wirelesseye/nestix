@@ -510,6 +510,15 @@ pub enum LayoutItem {
 }
 
 impl LayoutItem {
+    pub fn attrs(&self) -> &[Attribute] {
+        match self {
+            LayoutItem::Element(item) => &item.attrs,
+            LayoutItem::Expr(_) | LayoutItem::If(_) | LayoutItem::For(_) | LayoutItem::Match(_) => {
+                &[]
+            }
+        }
+    }
+
     pub fn is_yield(&self) -> bool {
         match self {
             LayoutItem::Element(item) => item.yield_token.is_some(),

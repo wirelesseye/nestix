@@ -346,12 +346,15 @@ fn generate_layout_item_if(ctx: &mut Context, input: &LayoutItemIf) -> Result<()
     let mut then_direct_output = TokenStream::new();
     for item in &then.items {
         generate_layout_item(ctx, item)?;
+        let attrs = item.attrs();
         let element_ident = ctx.current_element_ident();
         quote! {
+            #(#attrs)*
             __items.push(#element_ident.clone());
         }
         .to_tokens(&mut then_push_output);
         quote! {
+            #(#attrs)*
             #element_ident.clone()
         }
         .to_tokens(&mut then_direct_output);
@@ -388,12 +391,15 @@ fn generate_layout_item_if(ctx: &mut Context, input: &LayoutItemIf) -> Result<()
 
                 for item in &layout_input.items {
                     generate_layout_item(ctx, item)?;
+                    let attrs = item.attrs();
                     let element_ident = ctx.current_element_ident();
                     quote! {
+                        #(#attrs)*
                         __items.push(#element_ident.clone());
                     }
                     .to_tokens(&mut else_then_push_output);
                     quote! {
+                        #(#attrs)*
                         #element_ident.clone()
                     }
                     .to_tokens(&mut else_then_direct_output);

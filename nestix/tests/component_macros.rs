@@ -300,6 +300,29 @@ fn layout_macro_accepts_cfg_attribute_on_its_only_element() {
 }
 
 #[test]
+fn layout_macro_accepts_cfg_attributes_in_reactive_branches() {
+    let (show_first, _) = create_state(false);
+    let count = Rc::new(Cell::new(0));
+    let element = layout! {
+        Fragment {
+            if show_first.get() {
+                TransparentHost
+            } else {
+                #[cfg(any())]
+                FirstComponentThatDoesNotExist
+                #[cfg(any())]
+                SecondComponentThatDoesNotExist
+                Counter(.count = count.clone())
+            }
+        }
+    };
+
+    mount_root(&element);
+
+    assert_eq!(count.get(), 1);
+}
+
+#[test]
 fn layout_macro_accepts_reactive_match_arms_with_dsl_bodies() {
     let (selected, set_selected) = create_state(0);
     let selected_in_layout = selected.clone();
