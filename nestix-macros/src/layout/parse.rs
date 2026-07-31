@@ -1,7 +1,7 @@
 use proc_macro2::{TokenStream, TokenTree};
 use syn::{
-    Expr, FnArg, Ident, Pat, Token, Type, braced, bracketed, parenthesized, parse::Parse,
-    punctuated::Punctuated, token,
+    Attribute, Expr, FnArg, Ident, Pat, Token, Type, braced, bracketed, parenthesized,
+    parse::Parse, punctuated::Punctuated, token,
 };
 
 use crate::clone_var::CloneVar;
@@ -22,6 +22,7 @@ pub enum LayoutElementChildren {
 }
 
 pub struct LayoutItemElement {
+    pub attrs: Vec<Attribute>,
     pub yield_token: Option<Token![yield]>,
     pub bind: Option<Ident>,
     pub ty: Type,
@@ -220,6 +221,7 @@ impl LayoutItemElementInput {
 
 impl Parse for LayoutItemElementInput {
     fn parse(input: syn::parse::ParseStream) -> syn::Result<Self> {
+        let attrs = input.call(Attribute::parse_outer)?;
         let yield_token = if input.peek(Token![yield]) {
             Some(input.parse::<Token![yield]>()?)
         } else {
@@ -253,18 +255,19 @@ impl Parse for LayoutItemElementInput {
                 Some(LayoutElementProps::Build(props_tokens))
             };
 
-            return Self::parse_after_props(input, yield_token, bind, ty, props, directives);
+            return Self::parse_after_props(input, attrs, yield_token, bind, ty, props, directives);
         } else {
             None
         };
 
-        Self::parse_after_props(input, yield_token, bind, ty, props, Vec::new())
+        Self::parse_after_props(input, attrs, yield_token, bind, ty, props, Vec::new())
     }
 }
 
 impl LayoutItemElementInput {
     fn parse_after_props(
         input: syn::parse::ParseStream,
+        attrs: Vec<Attribute>,
         yield_token: Option<Token![yield]>,
         bind: Option<Ident>,
         ty: Type,
@@ -306,6 +309,7 @@ impl LayoutItemElementInput {
 
         Ok(Self {
             element: LayoutItemElement {
+                attrs,
                 yield_token,
                 bind,
                 ty,

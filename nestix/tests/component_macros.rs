@@ -273,6 +273,33 @@ fn layout_macro_accepts_if_without_else() {
 }
 
 #[test]
+fn layout_macro_accepts_cfg_attributes_on_children() {
+    let count = Rc::new(Cell::new(0));
+    let element = layout! {
+        Fragment {
+            #[cfg(any())]
+            ComponentThatDoesNotExist
+            #[cfg(all())]
+            Counter(.count = count.clone())
+        }
+    };
+
+    mount_root(&element);
+
+    assert_eq!(count.get(), 1);
+}
+
+#[test]
+fn layout_macro_accepts_cfg_attribute_on_its_only_element() {
+    let layout = Layout::from(layout! {
+        #[cfg(any())]
+        ComponentThatDoesNotExist
+    });
+
+    assert_eq!(layout.len(), 0);
+}
+
+#[test]
 fn layout_macro_accepts_reactive_match_arms_with_dsl_bodies() {
     let (selected, set_selected) = create_state(0);
     let selected_in_layout = selected.clone();

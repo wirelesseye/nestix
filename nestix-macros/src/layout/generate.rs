@@ -1,6 +1,6 @@
 use proc_macro2::{TokenStream, TokenTree};
 use quote::{ToTokens, format_ident, quote};
-use syn::{Ident, Pat};
+use syn::{Attribute, Ident, Pat};
 
 use crate::{
     clone_var::generate_clone_var,
@@ -15,8 +15,8 @@ struct Context {
     index: usize,
     computed: bool,
     generate_output: bool,
-    element_outputs: Vec<(Ident, TokenStream)>,
-    computed_element_outputs: Vec<(Ident, TokenStream)>,
+    element_outputs: Vec<(Vec<Attribute>, Ident, TokenStream)>,
+    computed_element_outputs: Vec<(Vec<Attribute>, Ident, TokenStream)>,
     hoisted_defs: TokenStream,
     push_output: TokenStream,
     direct_output: TokenStream,
@@ -53,27 +53,40 @@ impl Context {
         format_ident!("__element_{}", self.index)
     }
 
-    fn record_element_output(&mut self, element_ident: &Ident, output: TokenStream, yielded: bool) {
+    fn record_element_output(
+        &mut self,
+        attrs: &[Attribute],
+        element_ident: &Ident,
+        output: TokenStream,
+        yielded: bool,
+    ) {
         if yielded {
             self.computed_element_outputs
-                .push((element_ident.clone(), output));
+                .push((attrs.to_vec(), element_ident.clone(), output));
         } else {
-            self.element_outputs.push((element_ident.clone(), output));
+            self.element_outputs
+                .push((attrs.to_vec(), element_ident.clone(), output));
         }
     }
 
-    fn append_direct_output(&mut self, element_ident: &Ident, clone_when_computed: bool) {
+    fn append_direct_output(
+        &mut self,
+        attrs: &[Attribute],
+        element_ident: &Ident,
+        clone_when_computed: bool,
+    ) {
         let should_clone = self.computed && clone_when_computed;
 
         if should_clone {
-            quote! { #element_ident.clone() }.to_tokens(&mut self.direct_output);
+            quote! { #(#attrs)* #element_ident.clone() }.to_tokens(&mut self.direct_output);
         } else {
-            quote! { #element_ident }.to_tokens(&mut self.direct_output);
+            quote! { #(#attrs)* #element_ident }.to_tokens(&mut self.direct_output);
         }
     }
 
     fn append_push_output(
         &mut self,
+        attrs: &[Attribute],
         element_ident: &Ident,
         clone_when_computed: bool,
         use_to_elements: bool,
@@ -92,18 +105,26 @@ impl Context {
 
         if use_to_elements {
             quote! {
+                #(#attrs)*
                 #nestix_path::ToElements::to_elements(#item, &mut __items);
             }
             .to_tokens(&mut self.push_output);
         } else {
             quote! {
+                #(#attrs)*
                 __items.push(#item);
             }
             .to_tokens(&mut self.push_output);
         }
     }
 
-    fn append_output(&mut self, element_ident: &Ident, yielded: bool, use_to_elements: bool) {
+    fn append_output(
+        &mut self,
+        attrs: &[Attribute],
+        element_ident: &Ident,
+        yielded: bool,
+        use_to_elements: bool,
+    ) {
         if !self.generate_output {
             return;
         }
@@ -111,8 +132,8 @@ impl Context {
         // Yielded items are created inside the computed closure, so they do not
         // need the clone used for pre-created elements in computed layouts.
         let clone_when_computed = !yielded;
-        self.append_push_output(element_ident, clone_when_computed, use_to_elements);
-        self.append_direct_output(element_ident, clone_when_computed);
+        self.append_push_output(attrs, element_ident, clone_when_computed, use_to_elements);
+        self.append_direct_output(attrs, element_ident, clone_when_computed);
     }
 }
 
@@ -122,6 +143,7 @@ fn generate_layout_item_element(
 ) -> Result<(), syn::Error> {
     let nestix_path = nestix_path();
     let LayoutItemElement {
+        attrs,
         yield_token,
         bind,
         ty,
@@ -254,8 +276,8 @@ fn generate_layout_item_element(
 
     let element_ident = ctx.next_element_ident();
     let yielded = yield_token.is_some();
-    ctx.append_output(&element_ident, yielded, false);
-    ctx.record_element_output(&element_ident, output, yielded);
+    ctx.append_output(attrs, &element_ident, yielded, false);
+    ctx.record_element_output(attrs, &element_ident, output, yielded);
 
     Ok(())
 }
@@ -292,8 +314,8 @@ fn generate_layout_item_for(ctx: &mut Context, input: &LayoutItemFor) -> Result<
     };
 
     let element_ident = ctx.next_element_ident();
-    ctx.append_output(&element_ident, false, false);
-    ctx.record_element_output(&element_ident, output, false);
+    ctx.append_output(&[], &element_ident, false, false);
+    ctx.record_element_output(&[], &element_ident, output, false);
 
     Ok(())
 }
@@ -305,8 +327,8 @@ fn generate_layout_item_expr(ctx: &mut Context, input: &LayoutItemExpr) -> Resul
 
     let element_ident = ctx.next_element_ident();
     let yielded = yield_token.is_some();
-    ctx.append_output(&element_ident, yielded, true);
-    ctx.record_element_output(&element_ident, output, yielded);
+    ctx.append_output(&[], &element_ident, yielded, true);
+    ctx.record_element_output(&[], &element_ident, output, yielded);
 
     Ok(())
 }
@@ -507,8 +529,8 @@ fn generate_layout_item_match(
     }};
 
     let element_ident = ctx.next_element_ident();
-    ctx.append_output(&element_ident, true, true);
-    ctx.record_element_output(&element_ident, output, true);
+    ctx.append_output(&[], &element_ident, true, true);
+    ctx.record_element_output(&[], &element_ident, output, true);
 
     Ok(())
 }
@@ -565,15 +587,17 @@ fn generate_layout_items(items: &[LayoutItem]) -> Result<TokenStream, syn::Error
                 let mut element_defs = TokenStream::new();
                 let mut computed_element_defs = TokenStream::new();
 
-                for (ident, element_output) in ctx.element_outputs {
+                for (attrs, ident, element_output) in ctx.element_outputs {
                     quote! {
+                        #(#attrs)*
                         let #ident = #element_output;
                     }
                     .to_tokens(&mut element_defs);
                 }
 
-                for (ident, element_output) in ctx.computed_element_outputs {
+                for (attrs, ident, element_output) in ctx.computed_element_outputs {
                     quote! {
+                        #(#attrs)*
                         let #ident = #element_output;
                     }
                     .to_tokens(&mut computed_element_defs);
@@ -606,8 +630,9 @@ fn generate_layout_items(items: &[LayoutItem]) -> Result<TokenStream, syn::Error
             if computed {
                 let mut element_defs = TokenStream::new();
 
-                for (ident, element_output) in ctx.element_outputs {
+                for (attrs, ident, element_output) in ctx.element_outputs {
                     quote! {
+                        #(#attrs)*
                         let #ident = #element_output;
                     }
                     .to_tokens(&mut element_defs);
@@ -625,9 +650,10 @@ fn generate_layout_items(items: &[LayoutItem]) -> Result<TokenStream, syn::Error
                     ))
                 }})
             } else {
-                let (_, element_output) = ctx.element_outputs.remove(0);
+                let (attrs, _, element_output) = ctx.element_outputs.remove(0);
                 Ok(quote! {{
                     #hoisted_defs
+                    #(#attrs)*
                     #element_output
                 }})
             }
@@ -635,8 +661,9 @@ fn generate_layout_items(items: &[LayoutItem]) -> Result<TokenStream, syn::Error
         (0, 1) => {
             let mut computed_element_defs = TokenStream::new();
 
-            for (ident, element_output) in ctx.computed_element_outputs {
+            for (attrs, ident, element_output) in ctx.computed_element_outputs {
                 quote! {
+                    #(#attrs)*
                     let #ident = #element_output;
                 }
                 .to_tokens(&mut computed_element_defs);
@@ -659,15 +686,17 @@ fn generate_layout_items(items: &[LayoutItem]) -> Result<TokenStream, syn::Error
                 let mut element_defs = TokenStream::new();
                 let mut computed_element_defs = TokenStream::new();
 
-                for (ident, element_output) in ctx.element_outputs {
+                for (attrs, ident, element_output) in ctx.element_outputs {
                     quote! {
+                        #(#attrs)*
                         let #ident = #element_output;
                     }
                     .to_tokens(&mut element_defs);
                 }
 
-                for (ident, element_output) in ctx.computed_element_outputs {
+                for (attrs, ident, element_output) in ctx.computed_element_outputs {
                     quote! {
+                        #(#attrs)*
                         let #ident = #element_output;
                     }
                     .to_tokens(&mut computed_element_defs);
@@ -690,8 +719,9 @@ fn generate_layout_items(items: &[LayoutItem]) -> Result<TokenStream, syn::Error
             } else {
                 let mut element_defs = TokenStream::new();
 
-                for (ident, element_output) in ctx.element_outputs {
+                for (attrs, ident, element_output) in ctx.element_outputs {
                     quote! {
+                        #(#attrs)*
                         let #ident = #element_output;
                     }
                     .to_tokens(&mut element_defs);

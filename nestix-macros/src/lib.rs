@@ -138,7 +138,8 @@ pub fn build_props(input: TokenStream) -> TokenStream {
 ///
 /// The macro accepts elements, expression splices, `if`/`else` and `match`
 /// branches, signal-backed `for` loops, and layout-only directives such as
-/// `$if` and `$wrapper`.
+/// `$if` and `$wrapper`. Rust outer attributes can be placed on elements, so
+/// `#[cfg(...)]` can include platform-specific components.
 ///
 /// ```ignore
 /// layout! {
