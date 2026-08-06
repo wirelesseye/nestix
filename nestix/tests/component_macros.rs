@@ -67,7 +67,7 @@ fn props_macro_generates_structured_inspection_for_plain_reactive_and_nested_fie
     assert!(nestix::Props::as_inspectable(&props).is_some());
 }
 
-#[cfg(feature = "inspector")]
+#[allow(dead_code)]
 #[derive(Debug, nestix::InspectableValue)]
 enum UserPosition {
     Leading,

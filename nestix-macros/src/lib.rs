@@ -109,10 +109,17 @@ pub fn props(attr: TokenStream, input: TokenStream) -> TokenStream {
 }
 
 /// Derives an inspector value formatter using the type's `Debug` representation.
-#[cfg(feature = "inspector")]
 #[proc_macro_derive(InspectableValue)]
 pub fn inspectable_value(input: TokenStream) -> TokenStream {
-    inspectable_value::derive(input)
+    #[cfg(feature = "inspector")]
+    {
+        inspectable_value::derive(input)
+    }
+    #[cfg(not(feature = "inspector"))]
+    {
+        let _ = input;
+        TokenStream::new()
+    }
 }
 
 /// Converts a plain value, signal, or existing `PropValue` into a `PropValue`.
