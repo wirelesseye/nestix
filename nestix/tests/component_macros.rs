@@ -81,7 +81,6 @@ fn inspect_position(_: &UserPosition) -> nestix::InspectValue {
 #[cfg(feature = "inspector")]
 #[props]
 struct InspectableValueProps {
-    #[props(inspect)]
     derived: UserPosition,
     #[props(inspect(with = inspect_position))]
     custom: UserPosition,
@@ -206,8 +205,11 @@ struct DestructurePoint(i32, i32);
 
 #[props]
 struct DestructureProps {
+    #[props(inspect(skip))]
     data: (String, String),
+    #[props(inspect(skip))]
     user: DestructureUser,
+    #[props(inspect(skip))]
     point: DestructurePoint,
 }
 

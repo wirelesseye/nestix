@@ -320,14 +320,6 @@ fn generate_inspection(ctx: &Context) -> (TokenStream, TokenStream) {
                         std::any::type_name::<#original_ty>(),
                     )
                 }
-            } else if matches!(feature.inspect, Some(Inspect::Value)) {
-                quote! {
-                    self.#field_ident.inspect_prop_with(
-                        #name,
-                        std::any::type_name::<#original_ty>(),
-                        #nestix_path::InspectableValue::inspect_value,
-                    )
-                }
             } else if let Some(Inspect::With(formatter)) = &feature.inspect {
                 quote! {
                     self.#field_ident.inspect_prop_with(
@@ -338,9 +330,10 @@ fn generate_inspection(ctx: &Context) -> (TokenStream, TokenStream) {
                 }
             } else {
                 quote! {
-                    self.#field_ident.inspect_prop(
+                    self.#field_ident.inspect_prop_with(
                         #name,
                         std::any::type_name::<#original_ty>(),
+                        #nestix_path::InspectableValue::inspect_value,
                     )
                 }
             }

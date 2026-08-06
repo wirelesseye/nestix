@@ -132,6 +132,87 @@ pub trait InspectableValue {
 }
 
 #[cfg(feature = "inspector")]
+macro_rules! inspect_number {
+    ($($ty:ty),+ $(,)?) => {
+        $(impl InspectableValue for $ty {
+            fn inspect_value(&self) -> InspectValue {
+                InspectValue::Number(self.to_string())
+            }
+        })+
+    };
+}
+
+#[cfg(feature = "inspector")]
+inspect_number!(
+    u8, u16, u32, u64, u128, usize, i8, i16, i32, i64, i128, isize, f32, f64
+);
+
+#[cfg(feature = "inspector")]
+impl InspectableValue for bool {
+    fn inspect_value(&self) -> InspectValue {
+        InspectValue::Bool(*self)
+    }
+}
+
+#[cfg(feature = "inspector")]
+impl InspectableValue for String {
+    fn inspect_value(&self) -> InspectValue {
+        InspectValue::Text(self.clone())
+    }
+}
+
+#[cfg(feature = "inspector")]
+impl InspectableValue for &'static str {
+    fn inspect_value(&self) -> InspectValue {
+        InspectValue::Text((*self).to_string())
+    }
+}
+
+#[cfg(feature = "inspector")]
+impl<T: InspectableValue> InspectableValue for Option<T> {
+    fn inspect_value(&self) -> InspectValue {
+        self.as_ref()
+            .map(InspectableValue::inspect_value)
+            .unwrap_or(InspectValue::Empty)
+    }
+}
+
+#[cfg(feature = "inspector")]
+impl<T> InspectableValue for Vec<T> {
+    fn inspect_value(&self) -> InspectValue {
+        InspectValue::Display(format!("<{} items>", self.len()))
+    }
+}
+
+#[cfg(feature = "inspector")]
+impl<T: ?Sized + 'static> InspectableValue for Rc<T> {
+    fn inspect_value(&self) -> InspectValue {
+        inspect_opaque_type(std::any::type_name::<T>())
+    }
+}
+
+#[cfg(feature = "inspector")]
+impl<T: ?Sized + 'static> InspectableValue for Shared<T> {
+    fn inspect_value(&self) -> InspectValue {
+        inspect_opaque_type(std::any::type_name::<T>())
+    }
+}
+
+#[cfg(feature = "inspector")]
+impl InspectableValue for crate::Element {
+    fn inspect_value(&self) -> InspectValue {
+        InspectValue::Element(self.id())
+    }
+}
+
+#[cfg(feature = "inspector")]
+impl InspectableValue for crate::Layout {
+    fn inspect_value(&self) -> InspectValue {
+        InspectValue::Layout(self.len())
+    }
+}
+
+#[cfg(feature = "inspector")]
 fn inspect_opaque_type(type_name: &'static str) -> InspectValue {
     if type_name.contains("dyn core::ops::function::Fn")
         || type_name.contains("dyn std::ops::function::Fn")

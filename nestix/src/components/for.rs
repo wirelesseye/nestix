@@ -14,6 +14,7 @@ use crate::{
 /// `children` creates an element for an item signal.
 #[props(bounds(I: IntoIterator + 'static, K: 'static))]
 pub struct ForProps<I: IntoIterator, K> {
+    #[props(inspect(skip))]
     data: I,
     key: Shared<dyn Fn(&<I as IntoIterator>::Item) -> K>,
     children: Shared<dyn Fn(Readonly<<I as IntoIterator>::Item>) -> PropValue<Element>>,
