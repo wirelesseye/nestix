@@ -300,9 +300,19 @@ impl Element {
     ///
     /// Logical siblings that do not render a host object are skipped.
     pub fn pred_handle(&self) -> Option<Shared<dyn Any>> {
-        self.previous_siblings()
+        if let Some(handle) = self
+            .previous_siblings()
             .into_iter()
             .find_map(|sibling| sibling.last_handle())
+        {
+            return Some(handle);
+        }
+
+        let parent = self.parent()?;
+        if parent.data.detached_host_tree.get() || parent.handle().is_some() {
+            return None;
+        }
+        parent.pred_handle()
     }
 
     /// Returns the last host handle in this element's subtree.

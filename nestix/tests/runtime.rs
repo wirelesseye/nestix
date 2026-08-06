@@ -457,6 +457,26 @@ fn predecessor_handle_skips_logical_siblings_without_host_handles() {
 }
 
 #[test]
+fn first_host_in_nested_logical_list_uses_the_outer_predecessor() {
+    let preceding = create_element::<Host>(());
+    let nested_host = create_element::<Host>(());
+    let inner = create_element::<Fragment>(FragmentProps {
+        children: PropValue::from_plain(Layout::from(nested_host.clone())),
+    });
+    let root = create_element::<Fragment>(FragmentProps {
+        children: PropValue::from_plain(Layout::from(vec![preceding.clone(), inner])),
+    });
+
+    mount_root(&root);
+
+    assert_eq!(
+        nested_host.pred_handle().and_then(handle_name),
+        Some(String::from("host"))
+    );
+    root.unmount();
+}
+
+#[test]
 fn detached_tree_owns_descendants_without_exposing_their_handles() {
     let outer = create_element::<Empty>(());
     outer.provide_handle(String::from("outer"));
