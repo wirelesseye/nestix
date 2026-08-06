@@ -3,6 +3,9 @@ name = "nestix"
 version = "0.1.0"
 edition = "2024"
 
+[features]
+inspector = ["nestix-macros/inspector"]
+
 [dependencies]
 log = "0.4.28"
 nestix-macros = { path = "../nestix-macros" }

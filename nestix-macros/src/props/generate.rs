@@ -24,6 +24,8 @@ struct Context {
 }
 
 struct FieldFeature {
+    #[allow(dead_code)]
+    original_ty: Type,
     default: bool,
     default_value: Option<Expr>,
     start: bool,
@@ -58,6 +60,7 @@ fn preprocess(input: ItemStruct, attr: PropsAttr) -> Result<Context, syn::Error>
     let mut field_features = Vec::new();
 
     for field in &mut item_struct.fields {
+        let original_ty = field.ty.clone();
         let option = is_option_ty(&field.ty);
 
         // Field-level `#[props(...)]` attributes configure the generated
@@ -127,6 +130,7 @@ fn preprocess(input: ItemStruct, attr: PropsAttr) -> Result<Context, syn::Error>
             }
 
             FieldFeature {
+                original_ty,
                 start,
                 default,
                 default_value,
@@ -136,6 +140,7 @@ fn preprocess(input: ItemStruct, attr: PropsAttr) -> Result<Context, syn::Error>
             }
         } else {
             FieldFeature {
+                original_ty,
                 start: false,
                 default: option,
                 default_value: None,
@@ -268,6 +273,70 @@ fn preprocess(input: ItemStruct, attr: PropsAttr) -> Result<Context, syn::Error>
         debug: attr.debug,
         default: attr.default.is_some(),
     })
+}
+
+#[cfg(feature = "inspector")]
+fn generate_inspection(ctx: &Context) -> (TokenStream, TokenStream) {
+    let nestix_path = nestix_path();
+    let Context {
+        item_struct,
+        field_features,
+        generic_bounds,
+        user_generic_args,
+        ..
+    } = ctx;
+    let ident = &item_struct.ident;
+    let entries = item_struct
+        .fields
+        .iter()
+        .zip(field_features)
+        .map(|(field, feature)| {
+            let field_ident = field.ident.as_ref().unwrap();
+            let name = field_ident.to_string();
+            let original_ty = &feature.original_ty;
+            if feature.nested {
+                quote! {
+                    #nestix_path::InspectProp::nested(
+                        #name,
+                        std::any::type_name::<#original_ty>(),
+                        #nestix_path::InspectableProps::inspect_props(&self.#field_ident),
+                    )
+                }
+            } else if feature.raw {
+                quote! {
+                    #nestix_path::InspectProp::raw(
+                        #name,
+                        std::any::type_name::<#original_ty>(),
+                    )
+                }
+            } else {
+                quote! {
+                    self.#field_ident.inspect_prop(
+                        #name,
+                        std::any::type_name::<#original_ty>(),
+                    )
+                }
+            }
+        });
+
+    let trait_impl = quote! {
+        impl<#generic_bounds> #nestix_path::InspectableProps for #ident<#user_generic_args> {
+            fn inspect_props(&self) -> Vec<#nestix_path::InspectProp> {
+                vec![#(#entries),*]
+            }
+        }
+    };
+    let props_method = quote! {
+        fn as_inspectable(&self) -> Option<&dyn #nestix_path::InspectableProps> {
+            Some(self)
+        }
+    };
+    (trait_impl, props_method)
+}
+
+#[cfg(not(feature = "inspector"))]
+fn generate_inspection(_: &Context) -> (TokenStream, TokenStream) {
+    (TokenStream::new(), TokenStream::new())
 }
 
 fn generate_builder(ctx: &Context) -> Result<TokenStream, syn::Error> {
@@ -817,6 +886,7 @@ pub fn generate_props(input: ItemStruct, attr: PropsAttr) -> Result<TokenStream,
     };
 
     let builder_output = generate_builder(&ctx)?;
+    let (inspectable_impl, inspectable_props_method) = generate_inspection(&ctx);
     let default_output = if *default {
         quote! {
             impl<#generic_bounds> std::default::Default for #ident <#user_generic_args> {
@@ -834,7 +904,10 @@ pub fn generate_props(input: ItemStruct, attr: PropsAttr) -> Result<TokenStream,
 
         impl<#generic_bounds> #nestix_path::Props for #ident <#user_generic_args> {
             #impl_debug_output
+            #inspectable_props_method
         }
+
+        #inspectable_impl
 
         #default_output
 

@@ -40,6 +40,33 @@ fn component_macro_marks_only_explicit_internal_components() {
     );
 }
 
+#[cfg(feature = "inspector")]
+#[test]
+fn props_macro_generates_structured_inspection_for_plain_reactive_and_nested_fields() {
+    let (title, _) = create_state("Inspector".to_string());
+    let props = build_props!(ButtonProps(
+        .title = title,
+        .view_props(.margin = 2.5),
+    ));
+    let entries = nestix::InspectableProps::inspect_props(&props);
+
+    let view = entries
+        .iter()
+        .find(|entry| entry.name == "view_props")
+        .unwrap();
+    assert_eq!(view.source, nestix::InspectPropSource::Nested);
+    assert_eq!(view.children[0].name, "margin");
+    assert_eq!(
+        view.children[0].value,
+        nestix::InspectValue::Number("2.5".into())
+    );
+
+    let title = entries.iter().find(|entry| entry.name == "title").unwrap();
+    assert_eq!(title.source, nestix::InspectPropSource::Reactive);
+    assert_eq!(title.value, nestix::InspectValue::Text("Inspector".into()));
+    assert!(nestix::Props::as_inspectable(&props).is_some());
+}
+
 #[props]
 struct WrapperProps {
     count: Rc<Cell<usize>>,
