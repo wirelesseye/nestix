@@ -9,7 +9,7 @@ use syn::{
 };
 
 use crate::{
-    props::parse::{Group, PropsAttr, PropsFieldAttr},
+    props::parse::{Group, Inspect, PropsAttr, PropsFieldAttr},
     util::{IdentExt, nestix_path},
 };
 
@@ -32,6 +32,8 @@ struct FieldFeature {
     nested: bool,
     nested_inputs: Option<Punctuated<FnArg, Token![,]>>,
     raw: bool,
+    #[allow(dead_code)]
+    inspect: Option<Inspect>,
 }
 
 fn is_option_ty(ty: &Type) -> bool {
@@ -137,6 +139,7 @@ fn preprocess(input: ItemStruct, attr: PropsAttr) -> Result<Context, syn::Error>
                 nested,
                 nested_inputs,
                 raw,
+                inspect: field_attr.inspect.clone(),
             }
         } else {
             FieldFeature {
@@ -147,6 +150,7 @@ fn preprocess(input: ItemStruct, attr: PropsAttr) -> Result<Context, syn::Error>
                 nested: false,
                 nested_inputs: None,
                 raw: false,
+                inspect: None,
             }
         };
 
@@ -307,6 +311,29 @@ fn generate_inspection(ctx: &Context) -> (TokenStream, TokenStream) {
                     #nestix_path::InspectProp::raw(
                         #name,
                         std::any::type_name::<#original_ty>(),
+                    )
+                }
+            } else if matches!(feature.inspect, Some(Inspect::Skip)) {
+                quote! {
+                    #nestix_path::InspectProp::raw(
+                        #name,
+                        std::any::type_name::<#original_ty>(),
+                    )
+                }
+            } else if matches!(feature.inspect, Some(Inspect::Value)) {
+                quote! {
+                    self.#field_ident.inspect_prop_with(
+                        #name,
+                        std::any::type_name::<#original_ty>(),
+                        #nestix_path::InspectableValue::inspect_value,
+                    )
+                }
+            } else if let Some(Inspect::With(formatter)) = &feature.inspect {
+                quote! {
+                    self.#field_ident.inspect_prop_with(
+                        #name,
+                        std::any::type_name::<#original_ty>(),
+                        #formatter,
                     )
                 }
             } else {

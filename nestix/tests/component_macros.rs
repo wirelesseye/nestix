@@ -67,6 +67,49 @@ fn props_macro_generates_structured_inspection_for_plain_reactive_and_nested_fie
     assert!(nestix::Props::as_inspectable(&props).is_some());
 }
 
+#[cfg(feature = "inspector")]
+#[derive(Debug, nestix::InspectableValue)]
+enum UserPosition {
+    Leading,
+}
+
+#[cfg(feature = "inspector")]
+fn inspect_position(_: &UserPosition) -> nestix::InspectValue {
+    nestix::InspectValue::Display("custom position".into())
+}
+
+#[cfg(feature = "inspector")]
+#[props]
+struct InspectableValueProps {
+    #[props(inspect)]
+    derived: UserPosition,
+    #[props(inspect(with = inspect_position))]
+    custom: UserPosition,
+    #[props(inspect(skip))]
+    skipped: UserPosition,
+}
+
+#[cfg(feature = "inspector")]
+#[test]
+fn props_inspection_supports_derived_custom_and_skipped_values() {
+    let props = build_props!(InspectableValueProps(
+        .derived = UserPosition::Leading,
+        .custom = UserPosition::Leading,
+        .skipped = UserPosition::Leading,
+    ));
+    let entries = nestix::InspectableProps::inspect_props(&props);
+
+    assert_eq!(
+        entries[0].value,
+        nestix::InspectValue::Display("Leading".into())
+    );
+    assert_eq!(
+        entries[1].value,
+        nestix::InspectValue::Display("custom position".into())
+    );
+    assert_eq!(entries[2].source, nestix::InspectPropSource::Raw);
+}
+
 #[props]
 struct WrapperProps {
     count: Rc<Cell<usize>>,

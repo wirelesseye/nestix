@@ -34,6 +34,8 @@ mod clone_var;
 mod closure;
 mod component;
 mod destructure;
+#[cfg(feature = "inspector")]
+mod inspectable_value;
 mod layout;
 mod prop_value;
 mod props;
@@ -104,6 +106,13 @@ pub fn callback(input: TokenStream) -> TokenStream {
 #[proc_macro_attribute]
 pub fn props(attr: TokenStream, input: TokenStream) -> TokenStream {
     props::props(attr, input)
+}
+
+/// Derives an inspector value formatter using the type's `Debug` representation.
+#[cfg(feature = "inspector")]
+#[proc_macro_derive(InspectableValue)]
+pub fn inspectable_value(input: TokenStream) -> TokenStream {
+    inspectable_value::derive(input)
 }
 
 /// Converts a plain value, signal, or existing `PropValue` into a `PropValue`.

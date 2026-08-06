@@ -59,6 +59,7 @@ pub enum InspectValue {
     Callback,
     Element(crate::ElementId),
     Layout(usize),
+    Display(String),
     Opaque(&'static str),
 }
 
@@ -76,6 +77,7 @@ impl InspectValue {
             Self::Layout(0) => "<empty layout>".to_string(),
             Self::Layout(1) => "<1 element>".to_string(),
             Self::Layout(count) => format!("<{count} elements>"),
+            Self::Display(value) => value.clone(),
             Self::Opaque(type_name) => format!("<{type_name}>"),
         }
     }
@@ -121,6 +123,12 @@ impl InspectProp {
 #[cfg(feature = "inspector")]
 pub trait InspectableProps {
     fn inspect_props(&self) -> Vec<InspectProp>;
+}
+
+/// Converts an application-defined value into an inspector representation.
+#[cfg(feature = "inspector")]
+pub trait InspectableValue {
+    fn inspect_value(&self) -> InspectValue;
 }
 
 #[cfg(feature = "inspector")]
@@ -258,13 +266,23 @@ impl<T> PropValue<T> {
 impl<T: 'static> PropValue<T> {
     #[doc(hidden)]
     pub fn inspect_prop(&self, name: &'static str, type_name: &'static str) -> InspectProp {
+        self.inspect_prop_with(name, type_name, inspect_any)
+    }
+
+    #[doc(hidden)]
+    pub fn inspect_prop_with(
+        &self,
+        name: &'static str,
+        type_name: &'static str,
+        inspect: impl Fn(&T) -> InspectValue,
+    ) -> InspectProp {
         let (source, value) = match &self.inner {
-            PropValueInner::Plain(value) => (InspectPropSource::Plain, inspect_any(value.as_ref())),
+            PropValueInner::Plain(value) => (InspectPropSource::Plain, inspect(value.as_ref())),
             PropValueInner::Signal(signal) => (
                 InspectPropSource::Reactive,
                 nestix_signal::untrack(|| {
                     let value = signal();
-                    inspect_any(&value)
+                    inspect(&value)
                 }),
             ),
         };
