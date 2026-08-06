@@ -22,6 +22,7 @@ pub fn component(attr: TokenStream, input: TokenStream) -> TokenStream {
 #[derive(Default)]
 struct PropsAttr {
     generic_params: Punctuated<GenericParam, Token![,]>,
+    internal: bool,
 }
 
 impl Parse for PropsAttr {
@@ -41,6 +42,7 @@ impl Parse for PropsAttr {
                     attrs.generic_params =
                         Punctuated::<GenericParam, Token![,]>::parse_terminated(&inner)?;
                 }
+                "internal" => attrs.internal = true,
                 _ => {
                     return Err(syn::Error::new(
                         ident.span(),
@@ -64,7 +66,10 @@ fn generate_component(
     item: &ItemFn,
 ) -> Result<TokenStream2, syn::Error> {
     let nestix_path = nestix_path();
-    let PropsAttr { generic_params } = attr;
+    let PropsAttr {
+        generic_params,
+        internal,
+    } = attr;
     let ItemFn {
         attrs, vis, sig, ..
     } = item;
@@ -126,6 +131,8 @@ fn generate_component(
 
         impl #impl_generics #nestix_path::Component for #ident<#generic_args> #where_clause {
             type Props = #props_type;
+
+            const IS_INTERNAL: bool = #internal;
 
             fn on_mount(element: &#nestix_path::Element) {
                 // Re-introduce the user's function inside `on_mount` so the

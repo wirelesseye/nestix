@@ -19,6 +19,27 @@ fn Counter(props: &CounterProps) {
     count.set(count.get() + 1);
 }
 
+#[component(internal)]
+fn InternalComponent() {}
+
+#[test]
+fn component_macro_marks_only_explicit_internal_components() {
+    let public = nestix::create_element::<Counter>(build_props!(CounterProps(
+        .count = Rc::new(Cell::new(0)),
+    )));
+    let internal = nestix::create_element::<InternalComponent>(());
+
+    assert!(!public.is_internal());
+    assert!(internal.is_internal());
+    assert!(internal.component_id().is_internal());
+    assert!(
+        internal
+            .component_id()
+            .name()
+            .ends_with("InternalComponent")
+    );
+}
+
 #[props]
 struct WrapperProps {
     count: Rc<Cell<usize>>,

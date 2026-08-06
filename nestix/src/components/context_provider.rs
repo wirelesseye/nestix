@@ -17,7 +17,7 @@ pub struct ContextProviderProps<T> {
 /// Descendant component functions can retrieve the value with
 /// [`crate::use_context`], or use [`Element::context`] when they already have an
 /// element reference.
-#[component(generics(T))]
+#[component(generics(T), internal)]
 pub fn ContextProvider<T: 'static>(props: &ContextProviderProps<T>, element: &Element) -> Element {
     effect!(
         [element, props.value] || {

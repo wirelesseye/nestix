@@ -13,6 +13,66 @@ use nestix_signal::{EffectHandle, effect};
 thread_local! {
     static MOUNTED_ROOT: RefCell<Option<Element>> = const { RefCell::new(None) };
     static CURRENT_ELEMENT: RefCell<Option<Element>> = const { RefCell::new(None) };
+    static NEXT_ELEMENT_ID: Cell<u64> = const { Cell::new(1) };
+    static NEXT_TREE_OBSERVER_ID: Cell<u64> = const { Cell::new(1) };
+    static TREE_OBSERVERS: RefCell<HashMap<ElementId, HashMap<u64, TreeObserverRegistration>>> =
+        RefCell::new(HashMap::new());
+}
+
+/// Stable identity for an element during its mounted lifetime.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
+pub struct ElementId(u64);
+
+impl ElementId {
+    /// Returns the process-local numeric identity.
+    pub fn get(self) -> u64 {
+        self.0
+    }
+}
+
+fn next_element_id() -> ElementId {
+    NEXT_ELEMENT_ID.with(|next| {
+        let id = next.get();
+        next.set(id.checked_add(1).expect("element ID space exhausted"));
+        ElementId(id)
+    })
+}
+
+#[derive(Debug, Clone)]
+struct TreeObserverRegistration {
+    excluded_subtrees: Rc<HashSet<ElementId>>,
+    callback: Shared<dyn Fn()>,
+}
+
+/// Cancels a component-tree observation when dropped or explicitly cancelled.
+pub struct TreeObserverHandle {
+    root: ElementId,
+    id: u64,
+    cancelled: Cell<bool>,
+}
+
+impl TreeObserverHandle {
+    /// Stops delivering component-tree changes to this observer.
+    pub fn cancel(&self) {
+        if self.cancelled.replace(true) {
+            return;
+        }
+        TREE_OBSERVERS.with(|observers| {
+            let mut observers = observers.borrow_mut();
+            if let Some(root_observers) = observers.get_mut(&self.root) {
+                root_observers.remove(&self.id);
+                if root_observers.is_empty() {
+                    observers.remove(&self.root);
+                }
+            }
+        });
+    }
+}
+
+impl Drop for TreeObserverHandle {
+    fn drop(&mut self) {
+        self.cancel();
+    }
 }
 
 struct CurrentElementGuard(Option<Element>);
@@ -73,6 +133,7 @@ impl ComponentOutput for Element {
         if let Some(parent) = parent {
             parent.notify_last_handle_change();
         }
+        self.notify_tree_change();
     }
 }
 
@@ -96,6 +157,7 @@ impl<I: IntoIterator<Item = Element>> ToElements for I {
 
 #[derive(Debug)]
 struct ElementData {
+    id: ElementId,
     component_id: ComponentID,
     props: Box<dyn Props>,
     contexts: RefCell<HashMap<TypeId, Rc<dyn Any>>>,
@@ -110,6 +172,7 @@ struct ElementData {
     after_mount_callbacks: RefCell<HashSet<Shared<dyn Fn()>>>,
     on_place_callbacks: RefCell<HashSet<Shared<dyn Fn(&Placement)>>>,
     detached_host_tree: Cell<bool>,
+    inspector_internal: Cell<bool>,
 }
 
 /// A node in the Nestix component tree.
@@ -145,9 +208,25 @@ impl Hash for Element {
 }
 
 impl Element {
+    /// Returns this element's stable process-local identity.
+    pub fn id(&self) -> ElementId {
+        self.data.id
+    }
+
     /// Returns this element's component identity.
     pub fn component_id(&self) -> ComponentID {
         self.data.component_id
+    }
+
+    /// Returns whether component inspectors should hide this element by default.
+    pub fn is_internal(&self) -> bool {
+        self.data.inspector_internal.get() || self.component_id().is_internal()
+    }
+
+    #[doc(hidden)]
+    /// Marks a renderer-created element as internal to its public component.
+    pub fn mark_internal(&self) {
+        self.data.inspector_internal.set(true);
     }
 
     /// Returns this element's props as a type-erased props object.
@@ -199,12 +278,17 @@ impl Element {
             callback();
         }
 
+        let tree_change_callbacks = self.tree_change_callbacks();
         let parent = self.parent();
         self.data.parent.take();
         if let Some(parent) = parent {
             if parent.remove_child(self) {
                 parent.notify_last_handle_change();
             }
+        }
+
+        for callback in tree_change_callbacks {
+            callback();
         }
 
         self.data.after_mount_callbacks.take();
@@ -298,6 +382,36 @@ impl Element {
     /// Returns a snapshot of this element's mounted children.
     pub fn children(&self) -> Vec<Element> {
         self.data.children.borrow().clone()
+    }
+
+    /// Observes structural changes in this element's mounted subtree.
+    ///
+    /// Changes originating within an excluded subtree do not invoke `f`.
+    /// Keep the returned handle alive for as long as observation is required.
+    pub fn observe_tree(
+        &self,
+        excluded_subtrees: impl IntoIterator<Item = ElementId>,
+        f: impl Fn() + 'static,
+    ) -> TreeObserverHandle {
+        let id = NEXT_TREE_OBSERVER_ID.with(|next| {
+            let id = next.get();
+            next.set(id.checked_add(1).expect("tree observer ID space exhausted"));
+            id
+        });
+        TREE_OBSERVERS.with(|observers| {
+            observers.borrow_mut().entry(self.id()).or_default().insert(
+                id,
+                TreeObserverRegistration {
+                    excluded_subtrees: Rc::new(excluded_subtrees.into_iter().collect()),
+                    callback: Shared::from(Rc::new(f) as Rc<dyn Fn()>),
+                },
+            );
+        });
+        TreeObserverHandle {
+            root: self.id(),
+            id,
+            cancelled: Cell::new(false),
+        }
     }
 
     /// Stores a host-renderer handle on this element.
@@ -468,6 +582,38 @@ impl Element {
             parent.notify_last_handle_change();
         }
     }
+
+    pub(crate) fn notify_tree_change(&self) {
+        for callback in self.tree_change_callbacks() {
+            callback();
+        }
+    }
+
+    fn tree_change_callbacks(&self) -> Vec<Shared<dyn Fn()>> {
+        TREE_OBSERVERS.with(|observers| {
+            let observers = observers.borrow();
+            if observers.is_empty() {
+                return Vec::new();
+            }
+
+            let mut callbacks = Vec::new();
+            let mut path = HashSet::new();
+            let mut current = Some(self.clone());
+            while let Some(element) = current {
+                path.insert(element.id());
+                if let Some(element_observers) = observers.get(&element.id()) {
+                    callbacks.extend(
+                        element_observers
+                            .values()
+                            .filter(|observer| observer.excluded_subtrees.is_disjoint(&path))
+                            .map(|observer| observer.callback.clone()),
+                    );
+                }
+                current = element.parent();
+            }
+            callbacks
+        })
+    }
 }
 
 /// A weak reference to an [`Element`].
@@ -540,6 +686,7 @@ pub fn unmount_root() -> Result<(), &'static str> {
 pub fn create_element<C: Component>(props: C::Props) -> Element {
     Element {
         data: Rc::new(ElementData {
+            id: next_element_id(),
             component_id: component_id::<C>(),
             props: Box::new(props),
             contexts: RefCell::new(HashMap::new()),
@@ -554,6 +701,7 @@ pub fn create_element<C: Component>(props: C::Props) -> Element {
             after_mount_callbacks: RefCell::new(HashSet::new()),
             on_place_callbacks: RefCell::new(HashSet::new()),
             detached_host_tree: Cell::new(false),
+            inspector_internal: Cell::new(false),
         }),
     }
 }

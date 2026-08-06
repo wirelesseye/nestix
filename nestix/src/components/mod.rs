@@ -24,6 +24,9 @@ pub trait Component: 'static {
     /// The props type accepted by this component.
     type Props: Props;
 
+    /// Whether component inspectors should hide this component by default.
+    const IS_INTERNAL: bool = false;
+
     /// Mounts the component into the given element.
     fn on_mount(element: &Element);
 }
@@ -37,6 +40,19 @@ pub struct ComponentID {
     pub(crate) name: &'static str,
     pub(crate) type_id: TypeId,
     pub(crate) mount_fn: fn(&Element),
+    pub(crate) is_internal: bool,
+}
+
+impl ComponentID {
+    /// Returns the fully qualified Rust name of this component type.
+    pub fn name(self) -> &'static str {
+        self.name
+    }
+
+    /// Returns whether inspectors should hide this component by default.
+    pub fn is_internal(self) -> bool {
+        self.is_internal
+    }
 }
 
 impl PartialEq for ComponentID {
@@ -59,5 +75,6 @@ pub fn component_id<C: Component>() -> ComponentID {
         name: std::any::type_name::<C>(),
         type_id: TypeId::of::<C>(),
         mount_fn: C::on_mount,
+        is_internal: C::IS_INTERNAL,
     }
 }

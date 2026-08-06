@@ -60,7 +60,7 @@ where
 ///
 /// Existing children are reused by key. Each rendered child receives a readonly
 /// signal for its item, so reused children can react to item value changes.
-#[component(generics(I, K))]
+#[component(generics(I, K), internal)]
 pub fn For<I: IntoIterator + Clone + 'static, K: Eq + Hash + 'static>(
     props: &ForProps<I, K>,
     element: &Element,
@@ -150,6 +150,7 @@ pub fn For<I: IntoIterator + Clone + 'static, K: Eq + Hash + 'static>(
                 *prev_keys = next_keys;
                 *prev_signals = next_signals;
                 element.notify_last_handle_change();
+                element.notify_tree_change();
             });
         }
     );

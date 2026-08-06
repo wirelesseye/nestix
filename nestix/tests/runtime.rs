@@ -651,3 +651,70 @@ fn for_lifecycle_signal_reads_do_not_reenter_reconciliation() {
     assert_eq!(incidental.get(), 1);
     assert_eq!(survivor_mounts.get(), 1);
 }
+
+#[test]
+fn element_ids_are_unique_and_tree_observers_honor_exclusions_and_cancellation() {
+    let root = create_element::<Empty>(());
+    let child = create_element::<Empty>(());
+    assert_ne!(root.id(), child.id());
+
+    mount_root(&root);
+    let all_changes = Rc::new(Cell::new(0));
+    let all_observer = root.observe_tree([], {
+        let all_changes = all_changes.clone();
+        move || all_changes.set(all_changes.get() + 1)
+    });
+    let outside_child_changes = Rc::new(Cell::new(0));
+    let outside_child_observer = root.observe_tree([child.id()], {
+        let outside_child_changes = outside_child_changes.clone();
+        move || outside_child_changes.set(outside_child_changes.get() + 1)
+    });
+
+    child.mount(Some(&root));
+    assert_eq!(all_changes.get(), 1);
+    assert_eq!(outside_child_changes.get(), 0);
+
+    let sibling = create_element::<Empty>(());
+    sibling.mount(Some(&root));
+    assert_eq!(all_changes.get(), 2);
+    assert_eq!(outside_child_changes.get(), 1);
+
+    let grandchild = create_element::<Empty>(());
+    grandchild.mount(Some(&child));
+    assert_eq!(all_changes.get(), 3);
+    assert_eq!(outside_child_changes.get(), 1);
+
+    grandchild.unmount();
+    assert_eq!(all_changes.get(), 4);
+    assert_eq!(outside_child_changes.get(), 1);
+
+    all_observer.cancel();
+    child.unmount();
+    assert_eq!(all_changes.get(), 4);
+    assert_eq!(outside_child_changes.get(), 1);
+
+    outside_child_observer.cancel();
+    root.unmount();
+}
+
+#[test]
+fn tree_observer_reports_fragment_reorders() {
+    let first = create_element::<Empty>(());
+    let second = create_element::<Empty>(());
+    let (children, set_children) = create_state(Layout::from(vec![first.clone(), second.clone()]));
+    let fragment = create_element::<Fragment>(FragmentProps {
+        children: PropValue::from_signal(children),
+    });
+    mount_root(&fragment);
+
+    let changes = Rc::new(Cell::new(0));
+    let observer = fragment.observe_tree([], {
+        let changes = changes.clone();
+        move || changes.set(changes.get() + 1)
+    });
+    set_children.set_unchecked(Layout::from(vec![second, first]));
+
+    assert_eq!(changes.get(), 1);
+    observer.cancel();
+    fragment.unmount();
+}

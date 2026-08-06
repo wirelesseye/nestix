@@ -17,7 +17,7 @@ pub struct FragmentProps {
 ///
 /// The fragment reconciles its children when the layout changes, preserving
 /// existing elements where possible and unmounting removed elements.
-#[component]
+#[component(internal)]
 pub fn Fragment(props: &FragmentProps, element: &Element) {
     effect!(
         [element, props.children] || {
@@ -65,6 +65,7 @@ pub fn Fragment(props: &FragmentProps, element: &Element) {
                 }
 
                 element.notify_last_handle_change();
+                element.notify_tree_change();
             });
         }
     );
