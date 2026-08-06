@@ -185,6 +185,39 @@ impl<T> InspectableValue for Vec<T> {
 }
 
 #[cfg(feature = "inspector")]
+impl<T: InspectableValue> InspectableValue for (T,) {
+    fn inspect_value(&self) -> InspectValue {
+        InspectValue::Display(format!("({},)", self.0.inspect_value().summary()))
+    }
+}
+
+#[cfg(feature = "inspector")]
+macro_rules! inspect_tuple {
+    ($(($($ty:ident: $index:tt),+)),+ $(,)?) => {
+        $(
+            impl<$($ty: InspectableValue),+> InspectableValue for ($($ty,)+) {
+                fn inspect_value(&self) -> InspectValue {
+                    let values = [$(self.$index.inspect_value().summary()),+];
+                    InspectValue::Display(format!("({})", values.join(", ")))
+                }
+            }
+        )+
+    };
+}
+
+#[cfg(feature = "inspector")]
+inspect_tuple!(
+    (A: 0, B: 1),
+    (A: 0, B: 1, C: 2),
+    (A: 0, B: 1, C: 2, D: 3),
+    (A: 0, B: 1, C: 2, D: 3, E: 4),
+    (A: 0, B: 1, C: 2, D: 3, E: 4, F: 5),
+    (A: 0, B: 1, C: 2, D: 3, E: 4, F: 5, G: 6),
+    (A: 0, B: 1, C: 2, D: 3, E: 4, F: 5, G: 6, H: 7),
+    (A: 0, B: 1, C: 2, D: 3, E: 4, F: 5, G: 6, H: 7, I: 8),
+);
+
+#[cfg(feature = "inspector")]
 impl<T: ?Sized + 'static> InspectableValue for Rc<T> {
     fn inspect_value(&self) -> InspectValue {
         inspect_opaque_type(std::any::type_name::<T>())

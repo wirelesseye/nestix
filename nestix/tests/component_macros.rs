@@ -109,6 +109,18 @@ fn props_inspection_supports_derived_custom_and_skipped_values() {
     assert_eq!(entries[2].source, nestix::InspectPropSource::Raw);
 }
 
+#[cfg(feature = "inspector")]
+#[test]
+fn inspectable_value_formats_tuples_through_arity_nine() {
+    use nestix::InspectableValue;
+
+    assert_eq!(("one",).inspect_value().summary(), "(\"one\",)");
+    assert_eq!(
+        (1, 2, 3, 4, 5, 6, 7, 8, 9).inspect_value().summary(),
+        "(1, 2, 3, 4, 5, 6, 7, 8, 9)"
+    );
+}
+
 #[props]
 struct WrapperProps {
     count: Rc<Cell<usize>>,
@@ -205,7 +217,6 @@ struct DestructurePoint(i32, i32);
 
 #[props]
 struct DestructureProps {
-    #[props(inspect(skip))]
     data: (String, String),
     #[props(inspect(skip))]
     user: DestructureUser,
